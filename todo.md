@@ -20,6 +20,9 @@
 - [x] Audit existing robots, sitemap, manifest, canonical metadata, and bot-facing response behavior
 - [x] Add a compatible `/manifest.webmanifest` route and reference it consistently
 - [x] Point static SEO, social, security, and bot metadata to the working production domain until projectpolaris.live routing is repaired
+- [x] Run an isolated production server to verify robots, sitemap, manifest, and security files are served before SPA fallback
+- [x] Confirm Advanced SEO Support is enabled and the production site is Live/Public
+- [x] Diagnose hosted crawler fallback and register explicit server-side crawler routes ahead of SPA handling
 - [ ] Verify bot routes and representative route metadata locally and on the working production domain
 
 ## Foundation

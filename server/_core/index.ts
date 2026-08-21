@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "../googleAuth";
 import { registerRazorpayWebhook } from "../razorpayWebhook";
+import { registerSeoRoutes } from "../seoRoutes";
 import { registerStorageProxy } from "./storageProxy";
 import { ensureDevelopmentDemoAccount } from "../auth/resetDelivery";
 import { appRouter } from "../routers";
@@ -43,6 +44,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
+  registerSeoRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

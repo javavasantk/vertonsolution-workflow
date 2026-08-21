@@ -27,6 +27,13 @@
 - [x] Pin public route-level canonical and social URLs to https://projectpolaris.live rather than the current browser origin
 - [x] Verify rendered canonical and Open Graph metadata on `/`, `/courses`, and `/aeroforge` uses projectpolaris.live
 
+## SEO score improvement
+- [x] Audit analyzer-relevant keyword, heading, content, structured-data, internal-link, and technical SEO signals
+- [x] Add accurate Project Polaris keyword targeting and richer educational-organization structured data
+- [x] Add and verify contextual internal links between core public learning, simulation, project, resource, and membership routes
+- [x] Confirm the SEO implementation handoff documentation is saved with score expectations and cache limitations
+- [ ] Refresh the platform SEO cache and verify live projectpolaris.live crawler routes after propagation
+
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant
 - [x] Google Fonts: Playfair Display, Inter, JetBrains Mono wired in client/index.html

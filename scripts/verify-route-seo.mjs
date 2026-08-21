@@ -33,14 +33,14 @@ try {
     await send("Page.navigate", { url: `${appOrigin}${route}` }, sessionId);
     let metadata;
     for (let attempt = 0; attempt < 40; attempt++) {
-      const result = await send("Runtime.evaluate", { expression: `JSON.stringify({title: document.title, canonical: document.querySelector('link[rel="canonical"]')?.href, ogUrl: document.querySelector('meta[property="og:url"]')?.content})`, returnByValue: true }, sessionId);
+      const result = await send("Runtime.evaluate", { expression: `JSON.stringify({title: document.title, canonical: document.querySelector('link[rel="canonical"]')?.href, ogUrl: document.querySelector('meta[property="og:url"]')?.content, keywords: document.querySelector('meta[name="keywords"]')?.content, routeSchema: document.querySelector('#polaris-route-schema')?.textContent})`, returnByValue: true }, sessionId);
       metadata = JSON.parse(result.result.value ?? "{}");
       const expected = `https://projectpolaris.live${route === "/" ? "/" : route}`;
-      if (metadata.canonical === expected && metadata.ogUrl === expected) break;
+      if (metadata.canonical === expected && metadata.ogUrl === expected && metadata.keywords && metadata.routeSchema) break;
       await sleep(150);
     }
     const expected = `https://projectpolaris.live${route === "/" ? "/" : route}`;
-    if (metadata?.canonical !== expected || metadata?.ogUrl !== expected) throw new Error(`Route ${route} emitted incorrect metadata: ${JSON.stringify(metadata)}`);
+    if (metadata?.canonical !== expected || metadata?.ogUrl !== expected || !metadata?.keywords?.includes("aerospace") || !metadata?.routeSchema?.includes('"@type":"WebPage"')) throw new Error(`Route ${route} emitted incomplete metadata: ${JSON.stringify(metadata)}`);
     output.push({ route, ...metadata });
   }
   console.log(JSON.stringify({ verified: output }));

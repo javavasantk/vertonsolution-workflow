@@ -24,4 +24,12 @@ describe("static SEO and bot routes", () => {
     const manifest = await readFile(path.join(publicDir, "manifest.webmanifest"), "utf8");
     expect(JSON.parse(manifest)).toMatchObject({ name: expect.stringContaining("Project Polaris"), theme_color: "#8b5cf6" });
   });
+
+  it("includes keyword, social-image, and educational structured-data signals in the static document head", async () => {
+    const index = await readFile(path.resolve(process.cwd(), "client/index.html"), "utf8");
+    expect(index).toContain('name="keywords"');
+    expect(index).toContain('property="og:image"');
+    expect(index).toContain('"@type":"EducationalOrganization"');
+    expect(index).toContain('"@type":"WebSite"');
+  });
 });

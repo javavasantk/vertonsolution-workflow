@@ -16,29 +16,34 @@ interface ThemeProviderProps {
   switchable?: boolean;
 }
 
+const STORAGE_KEY = "polaris-theme";
+
+/**
+ * Polaris ships dark-first. The token sheet declares dark values on `:root`
+ * and the light variant under `.light`, so we toggle BOTH classes:
+ * `dark` keeps Tailwind's `dark:` variant working, `light` swaps the tokens.
+ */
 export function ThemeProvider({
   children,
-  defaultTheme = "light",
+  defaultTheme = "dark",
   switchable = false,
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (switchable) {
-      const stored = localStorage.getItem("theme");
-      return (stored as Theme) || defaultTheme;
+    if (switchable && typeof window !== "undefined") {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored === "light" || stored === "dark") return stored;
     }
     return defaultTheme;
   });
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    root.classList.toggle("dark", theme === "dark");
+    root.classList.toggle("light", theme === "light");
+    root.style.colorScheme = theme;
 
     if (switchable) {
-      localStorage.setItem("theme", theme);
+      window.localStorage.setItem(STORAGE_KEY, theme);
     }
   }, [theme, switchable]);
 

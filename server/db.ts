@@ -1,6 +1,9 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { aeroforgeTrials, backlogItems, catalogCourses, certificates, copilotMessages, enrollments, inquiries, InsertInquiry, InsertUser, payments, subscriptions, users } from "../drizzle/schema";
+import type { SolverInput, SolverResult } from "../shared/aeroforge";
+import type { BillingCycle, PlanId } from "../shared/plans";
+import { nanoid } from "nanoid";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -87,6 +90,315 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email.toLowerCase()))
+    .limit(1);
+  return result[0];
+}
+
+export async function createPasswordUser({
+  name,
+  email,
+  passwordHash,
+}: {
+  name: string;
+  email: string;
+  passwordHash: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const normalizedEmail = email.toLowerCase();
+  const existing = await getUserByEmail(normalizedEmail);
+  if (existing) return { user: existing, created: false };
+
+  await db.insert(users).values({
+    openId: `pw_${nanoid(21)}`,
+    name,
+    email: normalizedEmail,
+    loginMethod: "password",
+    passwordHash,
+    planId: "explorer",
+    lastSignedIn: new Date(),
+  });
+  const user = await getUserByEmail(normalizedEmail);
+  if (!user) throw new Error("Unable to create user");
+  return { user, created: true };
+}
+
+export async function findOrCreateGoogleUser({
+  googleSub,
+  email,
+  name,
+  avatarUrl,
+}: {
+  googleSub: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const normalizedEmail = email.toLowerCase();
+  const existing = await getUserByEmail(normalizedEmail);
+  if (existing) {
+    await db
+      .update(users)
+      .set({
+        name: existing.name || name,
+        avatarUrl: avatarUrl ?? existing.avatarUrl,
+        lastSignedIn: new Date(),
+      })
+      .where(eq(users.id, existing.id));
+    return (await getUserByEmail(normalizedEmail))!;
+  }
+
+  await db.insert(users).values({
+    openId: `google_${googleSub}`.slice(0, 64),
+    name,
+    email: normalizedEmail,
+    loginMethod: "google",
+    avatarUrl,
+    planId: "explorer",
+    lastSignedIn: new Date(),
+  });
+  const user = await getUserByEmail(normalizedEmail);
+  if (!user) throw new Error("Unable to create Google user");
+  return user;
+}
+
+export async function createInquiry(inquiry: InsertInquiry) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database is not available");
+  }
+
+  const result = await db.insert(inquiries).values(inquiry);
+  return result[0]?.insertId ?? null;
+}
+
+export async function listAeroForgeTrials(userId: number, limit = 12) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db
+    .select()
+    .from(aeroforgeTrials)
+    .where(eq(aeroforgeTrials.userId, userId))
+    .orderBy(desc(aeroforgeTrials.createdAt))
+    .limit(limit);
+}
+
+export async function createAeroForgeTrial({
+  userId,
+  input,
+  result,
+  label,
+}: {
+  userId: number;
+  input: SolverInput;
+  result: SolverResult;
+  label?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const insert = await db.insert(aeroforgeTrials).values({
+    userId,
+    challengeId: result.challengeId,
+    challengeName: result.challengeName,
+    label: label?.trim() || null,
+    mach: input.mach.toFixed(3),
+    alphaDeg: input.alphaDeg.toFixed(2),
+    altitudeKm: input.altitudeKm.toFixed(2),
+    liftCoefficient: result.liftCoefficient.toFixed(4),
+    dragCoefficient: result.dragCoefficient.toFixed(5),
+    liftToDrag: result.liftToDrag.toFixed(2),
+    trueAirspeedKmh: result.trueAirspeedKmh.toFixed(1),
+    reynolds: String(result.reynolds),
+    benchmarkDelta: result.benchmarkDelta.toFixed(2),
+  });
+  return insert[0]?.insertId ?? null;
+}
+
+export async function createCheckoutAttempt({
+  userId,
+  planId,
+  amountPaise,
+  billingCycle,
+  razorpayOrderId,
+}: {
+  userId: number;
+  planId: PlanId;
+  amountPaise: number;
+  billingCycle: BillingCycle;
+  razorpayOrderId: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const subscriptionInsert = await db.insert(subscriptions).values({
+    userId,
+    planId,
+    status: "created",
+    amountPaise,
+    currency: "INR",
+    billingCycle,
+    razorpayOrderId,
+  });
+  const subscriptionId = Number(subscriptionInsert[0]?.insertId);
+  await db.insert(payments).values({
+    userId,
+    subscriptionId,
+    planId,
+    razorpayOrderId,
+    amountPaise,
+    currency: "INR",
+    status: "created",
+  });
+  return subscriptionId;
+}
+
+export async function getCheckoutAttempt(razorpayOrderId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [payment] = await db.select().from(payments).where(eq(payments.razorpayOrderId, razorpayOrderId)).limit(1);
+  if (!payment?.subscriptionId) return null;
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.id, payment.subscriptionId)).limit(1);
+  if (!subscription) return null;
+  return { payment, subscription };
+}
+
+export async function activateCheckoutAttempt({
+  razorpayOrderId,
+  razorpayPaymentId,
+  razorpaySignature,
+}: {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const checkout = await getCheckoutAttempt(razorpayOrderId);
+  if (!checkout) throw new Error("Checkout attempt was not found");
+  const plan = (await import("../shared/plans")).getPlan(checkout.subscription.planId);
+  const now = new Date();
+  const periodEnd = new Date(now.getTime() + plan.periodDays * 24 * 60 * 60 * 1000);
+  await db.update(payments).set({ status: "paid", razorpayPaymentId, razorpaySignature }).where(eq(payments.id, checkout.payment.id));
+  await db.update(subscriptions).set({ status: "active", razorpayPaymentId, currentPeriodStart: now, currentPeriodEnd: periodEnd }).where(eq(subscriptions.id, checkout.subscription.id));
+  await db.update(users).set({ planId: checkout.subscription.planId }).where(eq(users.id, checkout.subscription.userId));
+  return { ...checkout, planId: checkout.subscription.planId, currentPeriodEnd: periodEnd };
+}
+
+export async function failCheckoutAttempt(razorpayOrderId: string, notes: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const checkout = await getCheckoutAttempt(razorpayOrderId);
+  if (!checkout) return null;
+  await db.update(payments).set({ status: "failed", notes }).where(eq(payments.id, checkout.payment.id));
+  await db.update(subscriptions).set({ status: "failed" }).where(eq(subscriptions.id, checkout.subscription.id));
+  return checkout;
+}
+
+export async function getSubscriptionSummary(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).orderBy(desc(subscriptions.createdAt)).limit(1);
+  const paymentHistory = await db.select().from(payments).where(eq(payments.userId, userId)).orderBy(desc(payments.createdAt)).limit(12);
+  return { subscription: subscription ?? null, payments: paymentHistory };
+}
+
+export async function getCurrentSubscription(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).orderBy(desc(subscriptions.createdAt)).limit(1);
+  return subscription ?? null;
+}
+
+/** Schedule an end-of-cycle cancellation. Entitlements remain active until expiry. */
+export async function scheduleCurrentSubscriptionCancellation(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const subscription = await getCurrentSubscription(userId);
+  if (!subscription || subscription.status !== "active") return null;
+  await db.update(subscriptions).set({ cancelledAt: new Date() }).where(eq(subscriptions.id, subscription.id));
+  return subscription;
+}
+
+export async function listBacklogItems(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.select().from(backlogItems).where(eq(backlogItems.userId, userId)).orderBy(desc(backlogItems.updatedAt));
+}
+
+export async function createBacklogItem({ userId, title, squad, priority, dueAt }: { userId: number; title: string; squad?: string; priority: "low" | "medium" | "high"; dueAt?: Date | null }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const insert = await db.insert(backlogItems).values({ userId, title, squad: squad?.trim() || null, priority, dueAt: dueAt ?? null, status: "todo" });
+  return insert[0]?.insertId ?? null;
+}
+
+export async function setBacklogItemStatus({ userId, itemId, status }: { userId: number; itemId: number; status: "todo" | "in_progress" | "review" | "done" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.update(backlogItems).set({ status }).where(and(eq(backlogItems.id, itemId), eq(backlogItems.userId, userId)));
+}
+
+export async function listCertificates(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.select().from(certificates).where(eq(certificates.userId, userId)).orderBy(desc(certificates.issuedAt));
+}
+
+/** Records an engineering completion only from a saved, user-owned numerical trial. */
+export async function recordEngineeringProjectCompletion({ userId, catalogSlug, trialId }: { userId: number; catalogSlug: string; trialId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [course] = await db.select().from(catalogCourses).where(eq(catalogCourses.slug, catalogSlug)).limit(1);
+  if (!course) throw new Error("Catalog item was not found");
+  const [trial] = await db.select().from(aeroforgeTrials).where(and(eq(aeroforgeTrials.id, trialId), eq(aeroforgeTrials.userId, userId))).limit(1);
+  if (!trial) throw new Error("A user-owned saved AeroForge trial is required for completion");
+  if (Number(trial.liftToDrag) <= 0 || Number(trial.dragCoefficient) <= 0) throw new Error("The saved trial does not contain qualifying numerical evidence");
+  const [existing] = await db.select().from(enrollments).where(and(eq(enrollments.userId, userId), eq(enrollments.catalogSlug, catalogSlug))).limit(1);
+  if (existing) {
+    await db.update(enrollments).set({ progressPercent: 100, completionTrialId: trial.id }).where(eq(enrollments.id, existing.id));
+    return { enrollmentId: existing.id, course };
+  }
+  const insert = await db.insert(enrollments).values({ userId, catalogSlug: course.slug, catalogTitle: course.title, catalogType: course.type, progressPercent: 100, completionTrialId: trial.id });
+  return { enrollmentId: Number(insert[0]?.insertId), course };
+}
+
+/** Certificates derive their title/type from a previously verified 100% completion. */
+export async function issueCertificateForVerifiedCompletion({ userId, catalogSlug }: { userId: number; catalogSlug: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [completion] = await db.select().from(enrollments).where(and(eq(enrollments.userId, userId), eq(enrollments.catalogSlug, catalogSlug))).limit(1);
+  if (!completion || completion.progressPercent < 100 || !completion.completionTrialId) throw new Error("A verified engineering completion with a saved trial is required before issuing a certificate");
+  const [sourceTrial] = await db.select().from(aeroforgeTrials).where(and(eq(aeroforgeTrials.id, completion.completionTrialId), eq(aeroforgeTrials.userId, userId))).limit(1);
+  if (!sourceTrial || Number(sourceTrial.liftToDrag) <= 0 || Number(sourceTrial.dragCoefficient) <= 0) throw new Error("The completion evidence trial is no longer valid");
+  const [existingCertificate] = await db.select().from(certificates).where(and(eq(certificates.userId, userId), eq(certificates.sourceTrialId, sourceTrial.id))).limit(1);
+  if (existingCertificate) return { certificateId: existingCertificate.id, alreadyIssued: true };
+  const credentialCode = `PP-${Date.now().toString(36).toUpperCase()}-${nanoid(6).toUpperCase()}`;
+  const insert = await db.insert(certificates).values({ userId, title: completion.catalogTitle, programType: completion.catalogType, sourceTrialId: sourceTrial.id, credentialCode, verified: true });
+  return { certificateId: Number(insert[0]?.insertId), alreadyIssued: false };
+}
+
+export async function listCopilotMessages(userId: number, limit = 16) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const messages = await db.select().from(copilotMessages).where(eq(copilotMessages.userId, userId)).orderBy(desc(copilotMessages.createdAt)).limit(limit);
+  return messages.reverse();
+}
+
+export async function saveCopilotMessage({ userId, role, content }: { userId: number; role: "user" | "assistant"; content: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const insert = await db.insert(copilotMessages).values({ userId, role, content });
+  return insert[0]?.insertId ?? null;
 }
 
 // TODO: add feature queries here as your schema grows.

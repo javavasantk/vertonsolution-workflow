@@ -1,35 +1,48 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import { ProgramsPage, ResearchPage, ResourcesPage, ShowcasePage } from "@/pages/CommunityPages";
+import { AboutPage, ContactPage, LegalPage, SchoolsPage } from "@/pages/InfoPages";
+import CoursesPage from "@/pages/Courses";
+import ProjectsPage from "@/pages/Projects";
+import AuthPage from "@/pages/Auth";
+import PortalPage from "@/pages/Portal";
+import AeroForgePage from "@/pages/AeroForge";
+import PricingPage from "@/pages/Pricing";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Home} />
+      <Route path="/courses" component={CoursesPage} />
+      <Route path="/projects" component={ProjectsPage} />
+      <Route path="/aeroforge" component={AeroForgePage} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/programs" component={ProgramsPage} />
+      <Route path="/showcase" component={ShowcasePage} />
+      <Route path="/research" component={ResearchPage} />
+      <Route path="/resources" component={ResourcesPage} />
+      <Route path="/schools" component={SchoolsPage} />
+      <Route path="/about" component={AboutPage} />
+      <Route path="/auth" component={AuthPage} />
+      <Route path="/portal" component={PortalPage} />
+      <Route path="/contact" component={ContactPage} />
+      <Route path="/privacy" component={() => <LegalPage type="privacy" />} />
+      <Route path="/terms" component={() => <LegalPage type="terms" />} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark" switchable>
         <TooltipProvider>
           <Toaster />
           <Router />

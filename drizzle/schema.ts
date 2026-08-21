@@ -30,6 +30,8 @@ export const users = mysqlTable("users", {
   avatarUrl: text("avatarUrl"),
   /** Denormalised current plan for fast gating reads. */
   planId: varchar("planId", { length: 32 }).default("explorer").notNull(),
+  /** Incremented after password reset to invalidate previously issued password sessions. */
+  sessionVersion: int("sessionVersion").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -37,6 +39,25 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+/** Short-lived, single-use password reset tokens. Only a SHA-256 hash is retained. */
+export const passwordResetTokens = mysqlTable(
+  "password_reset_tokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    userIdx: index("password_reset_tokens_userId_idx").on(table.userId),
+    expiryIdx: index("password_reset_tokens_expiresAt_idx").on(table.expiresAt),
+  })
+);
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 
 /**
  * The published learning catalog. `contentJson` preserves rich syllabus and

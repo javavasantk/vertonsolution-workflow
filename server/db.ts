@@ -1,9 +1,10 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aeroforgeTrials, backlogItems, catalogCourses, certificates, copilotMessages, enrollments, inquiries, InsertInquiry, InsertUser, payments, subscriptions, users } from "../drizzle/schema";
+import { aeroforgeTrials, backlogItems, catalogCourses, certificates, copilotMessages, enrollments, inquiries, InsertInquiry, InsertUser, passwordResetTokens, payments, subscriptions, users } from "../drizzle/schema";
 import type { SolverInput, SolverResult } from "../shared/aeroforge";
 import type { BillingCycle, PlanId } from "../shared/plans";
 import { nanoid } from "nanoid";
+import { createHash, randomBytes } from "node:crypto";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -130,6 +131,58 @@ export async function createPasswordUser({
   const user = await getUserByEmail(normalizedEmail);
   if (!user) throw new Error("Unable to create user");
   return { user, created: true };
+}
+
+export function hashPasswordResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/** Creates a one-hour reset token for local-password accounts. The raw token is never stored. */
+export async function createPasswordResetToken(email: string) {
+  const user = await getUserByEmail(email.toLowerCase());
+  if (!user?.passwordHash) return null;
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const token = randomBytes(32).toString("base64url");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+  await db.transaction(async tx => {
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: now })
+      .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+    await tx.insert(passwordResetTokens).values({ userId: user.id, tokenHash: hashPasswordResetToken(token), expiresAt });
+  });
+  return { user, token, expiresAt };
+}
+
+/** Atomically consumes a valid reset token, updates the password, and invalidates prior password sessions. */
+export async function consumePasswordResetToken({ token, passwordHash }: { token: string; passwordHash: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const tokenHash = hashPasswordResetToken(token);
+  return db.transaction(async tx => {
+    const [reset] = await tx
+      .select()
+      .from(passwordResetTokens)
+      .where(and(eq(passwordResetTokens.tokenHash, tokenHash), isNull(passwordResetTokens.usedAt), gt(passwordResetTokens.expiresAt, new Date())))
+      .limit(1);
+    if (!reset) return null;
+    const [user] = await tx.select().from(users).where(eq(users.id, reset.userId)).limit(1);
+    if (!user || !user.passwordHash) return null;
+    const used = await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokens.id, reset.id), isNull(passwordResetTokens.usedAt)));
+    if (!used[0]?.affectedRows) return null;
+    const nextSessionVersion = user.sessionVersion + 1;
+    await tx.update(users).set({ passwordHash, sessionVersion: nextSessionVersion, lastSignedIn: new Date() }).where(eq(users.id, user.id));
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+    return { ...user, passwordHash, sessionVersion: nextSessionVersion };
+  });
 }
 
 export async function findOrCreateGoogleUser({

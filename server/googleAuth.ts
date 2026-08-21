@@ -145,6 +145,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       });
       const session = await sdk.createSessionToken(user.openId, {
         name: user.name ?? "Polaris Member",
+        sessionVersion: user.sessionVersion,
       });
       res.cookie(COOKIE_NAME, session, {
         ...getSessionCookieOptions(req),

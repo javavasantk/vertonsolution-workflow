@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "../googleAuth";
 import { registerRazorpayWebhook } from "../razorpayWebhook";
 import { registerStorageProxy } from "./storageProxy";
+import { ensureDevelopmentDemoAccount } from "../auth/resetDelivery";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -33,6 +34,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  await ensureDevelopmentDemoAccount();
   // Razorpay signs the original byte stream, so its webhook must precede JSON parsing.
   registerRazorpayWebhook(app);
   // Configure body parser with larger size limit for file uploads

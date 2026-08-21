@@ -1,7 +1,9 @@
 import { COOKIE_NAME } from "@shared/const";
 import { createGoogleAuthorizationUrl } from "./googleAuth";
-import { activateCheckoutAttempt, createAeroForgeTrial, createBacklogItem, createCheckoutAttempt, createInquiry, createPasswordUser, getCheckoutAttempt, getCurrentSubscription, getSubscriptionSummary, getUserByEmail, issueCertificateForVerifiedCompletion, listAeroForgeTrials, listBacklogItems, listCertificates, listCopilotMessages, recordEngineeringProjectCompletion, saveCopilotMessage, scheduleCurrentSubscriptionCancellation, setBacklogItemStatus } from "./db";
+import { activateCheckoutAttempt, consumePasswordResetToken, createAeroForgeTrial, createBacklogItem, createCheckoutAttempt, createInquiry, createPasswordResetToken, createPasswordUser, getCheckoutAttempt, getCurrentSubscription, getSubscriptionSummary, getUserByEmail, issueCertificateForVerifiedCompletion, listAeroForgeTrials, listBacklogItems, listCertificates, listCopilotMessages, recordEngineeringProjectCompletion, saveCopilotMessage, scheduleCurrentSubscriptionCancellation, setBacklogItemStatus } from "./db";
 import { hashPassword, verifyPassword } from "./auth/passwords";
+import { developmentDemoCredentials, sendPasswordResetEmail } from "./auth/resetDelivery";
+import { validatePasswordResetOrigin } from "./auth/resetOrigins";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { User } from "../drizzle/schema";
@@ -36,7 +38,7 @@ export const appRouter = router({
         if (!created) {
           throw new TRPCError({ code: "CONFLICT", message: "An account already exists for this email" });
         }
-        const session = await sdk.createSessionToken(user.openId, { name: user.name ?? "Polaris Member" });
+        const session = await sdk.createSessionToken(user.openId, { name: user.name ?? "Polaris Member", sessionVersion: user.sessionVersion });
         ctx.res.cookie(COOKIE_NAME, session, { ...getSessionCookieOptions(ctx.req), maxAge: 1000 * 60 * 60 * 24 * 365 });
         return { user: toPublicUser(user) };
       }),
@@ -47,13 +49,44 @@ export const appRouter = router({
         if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Email or password is incorrect" });
         }
-        const session = await sdk.createSessionToken(user.openId, { name: user.name ?? "Polaris Member" });
+        const session = await sdk.createSessionToken(user.openId, { name: user.name ?? "Polaris Member", sessionVersion: user.sessionVersion });
         ctx.res.cookie(COOKIE_NAME, session, { ...getSessionCookieOptions(ctx.req), maxAge: 1000 * 60 * 60 * 24 * 365 });
         return { user: toPublicUser(user) };
       }),
     googleStart: publicProcedure
       .input(z.object({ origin: z.string().url() }))
       .mutation(({ input, ctx }) => ({ url: createGoogleAuthorizationUrl(input.origin, ctx.res, ctx.req) })),
+    requestPasswordReset: publicProcedure
+      .input(z.object({ email: z.string().trim().email().max(320), origin: z.string().url() }))
+      .mutation(async ({ input, ctx }) => {
+        const requestOrigin = typeof ctx.req.headers.origin === "string" ? ctx.req.headers.origin : null;
+        let trustedOrigin: string;
+        try {
+          trustedOrigin = validatePasswordResetOrigin(input.origin, requestOrigin);
+        } catch {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Invalid password reset origin" });
+        }
+        const requested = await createPasswordResetToken(input.email);
+        if (!requested) return { success: true, debugResetUrl: null };
+        const resetUrl = `${trustedOrigin}/auth?reset=${encodeURIComponent(requested.token)}`;
+        try {
+          const delivery = await sendPasswordResetEmail({ email: requested.user.email!, resetUrl, expiresAt: requested.expiresAt });
+          return { success: true, debugResetUrl: delivery.debugResetUrl ?? null };
+        } catch (error) {
+          console.error("[Auth] Password reset delivery failed", error);
+          return { success: true, debugResetUrl: null };
+        }
+      }),
+    resetPassword: publicProcedure
+      .input(z.object({ token: z.string().min(32).max(256), password: z.string().min(8).max(128) }))
+      .mutation(async ({ input, ctx }) => {
+        const user = await consumePasswordResetToken({ token: input.token, passwordHash: await hashPassword(input.password) });
+        if (!user) throw new TRPCError({ code: "BAD_REQUEST", message: "This reset link is invalid or has expired." });
+        const session = await sdk.createSessionToken(user.openId, { name: user.name ?? "Polaris Member", sessionVersion: user.sessionVersion });
+        ctx.res.cookie(COOKIE_NAME, session, { ...getSessionCookieOptions(ctx.req), maxAge: 1000 * 60 * 60 * 24 * 365 });
+        return { user: toPublicUser(user) };
+      }),
+    demoCredentials: publicProcedure.query(() => developmentDemoCredentials()),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

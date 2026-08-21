@@ -4,6 +4,14 @@
 - [x] Create an end-to-end Python + SQL Project Polaris implementation prompt pack covering every platform capability
 - [x] Audit the current Node.js/tRPC backend for production implementation gaps and create an end-to-end backend prompt pack
 
+## Authentication enhancement
+- [x] Implement secure password-reset request and completion flows with single-use expiring tokens
+- [x] Add login UI paths for sign-in, forgot password, reset password, and configured Google login
+- [x] Exercise the development-only demo account through /auth
+- [x] Run a production-mode server and verify `/auth` does not render demo credentials or expose `auth.demoCredentials`
+- [x] Restrict production password-reset URLs to configured trusted origins
+- [x] Complete final authentication validation, including direct production-mode demo suppression in startup and UI
+
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant
 - [x] Google Fonts: Playfair Display, Inter, JetBrains Mono wired in client/index.html

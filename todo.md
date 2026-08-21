@@ -34,6 +34,10 @@
 - [x] Confirm the SEO implementation handoff documentation is saved with score expectations and cache limitations
 - [ ] Refresh the platform SEO cache and verify live projectpolaris.live crawler routes after propagation
 
+## Homepage image accessibility
+- [x] Identify and add accurate alt text to the two homepage images flagged by the SEO analyzer
+- [x] Verify in the rendered homepage DOM that both logo images expose non-empty descriptive alt text
+
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant
 - [x] Google Fonts: Playfair Display, Inter, JetBrains Mono wired in client/index.html

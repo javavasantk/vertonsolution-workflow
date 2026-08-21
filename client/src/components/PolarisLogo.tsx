@@ -26,7 +26,7 @@ export function PolarisLogo({
       >
         <img
           src={LOGO_URL}
-          alt=""
+          alt="Project Polaris logo"
           className="h-full w-full object-cover opacity-95 transition-transform duration-300 group-hover:scale-110"
         />
       </span>

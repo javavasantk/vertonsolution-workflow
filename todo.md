@@ -23,7 +23,7 @@
 - [x] Run an isolated production server to verify robots, sitemap, manifest, and security files are served before SPA fallback
 - [x] Confirm Advanced SEO Support is enabled and the production site is Live/Public
 - [x] Diagnose hosted crawler fallback and register explicit server-side crawler routes ahead of SPA handling
-- [ ] Verify bot routes and representative route metadata locally and on the working production domain
+- [ ] External blocker: revalidate live bot routes and representative metadata after the hosting SEO cache refreshes or receives a support purge
 - [x] Pin public route-level canonical and social URLs to https://projectpolaris.live rather than the current browser origin
 - [x] Verify rendered canonical and Open Graph metadata on `/`, `/courses`, and `/aeroforge` uses projectpolaris.live
 
@@ -32,11 +32,17 @@
 - [x] Add accurate Project Polaris keyword targeting and richer educational-organization structured data
 - [x] Add and verify contextual internal links between core public learning, simulation, project, resource, and membership routes
 - [x] Confirm the SEO implementation handoff documentation is saved with score expectations and cache limitations
-- [ ] Refresh the platform SEO cache and verify live projectpolaris.live crawler routes after propagation
+- [ ] External blocker: obtain hosting cache refresh or support purge, then confirm live projectpolaris.live crawler routes
 
 ## Homepage image accessibility
 - [x] Identify and add accurate alt text to the two homepage images flagged by the SEO analyzer
 - [x] Verify in the rendered homepage DOM that both logo images expose non-empty descriptive alt text
+
+## Homepage audit
+- [x] Measure current live homepage performance and browser timing metrics
+- [x] Review all live homepage meta, canonical, Open Graph, Twitter, and structured-data properties
+- [x] Run a Lighthouse-style SEO audit and document prioritized findings
+- [x] Save and review the homepage performance, Lighthouse availability, and meta/OG audit document
 
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant

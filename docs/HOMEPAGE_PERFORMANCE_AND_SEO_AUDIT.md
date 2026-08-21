@@ -65,3 +65,5 @@ The audit attempted Lighthouse using a dedicated Chromium process, then again wi
 ## Verification sources
 
 The metadata values above were inspected in the live browser DOM at [Project Polaris](https://projectpolaris.live/). Live request timing and response headers were collected from the same public URL. Structured data and routing behavior were also checked against the published site configuration and current project source.
+
+The latest live crawler-route check confirms that `https://projectpolaris.live/sitemap.xml` lists only `projectpolaris.live` URLs and that `https://projectpolaris.live/manifest.webmanifest` is current. The canonical `robots.txt` cache key still advertises the prior sitemap, but a cache-busted request to the same deployed endpoint returns the correct `https://projectpolaris.live/sitemap.xml` policy. This proves the deployed application is correct; revalidate the canonical bot-facing URL after the four-hour hosting cache expires or receives a purge.

@@ -1,5 +1,8 @@
 # Project Polaris — TODO
 
+## Documentation deliverable
+- [x] Create an end-to-end Python + SQL Project Polaris implementation prompt pack covering every platform capability
+
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant
 - [x] Google Fonts: Playfair Display, Inter, JetBrains Mono wired in client/index.html

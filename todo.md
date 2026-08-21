@@ -12,6 +12,10 @@
 - [x] Restrict production password-reset URLs to configured trusted origins
 - [x] Complete final authentication validation, including direct production-mode demo suppression in startup and UI
 
+## Production domain
+- [ ] Attach and validate the published Project Polaris deployment on https://projectpolaris.live
+- [ ] Resolve the current public 404 returned by https://projectpolaris.live after domain attachment
+
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant
 - [x] Google Fonts: Playfair Display, Inter, JetBrains Mono wired in client/index.html

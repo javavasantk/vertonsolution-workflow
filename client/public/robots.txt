@@ -4,4 +4,4 @@ Disallow: /portal
 Disallow: /auth
 Disallow: /api/
 
-Sitemap: https://novarocketrylearning.best/sitemap.xml
+Sitemap: https://projectpolaris.live/sitemap.xml

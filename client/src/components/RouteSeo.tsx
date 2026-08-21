@@ -8,6 +8,8 @@ const DEFAULT: Metadata = {
   description: "Hands-on aerospace learning, engineering projects, and the AeroForge simulation laboratory.",
 };
 
+export const PRIMARY_SEO_ORIGIN = "https://projectpolaris.live";
+
 const ROUTE_METADATA: Record<string, Metadata> = {
   "/": DEFAULT,
   "/courses": { title: "Courses | Project Polaris", description: "Explore hands-on aerospace, astronomy, physics, engineering, programming, and AI learning experiences." },
@@ -31,6 +33,10 @@ export function getRouteMetadata(location: string): Metadata {
   return ROUTE_METADATA[location] ?? { title: "Page Not Found | Project Polaris", description: "The requested Project Polaris page could not be found.", indexable: false };
 }
 
+export function getCanonicalUrl(location: string) {
+  return `${PRIMARY_SEO_ORIGIN}${location === "/" ? "/" : location}`;
+}
+
 function upsertMeta(selector: string, attributes: Record<string, string>) {
   let element = document.head.querySelector<HTMLMetaElement>(selector);
   if (!element) {
@@ -46,7 +52,7 @@ export default function RouteSeo() {
   useEffect(() => {
     const metadata = getRouteMetadata(location);
     const indexable = metadata.indexable !== false;
-    const canonicalUrl = `${window.location.origin}${location === "/" ? "/" : location}`;
+    const canonicalUrl = getCanonicalUrl(location);
     document.title = metadata.title;
     upsertMeta('meta[name="description"]', { name: "description", content: metadata.description });
     upsertMeta('meta[name="robots"]', { name: "robots", content: indexable ? "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" : "noindex,nofollow,noarchive" });

@@ -1,6 +1,6 @@
 import type { Express } from "express";
 
-const PUBLIC_ORIGIN = "https://novarocketrylearning.best";
+const PUBLIC_ORIGIN = "https://projectpolaris.live";
 const PUBLIC_PATHS = [
   ["/", "weekly", "1.0"],
   ["/courses", "weekly", "0.9"],

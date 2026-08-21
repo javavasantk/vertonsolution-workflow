@@ -13,8 +13,8 @@
 - [x] Complete final authentication validation, including direct production-mode demo suppression in startup and UI
 
 ## Production domain
-- [ ] Attach and validate the published Project Polaris deployment on https://projectpolaris.live
-- [ ] Resolve the current public 404 returned by https://projectpolaris.live after domain attachment
+- [x] Attach and validate the published Project Polaris deployment on https://projectpolaris.live
+- [x] Resolve the current public 404 returned by https://projectpolaris.live after domain attachment
 
 ## Static SEO and bot routes
 - [x] Audit existing robots, sitemap, manifest, canonical metadata, and bot-facing response behavior
@@ -24,6 +24,8 @@
 - [x] Confirm Advanced SEO Support is enabled and the production site is Live/Public
 - [x] Diagnose hosted crawler fallback and register explicit server-side crawler routes ahead of SPA handling
 - [ ] Verify bot routes and representative route metadata locally and on the working production domain
+- [x] Pin public route-level canonical and social URLs to https://projectpolaris.live rather than the current browser origin
+- [x] Verify rendered canonical and Open Graph metadata on `/`, `/courses`, and `/aeroforge` uses projectpolaris.live
 
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant

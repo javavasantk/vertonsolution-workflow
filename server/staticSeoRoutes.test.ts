@@ -9,13 +9,13 @@ describe("static SEO and bot routes", () => {
     const robots = await readFile(path.join(publicDir, "robots.txt"), "utf8");
     expect(robots).toContain("Disallow: /portal");
     expect(robots).toContain("Disallow: /auth");
-    expect(robots).toContain("Sitemap: https://novarocketrylearning.best/sitemap.xml");
+    expect(robots).toContain("Sitemap: https://projectpolaris.live/sitemap.xml");
   });
 
   it("publishes a sitemap that includes public catalog and simulation routes but excludes private routes", async () => {
     const sitemap = await readFile(path.join(publicDir, "sitemap.xml"), "utf8");
-    expect(sitemap).toContain("https://novarocketrylearning.best/courses");
-    expect(sitemap).toContain("https://novarocketrylearning.best/aeroforge");
+    expect(sitemap).toContain("https://projectpolaris.live/courses");
+    expect(sitemap).toContain("https://projectpolaris.live/aeroforge");
     expect(sitemap).not.toContain("/portal");
     expect(sitemap).not.toContain("/auth");
   });

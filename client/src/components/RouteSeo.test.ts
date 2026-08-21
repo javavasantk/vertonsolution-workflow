@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRouteMetadata } from "./RouteSeo";
+import { getCanonicalUrl, getRouteMetadata } from "./RouteSeo";
 
 describe("route SEO metadata", () => {
   it("marks private and missing routes as non-indexable", () => {
@@ -13,5 +13,11 @@ describe("route SEO metadata", () => {
     expect(courses.indexable).not.toBe(false);
     expect(courses.title).toContain("Courses");
     expect(courses.description).toContain("aerospace");
+  });
+
+  it("pins public canonical URLs to the configured primary domain", () => {
+    expect(getCanonicalUrl("/")).toBe("https://projectpolaris.live/");
+    expect(getCanonicalUrl("/courses")).toBe("https://projectpolaris.live/courses");
+    expect(getCanonicalUrl("/aeroforge")).toBe("https://projectpolaris.live/aeroforge");
   });
 });

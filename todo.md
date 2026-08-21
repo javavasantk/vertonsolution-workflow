@@ -2,6 +2,7 @@
 
 ## Documentation deliverable
 - [x] Create an end-to-end Python + SQL Project Polaris implementation prompt pack covering every platform capability
+- [x] Audit the current Node.js/tRPC backend for production implementation gaps and create an end-to-end backend prompt pack
 
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant

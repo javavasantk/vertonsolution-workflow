@@ -1,0 +1,10 @@
+{
+  "name": "Project Polaris — Experiential Learning Platform",
+  "short_name": "Project Polaris",
+  "description": "Hands-on aerospace learning, engineering projects, and the AeroForge simulation lab.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#08070d",
+  "theme_color": "#8b5cf6",
+  "lang": "en"
+}

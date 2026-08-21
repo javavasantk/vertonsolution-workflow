@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /portal
+Disallow: /auth
+Disallow: /api/
+
+Sitemap: https://novarocketrylearning.best/sitemap.xml

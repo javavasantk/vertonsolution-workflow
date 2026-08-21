@@ -1,0 +1,19 @@
+# Project Polaris
+
+Project Polaris is an experiential science and engineering learning platform focused on aerospace education, hands-on projects, and the AeroForge simulation laboratory.
+
+## Public routes
+
+- https://novarocketrylearning.best/
+- https://novarocketrylearning.best/courses
+- https://novarocketrylearning.best/aeroforge
+- https://novarocketrylearning.best/projects
+- https://novarocketrylearning.best/programs
+- https://novarocketrylearning.best/research
+- https://novarocketrylearning.best/resources
+- https://novarocketrylearning.best/schools
+- https://novarocketrylearning.best/pricing
+
+## Crawler guidance
+
+Do not treat learner workspaces, authentication screens, payment records, or API endpoints as public content. Respect robots.txt and do not bypass access controls.

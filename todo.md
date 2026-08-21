@@ -16,6 +16,12 @@
 - [ ] Attach and validate the published Project Polaris deployment on https://projectpolaris.live
 - [ ] Resolve the current public 404 returned by https://projectpolaris.live after domain attachment
 
+## Static SEO and bot routes
+- [x] Audit existing robots, sitemap, manifest, canonical metadata, and bot-facing response behavior
+- [x] Add a compatible `/manifest.webmanifest` route and reference it consistently
+- [x] Point static SEO, social, security, and bot metadata to the working production domain until projectpolaris.live routing is repaired
+- [ ] Verify bot routes and representative route metadata locally and on the working production domain
+
 ## Foundation
 - [x] Design tokens in index.css: violet #8b5cf6 / #c59dff, gold #d4af37, dark default + light variant
 - [x] Google Fonts: Playfair Display, Inter, JetBrains Mono wired in client/index.html

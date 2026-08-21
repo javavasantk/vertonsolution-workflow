@@ -18,3 +18,9 @@ The pricing route deliberately displays the configuration-required state until R
 
 1. Add Razorpay credentials and confirm a live/test order, payment verification, webhook event, and end-of-cycle provider cancellation.
 2. Register the deployed Google callback URL in Google Cloud and complete a real Google consent login.
+
+## Integration disposition
+
+Google OAuth is configured. The final pre-delivery check reconfirmed an authorization redirect to Google, an `HttpOnly` state cookie with `SameSite=Lax`, safe state/error callback recovery, and visible user guidance. A real consent return remains a normal post-publish acceptance step because it must use the production callback URL.
+
+Razorpay activation is **deferred at the user’s request**. The application contains the secure order, signature-verification, signed-webhook, subscription-record, provider cancellation, and end-of-period access paths, but test/live credentials and recurring Razorpay Plan IDs have not been supplied. Once available, perform the checkout, webhook, cancellation, and grace-period acceptance checks listed above.

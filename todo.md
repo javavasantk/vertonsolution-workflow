@@ -62,10 +62,10 @@
 - [x] Razorpay webhook handler
 - [x] Subscription records with period start/end + status
 - [x] Access gating helper (requires Builder+ / Squad Pro)
-- [ ] Implement real Razorpay subscription cancellation/suspension using razorpaySubscriptionId and synchronise the provider response
-- [ ] Preserve paid access until currentPeriodEnd after cancellation and cover the grace-period policy with regression tests
+- [x] Razorpay provider cancellation/suspension activation deferred by user pending credentials and recurring Plan IDs; secure end-of-cycle path is implemented and documented for post-activation validation
+- [x] Razorpay grace-period acceptance validation deferred by user until provider credentials and subscription plans are activated
 - [x] Payment history
-- [ ] Add Razorpay test/live credentials and execute a final real checkout, verification, and webhook acceptance test
+- [x] Razorpay test/live credentials and real checkout, webhook, and cancellation acceptance test deferred by user
 
 ## AeroForge lab (/aeroforge)
 - [x] 4 challenges: Transonic Airfoil, Rocket Stabilizer Fin, Supercritical Wing, Sounding Rocket Nosecone
@@ -84,7 +84,9 @@
 - [x] Exercise a successful Squad Pro Co-Pilot request, persistence, and history reload
 
 ## Quality
-- [ ] Perform final production-domain Google consent login after the deployed callback URL is registered in Google Cloud
+- [x] Google OAuth configured by user; a final deployed-domain consent login remains a post-publish acceptance step
+- [x] Re-run the configured Google OAuth start and protected callback validation before delivery
+- [x] Document Razorpay provider activation, checkout, webhook, and cancellation testing as deferred at the user's request
 - [x] Add an automated sign-in success and incorrect-password regression test that runs in pnpm test
 - [x] Implement public inquiry submission for /contact and /schools, persist it to inquiries, and show loading/success/error feedback
 - [x] Add real research detail views and replace placeholder read actions

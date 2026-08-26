@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, demoAuthState, resumeTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -19,6 +19,12 @@ const { authState, startLoginSpy, aiTestState, demoAuthState, resumeTestState } 
     isPending: false,
     error: null as Error | null,
     response: null as { briefing: string; task: string; model: string } | null,
+  },
+  workspaceAssistantState: {
+    mutate: vi.fn(),
+    isPending: false,
+    error: null as Error | null,
+    response: { reply: "Use the assigned workflow controls and confirm the designated human owner before acting.", model: "test-model", unavailable: false },
   },
   demoAuthState: {
     loginMutate: vi.fn(),
@@ -63,15 +69,19 @@ vi.mock("@/lib/trpc", () => ({
       mine: { useQuery: () => ({ data: undefined, refetch: vi.fn() }) },
       requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    portal: {
+      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, status: "approved", hours: 40, weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] } }) },
+    },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       listCandidates: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
       prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadPath: "/api/recruiter/resume-upload/f4c4c2a6-17fb-4d62-b119-784831553898", expiresAt: new Date() }; }, isPending: false, error: null }) },
-      completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, isPending: false, error: null }) },
+      completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); const result = { ...resumeTestState.response, fileName: "alex-morgan.pdf" }; options?.onSuccess?.(result); return result; }, isPending: false, error: null }) },
     },
     ai: {
       assist: { useMutation: (options?: { onSuccess?: (data: { briefing: string; task: string; model: string }) => void }) => ({ mutate: (input: unknown) => { aiTestState.mutate(input); if (aiTestState.response) options?.onSuccess?.(aiTestState.response); }, isPending: aiTestState.isPending, error: aiTestState.error }) },
+      workspaceAssistant: { useMutation: (options?: { onSuccess?: (data: { reply: string; model: string; unavailable: boolean }) => void }) => ({ mutate: (input: unknown) => { workspaceAssistantState.mutate(input); options?.onSuccess?.(workspaceAssistantState.response); }, isPending: workspaceAssistantState.isPending, error: workspaceAssistantState.error }) },
     },
   },
 }));
@@ -118,6 +128,9 @@ afterEach(() => {
   aiTestState.isPending = false;
   aiTestState.error = null;
   aiTestState.response = null;
+  workspaceAssistantState.mutate.mockReset();
+  workspaceAssistantState.isPending = false;
+  workspaceAssistantState.error = null;
   demoAuthState.loginMutate.mockReset();
   demoAuthState.resetRequestMutate.mockReset();
   demoAuthState.resetMutate.mockReset();
@@ -189,6 +202,28 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getAllByText("Onboarding").length).toBeGreaterThan(0);
     expect(screen.queryByText("Readiness")).toBeNull();
     expect(screen.queryByText("Controls")).toBeNull();
+  });
+
+  it("renders protected database-backed demo summary records in the authenticated overview", () => {
+    setAuthenticatedRole("consultant", "Jamie Consultant");
+    renderRoute("/workspace");
+
+    expect(screen.getByText(/MySQL-compatible TiDB via Drizzle ORM/)).toBeTruthy();
+    expect(screen.getByText("Demo assignment extension review")).toBeTruthy();
+    expect(screen.getByText("Database-backed operational activity.")).toBeTruthy();
+  });
+
+  it("renders seeded staffing demand, assignments, and timesheets in their protected operational views", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Consultant");
+    renderRoute("/workspace");
+
+    await user.click(screen.getAllByRole("button", { name: "Delivery" })[0]!);
+    expect(screen.getByText("Database Lead Engineer")).toBeTruthy();
+    expect(screen.getAllByText("Northstar Commerce Cloud · Demo").length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]!);
+    expect(screen.getByText("Timesheet #1")).toBeTruthy();
+    expect(screen.getByText("40")).toBeTruthy();
   });
 
   it("reveals commercial values for an authenticated finance account", async () => {
@@ -339,31 +374,37 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(within(finder).getByText(/No candidate profiles match these filters/)).toBeTruthy();
   });
 
-  it("sends bounded onboarding state to the AI assistant and renders the returned briefing", async () => {
+  it("shows onboarding drafting only in its active workflow context and renders the returned briefing", async () => {
     const user = userEvent.setup();
     aiTestState.response = { briefing: "Summary\nHuman follow-up\nBoundary", task: "onboarding_guidance", model: "test-model" };
     setAuthenticatedRole("consultant", "Riley Consultant");
     renderRoute("/workspace");
 
-    await user.click(screen.getByRole("button", { name: /Draft next-step guidance/ }));
+    expect(screen.queryByRole("button", { name: /Draft next-step guidance/ })).toBeNull();
+    await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]!);
+    await user.click(screen.getByRole("button", { name: /Draft onboarding follow-up/ }));
     expect(aiTestState.mutate).toHaveBeenCalledWith(expect.objectContaining({ task: "onboarding_guidance", context: expect.stringContaining("Current employee onboarding signals") }));
     expect(screen.getByText(/Summary/)).toBeTruthy();
     expect(screen.getByText(/Human follow-up/)).toBeTruthy();
   });
 
-  it("shows the unavailable fallback when the AI service returns an error", () => {
-    aiTestState.error = new Error("provider unavailable");
+  it("shows the floating assistant fallback when its service returns an error", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.error = new Error("provider unavailable");
     setAuthenticatedRole("consultant", "Riley Consultant");
     renderRoute("/workspace");
 
-    expect(screen.getByText(/AI assistance is unavailable right now/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    expect(screen.getByText(/The assistant is unavailable/)).toBeTruthy();
   });
 
-  it("disables AI action controls while an AI briefing is being prepared", () => {
-    aiTestState.isPending = true;
+  it("disables floating assistant prompts while a response is being prepared", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.isPending = true;
     setAuthenticatedRole("consultant", "Riley Consultant");
     renderRoute("/workspace");
 
-    expect(screen.getByRole("button", { name: /Preparing/ }).hasAttribute("disabled")).toBe(true);
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    expect(screen.getByRole("button", { name: "What can I do on this page?" }).hasAttribute("disabled")).toBe(true);
   });
 });

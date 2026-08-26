@@ -50,6 +50,13 @@
       "when": 1787756183746,
       "tag": "0006_cloudy_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1787758542502,
+      "tag": "0007_robust_blue_blade",
+      "breakpoints": true
     }
   ]
 }

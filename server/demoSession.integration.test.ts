@@ -19,6 +19,8 @@ describe("demo credential session integration", () => {
     });
 
     expect(ctx.user).toMatchObject({ openId: "demo_recruiter", role: "recruiter", isDemo: true });
-    await expect(appRouter.createCaller(ctx).recruiting.newHireProgress()).resolves.toEqual([]);
+    await expect(appRouter.createCaller(ctx).recruiting.newHireProgress()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ onboardingStage: expect.any(String), readinessStatus: expect.any(String) }),
+    ]));
   }, 30_000);
 });

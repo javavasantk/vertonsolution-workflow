@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { generateAiBriefingSpy } = vi.hoisted(() => ({
+const { generateAiBriefingSpy, generateWorkspaceAssistantReplySpy } = vi.hoisted(() => ({
   generateAiBriefingSpy: vi.fn(),
+  generateWorkspaceAssistantReplySpy: vi.fn(),
 }));
 
 vi.mock("./aiService", () => ({
   generateAiBriefing: generateAiBriefingSpy,
+  generateWorkspaceAssistantReply: generateWorkspaceAssistantReplySpy,
 }));
 
 import { appRouter } from "./routers";
@@ -30,7 +32,10 @@ function createContext(role: "admin" | "recruiter" | "consultant"): TrpcContext 
 }
 
 describe("ai.assist tRPC procedure", () => {
-  beforeEach(() => generateAiBriefingSpy.mockReset());
+  beforeEach(() => {
+    generateAiBriefingSpy.mockReset();
+    generateWorkspaceAssistantReplySpy.mockReset();
+  });
 
   it("delivers a recruiter handoff task through the protected procedure", async () => {
     generateAiBriefingSpy.mockResolvedValue({ briefing: "Recruiter summary", task: "recruiter_summary", model: "test", unavailable: false });
@@ -78,5 +83,19 @@ describe("ai.assist tRPC procedure", () => {
     const consultantCaller = appRouter.createCaller(createContext("consultant"));
 
     await expect(consultantCaller.ai.assist({ task: "onboarding_guidance", context: "Two onboarding tasks are complete and manager confirmation is needed." })).resolves.toMatchObject({ unavailable: true });
+  });
+
+  it("delivers bounded role and workspace context through the floating assistant procedure", async () => {
+    generateWorkspaceAssistantReplySpy.mockResolvedValue({ reply: "Use Candidate Finder to review recruiter-visible skills.", model: "test", unavailable: false });
+    const caller = appRouter.createCaller(createContext("recruiter"));
+
+    await expect(caller.ai.workspaceAssistant({ page: "New-hire progress", prompt: "How do I use Candidate Finder?" })).resolves.toMatchObject({ reply: "Use Candidate Finder to review recruiter-visible skills." });
+    expect(generateWorkspaceAssistantReplySpy).toHaveBeenCalledWith({ role: "recruiter", page: "New-hire progress", prompt: "How do I use Candidate Finder?" });
+  });
+
+  it("rejects an oversized workspace assistant prompt before calling the model", async () => {
+    const caller = appRouter.createCaller(createContext("consultant"));
+    await expect(caller.ai.workspaceAssistant({ page: "Overview", prompt: "x".repeat(601) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(generateWorkspaceAssistantReplySpy).not.toHaveBeenCalled();
   });
 });

@@ -137,6 +137,87 @@ export const resumeUploadSessions = mysqlTable("resume_upload_sessions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** Clearly labeled operational demonstration records backing the client-to-delivery lifecycle. */
+export const clientAccounts = mysqlTable("client_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  industry: varchar("industry", { length: 128 }),
+  location: varchar("location", { length: 180 }),
+  primaryContact: varchar("primaryContact", { length: 255 }),
+  status: mysqlEnum("status", ["prospect", "active", "paused"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const clientProjects = mysqlTable("client_projects", {
+  id: int("id").autoincrement().primaryKey(),
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  clientId: int("clientId").notNull().references(() => clientAccounts.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  technologyStackJson: text("technologyStackJson").notNull(),
+  deliveryStatus: mysqlEnum("deliveryStatus", ["planned", "active", "at_risk", "closing"]).default("planned").notNull(),
+  projectManagerName: varchar("projectManagerName", { length: 255 }),
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const staffingDemands = mysqlTable("staffing_demands", {
+  id: int("id").autoincrement().primaryKey(),
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  clientId: int("clientId").notNull().references(() => clientAccounts.id),
+  projectId: int("projectId").references(() => clientProjects.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  skillsJson: text("skillsJson").notNull(),
+  openings: int("openings").default(1).notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+  status: mysqlEnum("status", ["open", "submitted", "filled", "on_hold"]).default("open").notNull(),
+  targetDate: timestamp("targetDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const consultantAssignments = mysqlTable("consultant_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  userId: int("userId").notNull().references(() => users.id),
+  clientId: int("clientId").notNull().references(() => clientAccounts.id),
+  projectId: int("projectId").notNull().references(() => clientProjects.id),
+  managerName: varchar("managerName", { length: 255 }),
+  allocationPercent: int("allocationPercent").default(100).notNull(),
+  assignmentState: mysqlEnum("assignmentState", ["pending", "active", "extension_due", "roll_off", "bench"]).default("pending").notNull(),
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
+  billable: boolean("billable").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const timesheetEntries = mysqlTable("timesheet_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  userId: int("userId").notNull().references(() => users.id),
+  assignmentId: int("assignmentId").references(() => consultantAssignments.id),
+  weekEnding: timestamp("weekEnding").notNull(),
+  hours: int("hours").default(0).notNull(),
+  status: mysqlEnum("status", ["draft", "submitted", "approved", "exception"]).default("draft").notNull(),
+  note: varchar("note", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const operationalActivities = mysqlTable("operational_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  entityType: varchar("entityType", { length: 96 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  detail: varchar("detail", { length: 500 }),
+  activityState: mysqlEnum("activityState", ["open", "attention", "complete"]).default("open").notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
 export type InsertEmployeeProfile = typeof employeeProfiles.$inferInsert;
 export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
@@ -145,3 +226,9 @@ export type AccessRoleChange = typeof accessRoleChanges.$inferSelect;
 export type CandidateProfile = typeof candidateProfiles.$inferSelect;
 export type ResumeUpload = typeof resumeUploads.$inferSelect;
 export type ResumeUploadSession = typeof resumeUploadSessions.$inferSelect;
+export type ClientAccount = typeof clientAccounts.$inferSelect;
+export type ClientProject = typeof clientProjects.$inferSelect;
+export type StaffingDemand = typeof staffingDemands.$inferSelect;
+export type ConsultantAssignment = typeof consultantAssignments.$inferSelect;
+export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
+export type OperationalActivity = typeof operationalActivities.$inferSelect;

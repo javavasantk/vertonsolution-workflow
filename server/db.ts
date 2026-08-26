@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, employeeProfiles, InsertUser, onboardingAssignments, resumeUploads, resumeUploadSessions, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -303,6 +303,27 @@ export async function listRecruiterCandidates() {
   if (!db) return [];
   const rows = await db.select().from(candidateProfiles).orderBy(desc(candidateProfiles.updatedAt));
   return rows.map(presentCandidate);
+}
+
+export async function getDemoPortalSummary() {
+  const db = await getDb();
+  if (!db) return { clients: [], projects: [], demands: [], assignments: [], timesheets: [], activities: [] };
+  const [clients, projects, demands, assignments, timesheets, activities] = await Promise.all([
+    db.select().from(clientAccounts).orderBy(desc(clientAccounts.updatedAt)),
+    db.select().from(clientProjects).orderBy(desc(clientProjects.updatedAt)),
+    db.select().from(staffingDemands).orderBy(desc(staffingDemands.updatedAt)),
+    db.select().from(consultantAssignments).orderBy(desc(consultantAssignments.updatedAt)),
+    db.select().from(timesheetEntries).orderBy(desc(timesheetEntries.updatedAt)),
+    db.select().from(operationalActivities).orderBy(desc(operationalActivities.occurredAt)),
+  ]);
+  return {
+    clients,
+    projects: projects.map(project => ({ ...project, technologyStack: parseJson<string[]>(project.technologyStackJson, []) })),
+    demands: demands.map(demand => ({ ...demand, skills: parseJson<string[]>(demand.skillsJson, []) })),
+    assignments,
+    timesheets,
+    activities,
+  };
 }
 
 export async function createResumeUploadSession(userId: number, input: { originalFileName: string; mimeType: string; fileSize: number }) {

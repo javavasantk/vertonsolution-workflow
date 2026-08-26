@@ -101,10 +101,24 @@
 - [x] Re-verify the hardened recruiter upload workflow on desktop and mobile and save a final checkpoint.
 - [x] Capture fresh authenticated desktop and mobile recruiter workflow evidence after signed-upload hardening, including upload, candidate filters, and export controls.
 - [x] Extend the real-browser recruiter test to exercise the direct upload preparation and completion workflow through the authenticated UI.
-- [ ] Re-run the full suite, verify fresh recruiter evidence, and save the final checkpoint.
+- [x] Re-run the full suite, verify fresh recruiter evidence, and save the final checkpoint.
 - [x] Add an authenticated real-browser recruiter journey that uploads a valid PDF/DOCX fixture, completes signed upload and AI parsing, and verifies structured result rendering.
 - [x] Capture fresh desktop and mobile evidence after a completed recruiter upload, showing parsed results, CSV/PDF export controls, and candidate filters.
-- [ ] Re-run the complete suite and save a final checkpoint after true browser upload coverage.
+- [x] Re-run the complete suite and save a final checkpoint after true browser upload coverage.
 - [x] Add protected upload-path coverage for safe human-review fallback when AI extraction is unavailable.
 - [x] Add CSV and PDF export-content tests that verify structured candidate details are included in generated downloads.
 - [x] Re-run full validation after upload fallback and export-content coverage, then prepare the completed project checkpoint.
+- [x] Audit which existing portal demonstrations are database-backed versus client-only representative records, and document the database technology in the project experience.
+- [x] Add structured, clearly labeled internal demo records for recruiting candidates, client demand, projects, assignments, timesheets, and operational activity using idempotent database seeding.
+- [x] Connect database-backed demo records to relevant protected workspace views while retaining field-level role scoping.
+- [x] Remove repeated “Draft next-step guidance” actions and retain contextual AI actions only where a user has an active workflow task.
+- [x] Add a role-aware bottom-right AI assistant that uses bounded workspace context and preserves existing human-review safeguards.
+- [x] Add automated tests for seeded records, contextual AI action visibility, assistant authorization, and mobile behavior.
+- [ ] Verify the database-backed portal experience and floating AI assistant on desktop and mobile, then save a completed project checkpoint.
+- [x] Add an in-app data-source note that identifies MySQL-compatible TiDB with Drizzle ORM and distinguishes database-backed modules from client-only representative UI.
+- [x] Extend the idempotent demo seed to include clearly labeled recruiter candidate profiles for Candidate Finder.
+- [x] Replace remaining hardcoded delivery lifecycle, demand, assignment, time, and activity datasets with protected database summary records while retaining role-scoped masking.
+- [x] Add tests that verify protected portal summaries and seeded records render in connected workspace views.
+- [x] Replace remaining hardcoded staffing demand and timesheet display arrays with protected portal summary records while retaining finance masking.
+- [x] Add connected-view tests proving seeded demand, assignment, timesheet, and activity records render instead of static fallbacks.
+- [x] Re-run automated and browser validation after all connected operational views use seeded database records.

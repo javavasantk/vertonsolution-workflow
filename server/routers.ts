@@ -4,7 +4,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
-import { generateAiBriefing } from "./aiService";
+import { generateAiBriefing, generateWorkspaceAssistantReply } from "./aiService";
 import { parseRecruiterResume } from "./resumeParserService";
 import { extractResumeTextFromBytes, validateResumeMetadata } from "./resumeFileService";
 import { storageGetSignedUrl } from "./storage";
@@ -42,6 +42,11 @@ const workforcePermissionGroups = [
 const aiAssistantInputSchema = z.object({
   task: z.enum(["recruiter_summary", "onboarding_guidance", "access_review"]),
   context: z.string().trim().min(12).max(1600),
+});
+
+const workspaceAssistantInputSchema = z.object({
+  page: z.string().trim().min(2).max(64),
+  prompt: z.string().trim().min(4).max(600),
 });
 
 const resumeUploadMetadataSchema = z.object({
@@ -147,8 +152,12 @@ export const appRouter = router({
       }),
   }),
 
+  portal: router({
+    demoSummary: protectedProcedure.query(() => db.getDemoPortalSummary()),
+  }),
+
   recruiting: router({
-    newHireProgress: recruiterProcedure.query(({ ctx }) => ctx.user.isDemo ? [] : db.listRecruiterNewHireProgress()),
+    newHireProgress: recruiterProcedure.query(() => db.listRecruiterNewHireProgress()),
     listCandidates: recruiterProcedure.query(() => db.listRecruiterCandidates()),
     parseResume: recruiterProcedure
       .input(z.object({ resumeText: z.string().trim().min(80).max(12_000) }))
@@ -201,6 +210,9 @@ export const appRouter = router({
 
         return generateAiBriefing(input.task, input.context);
       }),
+    workspaceAssistant: protectedProcedure
+      .input(workspaceAssistantInputSchema)
+      .mutation(({ ctx, input }) => generateWorkspaceAssistantReply({ role: ctx.user.role, page: input.page, prompt: input.prompt })),
   }),
 
 });

@@ -74,4 +74,24 @@ describe("real browser demo authentication journey", () => {
       await browser.close();
     }
   }, 45_000);
+
+  runBrowserJourney("opens the role-aware bottom-right assistant only after authentication", async () => {
+    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    try {
+      for (const [suffix, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]] as const) {
+        const page = await browser.newPage({ viewport });
+        await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+        await expect.poll(() => page.getByRole("button", { name: "Open AI assistant" }).count()).toBe(0);
+        await page.getByLabel("Email address").fill("consultant@demo.vertonsolutions.com");
+        await page.getByLabel("Password").fill("VertonDemo!2026");
+        await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
+        await page.waitForURL(`${baseUrl}/workspace`);
+        await page.getByRole("button", { name: "Open AI assistant" }).click();
+        await expect.poll(() => page.getByText("Workforce Hub assistant").count()).toBe(1);
+        await page.screenshot({ path: `/home/ubuntu/workspace-assistant-${suffix}.png`, fullPage: true });
+      }
+    } finally {
+      await browser.close();
+    }
+  }, 45_000);
 });

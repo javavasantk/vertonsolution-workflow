@@ -114,13 +114,14 @@ describe("demo credential authentication", () => {
     await expect(appRouter.createCaller(ctx).auth.resetDemoPassword({ token: "reset-token-12345678901234567890", password: "ReplacementDemo!2026" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("keeps public demo sessions from changing roles or reading production recruiter progress", async () => {
+  it("keeps public demo sessions from changing roles while permitting safe seeded recruiter progress", async () => {
+    dbMock.listRecruiterNewHireProgress.mockResolvedValue([{ userId: 2, onboardingStage: "manager_confirmation", progressPercent: 82 }]);
     const adminCaller = appRouter.createCaller(createDemoContext("admin"));
     const recruiterCaller = appRouter.createCaller(createDemoContext("recruiter"));
 
     await expect(adminCaller.access.assignRole({ userId: 99, role: "recruiter" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(recruiterCaller.recruiting.newHireProgress()).resolves.toEqual([]);
+    await expect(recruiterCaller.recruiting.newHireProgress()).resolves.toEqual([{ userId: 2, onboardingStage: "manager_confirmation", progressPercent: 82 }]);
     expect(dbMock.assignWorkforceRole).not.toHaveBeenCalled();
-    expect(dbMock.listRecruiterNewHireProgress).not.toHaveBeenCalled();
+    expect(dbMock.listRecruiterNewHireProgress).toHaveBeenCalledOnce();
   });
 });

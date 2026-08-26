@@ -24,4 +24,5 @@
 - [x] Add a polished Workforce Hub login experience that presents permitted demo access profiles without exposing sensitive workflow information before sign-in.
 - [x] Add role-based session handling, route protection, sign-out behavior, and role-scoped access routing for administrator, recruiter, HR/compliance, account manager, delivery manager, project manager, finance, and consultant users.
 - [x] Extend automated tests for login, account-assigned role access, protected workspace entry, and sign-out behavior.
-- [ ] Verify the updated login and role-access experience on desktop and mobile, then create a final checkpoint.
+- [x] Verify the updated login and role-access experience on desktop and mobile, then create a final checkpoint.
+- [x] Verify the secure login screen at a mobile breakpoint with the official Verton logo, sign-in action, and role-access messaging visible.

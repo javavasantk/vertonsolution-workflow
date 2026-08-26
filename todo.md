@@ -87,4 +87,18 @@
 - [x] Re-run login and workspace access-control tests and visual verification after enforcing the strict workspace route gate.
 - [x] Save a checkpoint after strict workspace route protection is fully validated.
 - [x] Visually verify the final authenticated recruiter resume parser on desktop and mobile after strict workspace route gating.
-- [ ] Save a final checkpoint after the authenticated recruiter parser and streamlined login are re-verified together.
+- [x] Save a final checkpoint after the authenticated recruiter parser and streamlined login are re-verified together.
+- [x] Define file-upload privacy boundaries: restrict uploads to recruiters/admins, accept only PDF/DOCX within a bounded size, process extracted text without automatic decisions, and retain only approved metadata.
+- [x] Add protected backend workflows for signed resume upload, PDF/DOCX text extraction, structured AI parsing, and candidate-search data.
+- [x] Add recruiter candidate search and filters for extracted skills, experience, and location with clear human-review status.
+- [x] Add CSV and PDF export actions for structured resume parsing results with safe client-side downloads.
+- [x] Add the resume upload and parsing interface with progress, errors, extracted result review, and no-automatic-decision notices.
+- [x] Restyle the first-login experience with the dark protected-access composition inspired by the provided reference, while retaining Verton identity and accessibility.
+- [x] Add automated tests for upload validation, role authorization, extraction fallback, candidate filtering, and export content.
+- [x] Verify desktop/mobile workflows and prepare the completed project checkpoint.
+- [x] Replace base64-over-tRPC resume submission with an explicit protected upload flow that obtains a short-lived upload target and validates file metadata server-side before parsing.
+- [x] Add end-to-end tests for accepted PDF/DOCX upload, invalid or oversized file rejection, storage linkage, and recruiter/admin authorization.
+- [ ] Re-verify the hardened recruiter upload workflow on desktop and mobile and save a final checkpoint.
+- [x] Add protected upload-path coverage for safe human-review fallback when AI extraction is unavailable.
+- [x] Add CSV and PDF export-content tests that verify structured candidate details are included in generated downloads.
+- [x] Re-run full validation after upload fallback and export-content coverage, then prepare the completed project checkpoint.

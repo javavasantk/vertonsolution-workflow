@@ -92,8 +92,56 @@ export const accessRoleChanges = mysqlTable("access_role_changes", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** Recruiter-visible candidate details extracted from an uploaded or pasted resume. Raw extracted text is intentionally not stored. */
+export const candidateProfiles = mysqlTable("candidate_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  createdByUserId: int("createdByUserId").notNull().references(() => users.id),
+  candidateName: varchar("candidateName", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 96 }),
+  location: varchar("location", { length: 255 }),
+  professionalSummary: text("professionalSummary"),
+  yearsExperience: varchar("yearsExperience", { length: 96 }),
+  skillsJson: text("skillsJson").notNull(),
+  recentRolesJson: text("recentRolesJson").notNull(),
+  educationJson: text("educationJson").notNull(),
+  recruiterNotesJson: text("recruiterNotesJson").notNull(),
+  confidence: mysqlEnum("confidence", ["high", "medium", "low"]).default("low").notNull(),
+  reviewState: mysqlEnum("reviewState", ["pending_human_review", "reviewed", "archived"]).default("pending_human_review").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Private object-store references for original recruiter uploads; file bytes never live in database columns. */
+export const resumeUploads = mysqlTable("resume_uploads", {
+  id: int("id").autoincrement().primaryKey(),
+  candidateProfileId: int("candidateProfileId").notNull().references(() => candidateProfiles.id),
+  uploadedByUserId: int("uploadedByUserId").notNull().references(() => users.id),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  originalFileName: varchar("originalFileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  fileSize: int("fileSize").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Short-lived server-issued upload records bind an object-store target to the authenticated recruiter before parsing. */
+export const resumeUploadSessions = mysqlTable("resume_upload_sessions", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  originalFileName: varchar("originalFileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  fileSize: int("fileSize").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
 export type InsertEmployeeProfile = typeof employeeProfiles.$inferInsert;
 export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
 export type InsertOnboardingAssignment = typeof onboardingAssignments.$inferInsert;
 export type AccessRoleChange = typeof accessRoleChanges.$inferSelect;
+export type CandidateProfile = typeof candidateProfiles.$inferSelect;
+export type ResumeUpload = typeof resumeUploads.$inferSelect;
+export type ResumeUploadSession = typeof resumeUploadSessions.$inferSelect;

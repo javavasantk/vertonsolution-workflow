@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +29,7 @@ const { authState, startLoginSpy, aiTestState, demoAuthState, resumeTestState } 
   },
   resumeTestState: {
     mutate: vi.fn(),
+    uploadMutate: vi.fn(),
     isPending: false,
     error: null as Error | null,
     response: { profile: { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Full-stack engineer with cloud delivery experience.", yearsExperience: "6 years", skills: ["TypeScript", "React", "AWS"], recentRoles: [{ title: "Software Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm project availability with the candidate."], confidence: "high" }, model: "test-model", unavailable: false } as any,
@@ -64,7 +65,10 @@ vi.mock("@/lib/trpc", () => ({
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+      listCandidates: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
+      prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadUrl: "https://upload.example.test/resume", expiresAt: new Date() }; }, isPending: false, error: null }) },
+      completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, isPending: false, error: null }) },
     },
     ai: {
       assist: { useMutation: (options?: { onSuccess?: (data: { briefing: string; task: string; model: string }) => void }) => ({ mutate: (input: unknown) => { aiTestState.mutate(input); if (aiTestState.response) options?.onSuccess?.(aiTestState.response); }, isPending: aiTestState.isPending, error: aiTestState.error }) },
@@ -72,7 +76,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import Home, { countCompletedOnboardingTasks, getAllowedNavigation, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage } from "./Home";
+import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, getAllowedNavigation, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage } from "./Home";
 
 function setAuthenticatedRole(role: string, name = "Avery Morgan") {
   authState.user = {
@@ -119,12 +123,22 @@ afterEach(() => {
   demoAuthState.resetMutate.mockReset();
   demoAuthState.loginAs = null;
   resumeTestState.mutate.mockReset();
+  resumeTestState.uploadMutate.mockReset();
   resumeTestState.isPending = false;
   resumeTestState.error = null;
   window.history.pushState({}, "", "/");
 });
 
 describe("Workforce Hub role access", () => {
+  it("builds structured CSV and PDF export content from extracted candidate details", () => {
+    const profile = { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"], education: ["B.S. Computer Science"], professionalSummary: "Full-stack engineer", recruiterNotes: ["Confirm availability"] };
+    const csv = buildCandidateResumeCsv(profile);
+    const pdf = buildCandidateResumePdfText(profile);
+    expect(csv).toContain('"Candidate name","Alex Morgan"');
+    expect(csv).toContain('"Skills","TypeScript; React"');
+    expect(pdf).toContain("Candidate: Alex Morgan");
+    expect(pdf).toContain("Human review notes: Confirm availability");
+  });
   it("maps stored account roles to their intended workspace role", () => {
     expect(getRoleKeyFromStoredRole("admin")).toBe("Administrator");
     expect(getRoleKeyFromStoredRole("hr_compliance")).toBe("HR & Compliance");
@@ -280,13 +294,49 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     const resumeInput = screen.getByLabelText("Resume text") as HTMLTextAreaElement;
     await user.type(resumeInput, "Alex Morgan is a full-stack engineer with six years of TypeScript, React, AWS, and cloud delivery experience. Alex has delivered web platforms for Northstar and is based in Austin, Texas. Contact alex@example.com.");
     expect(resumeInput.value.length).toBeGreaterThan(80);
-    const parseButton = screen.getByRole("button", { name: /Parse resume details/ }) as HTMLButtonElement;
+    const parseButton = screen.getByRole("button", { name: /Parse pasted resume/ }) as HTMLButtonElement;
     expect(parseButton.disabled).toBe(false);
     await user.click(parseButton);
     expect(resumeTestState.mutate).toHaveBeenCalledWith(expect.objectContaining({ resumeText: expect.stringContaining("Alex Morgan") }));
     expect(screen.getByText("Alex Morgan")).toBeTruthy();
-    expect(screen.getByText("TypeScript")).toBeTruthy();
+    expect(screen.getAllByText("TypeScript").length).toBeGreaterThan(0);
     expect(screen.getByText(/Prepare for human review/)).toBeTruthy();
+  });
+
+  it("starts the protected direct-upload flow and exposes result exports", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchSpy);
+    const createObjectUrl = vi.fn(() => "blob:resume-export");
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+    const file = new File(["%PDF example resume"], "alex-morgan.pdf", { type: "application/pdf" });
+    await user.upload(screen.getByLabelText("Resume file upload"), file);
+    await user.click(screen.getByRole("button", { name: /Upload & parse resume/ }));
+    await waitFor(() => expect(resumeTestState.uploadMutate).toHaveBeenCalledWith(expect.objectContaining({ fileName: "alex-morgan.pdf", fileSize: file.size })));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("https://upload.example.test/resume", expect.objectContaining({ method: "PUT" })));
+    expect(screen.getByRole("button", { name: /CSV/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /PDF/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /CSV/ }));
+    expect(createObjectUrl).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("filters recruiter-visible candidates by search, skill, and experience", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+    const finder = screen.getByText("Candidate finder").closest("section") as HTMLElement;
+    await user.type(screen.getByLabelText("Search candidates"), "Lena");
+    expect(within(finder).getByText("Lena Garcia")).toBeTruthy();
+    expect(within(finder).queryByText("Owen Miller")).toBeNull();
+    await user.clear(screen.getByLabelText("Search candidates"));
+    await user.selectOptions(screen.getByLabelText("Filter by skill"), "Java");
+    expect(within(finder).getByText("Owen Miller")).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Filter by experience"), "4-7");
+    expect(within(finder).getByText(/No candidate profiles match these filters/)).toBeTruthy();
   });
 
   it("sends bounded onboarding state to the AI assistant and renders the returned briefing", async () => {

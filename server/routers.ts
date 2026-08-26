@@ -6,6 +6,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
 import { generateAiBriefing } from "./aiService";
 import { parseRecruiterResume } from "./resumeParserService";
+import { extractResumeTextFromBytes, validateResumeMetadata } from "./resumeFileService";
+import { storageCreateUploadTarget, storageGetSignedUrl } from "./storage";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
 
@@ -41,6 +43,14 @@ const aiAssistantInputSchema = z.object({
   task: z.enum(["recruiter_summary", "onboarding_guidance", "access_review"]),
   context: z.string().trim().min(12).max(1600),
 });
+
+const resumeUploadMetadataSchema = z.object({
+  fileName: z.string().trim().min(5).max(255),
+  mimeType: z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]),
+  fileSize: z.number().int().min(1).max(5 * 1024 * 1024),
+});
+
+const resumeUploadCompletionSchema = z.object({ sessionId: z.string().uuid() });
 
 const demoLoginSchema = z.object({
   email: z.string().trim().email().max(320),
@@ -139,9 +149,47 @@ export const appRouter = router({
 
   recruiting: router({
     newHireProgress: recruiterProcedure.query(({ ctx }) => ctx.user.isDemo ? [] : db.listRecruiterNewHireProgress()),
+    listCandidates: recruiterProcedure.query(() => db.listRecruiterCandidates()),
     parseResume: recruiterProcedure
       .input(z.object({ resumeText: z.string().trim().min(80).max(12_000) }))
-      .mutation(async ({ input }) => parseRecruiterResume(input.resumeText)),
+      .mutation(async ({ ctx, input }) => {
+        const parsed = await parseRecruiterResume(input.resumeText);
+        const candidate = parsed.unavailable ? null : await db.createCandidateProfile(ctx.user.id, parsed.profile);
+        return { ...parsed, candidate };
+      }),
+    prepareResumeUpload: recruiterProcedure
+      .input(resumeUploadMetadataSchema)
+      .mutation(async ({ ctx, input }) => {
+        const metadata = validateResumeMetadata(input);
+        const session = await db.createResumeUploadSession(ctx.user.id, { originalFileName: metadata.fileName, mimeType: input.mimeType, fileSize: input.fileSize });
+        const target = await storageCreateUploadTarget(session.fileKey, input.mimeType);
+        return { sessionId: session.id, uploadUrl: target.uploadUrl, expiresAt: session.expiresAt };
+      }),
+    completeResumeUpload: recruiterProcedure
+      .input(resumeUploadCompletionSchema)
+      .mutation(async ({ ctx, input }) => {
+        const session = await db.getActiveResumeUploadSession(ctx.user.id, input.sessionId);
+        if (!session) throw new TRPCError({ code: "BAD_REQUEST", message: "This upload session is invalid, expired, or already completed." });
+        const signedUrl = await storageGetSignedUrl(session.fileKey);
+        const response = await fetch(signedUrl);
+        if (!response.ok) throw new TRPCError({ code: "BAD_REQUEST", message: "The resume upload could not be retrieved. Upload the file again." });
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length !== session.fileSize) throw new TRPCError({ code: "BAD_REQUEST", message: "The uploaded file size does not match the approved upload request." });
+        const extracted = await extractResumeTextFromBytes({ fileName: session.originalFileName, mimeType: session.mimeType, bytes });
+        const parsed = await parseRecruiterResume(extracted.text);
+        if (parsed.unavailable) {
+          await db.completeResumeUploadSession(session.id);
+          return { ...parsed, candidate: null, fileName: extracted.fileName };
+        }
+        const candidate = await db.createCandidateProfile(ctx.user.id, parsed.profile, {
+          fileKey: session.fileKey,
+          originalFileName: extracted.fileName,
+          mimeType: session.mimeType,
+          fileSize: extracted.bytes.length,
+        });
+        await db.completeResumeUploadSession(session.id);
+        return { ...parsed, candidate, fileName: extracted.fileName };
+      }),
   }),
 
   ai: router({

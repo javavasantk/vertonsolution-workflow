@@ -1,9 +1,9 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, employeeProfiles, InsertUser, onboardingAssignments, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, employeeProfiles, InsertUser, onboardingAssignments, resumeUploads, resumeUploadSessions, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
-import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
 const DEMO_PASSWORD = "VertonDemo!2026";
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -241,6 +241,93 @@ export async function listRecruiterNewHireProgress() {
     .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
     .where(inArray(users.role, ["user", "consultant"]))
     .orderBy(desc(onboardingAssignments.updatedAt));
+}
+
+type CandidateProfileInput = {
+  candidateName: string;
+  email: string;
+  phone: string;
+  location: string;
+  professionalSummary: string;
+  yearsExperience: string;
+  skills: string[];
+  recentRoles: Array<{ title: string; company: string; period: string }>;
+  education: string[];
+  recruiterNotes: string[];
+  confidence: "high" | "medium" | "low";
+};
+
+function serializeCandidateProfile(input: CandidateProfileInput) {
+  return {
+    candidateName: input.candidateName || "Candidate pending review",
+    email: input.email || null,
+    phone: input.phone || null,
+    location: input.location || null,
+    professionalSummary: input.professionalSummary || null,
+    yearsExperience: input.yearsExperience || null,
+    skillsJson: JSON.stringify(input.skills ?? []),
+    recentRolesJson: JSON.stringify(input.recentRoles ?? []),
+    educationJson: JSON.stringify(input.education ?? []),
+    recruiterNotesJson: JSON.stringify(input.recruiterNotes ?? []),
+    confidence: input.confidence ?? "low",
+  };
+}
+
+function parseJson<T>(value: string, fallback: T): T {
+  try { return JSON.parse(value) as T; } catch { return fallback; }
+}
+
+function presentCandidate(row: typeof candidateProfiles.$inferSelect) {
+  return {
+    ...row,
+    skills: parseJson<string[]>(row.skillsJson, []),
+    recentRoles: parseJson<Array<{ title: string; company: string; period: string }>>(row.recentRolesJson, []),
+    education: parseJson<string[]>(row.educationJson, []),
+    recruiterNotes: parseJson<string[]>(row.recruiterNotesJson, []),
+  };
+}
+
+export async function createCandidateProfile(createdByUserId: number, input: CandidateProfileInput, upload?: { fileKey: string; originalFileName: string; mimeType: string; fileSize: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.insert(candidateProfiles).values({ createdByUserId, ...serializeCandidateProfile(input) });
+  const created = await db.select().from(candidateProfiles).where(eq(candidateProfiles.createdByUserId, createdByUserId)).orderBy(desc(candidateProfiles.id)).limit(1);
+  const candidate = created[0];
+  if (!candidate) throw new Error("Candidate profile could not be created");
+  if (upload) await db.insert(resumeUploads).values({ candidateProfileId: candidate.id, uploadedByUserId: createdByUserId, ...upload });
+  return presentCandidate(candidate);
+}
+
+export async function listRecruiterCandidates() {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(candidateProfiles).orderBy(desc(candidateProfiles.updatedAt));
+  return rows.map(presentCandidate);
+}
+
+export async function createResumeUploadSession(userId: number, input: { originalFileName: string; mimeType: string; fileSize: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const id = randomUUID();
+  const fileKey = `recruiter-resumes/${userId}/${id}-${input.originalFileName}`;
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await db.insert(resumeUploadSessions).values({ id, userId, fileKey, ...input, expiresAt });
+  return { id, fileKey, expiresAt };
+}
+
+export async function getActiveResumeUploadSession(userId: number, sessionId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const session = await db.select().from(resumeUploadSessions).where(and(eq(resumeUploadSessions.id, sessionId), eq(resumeUploadSessions.userId, userId))).limit(1);
+  const active = session[0];
+  if (!active || active.completedAt || active.expiresAt.getTime() < Date.now()) return undefined;
+  return active;
+}
+
+export async function completeResumeUploadSession(sessionId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.update(resumeUploadSessions).set({ completedAt: new Date() }).where(eq(resumeUploadSessions.id, sessionId));
 }
 
 export async function ensureDemoAccounts() {

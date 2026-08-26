@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { parseRecruiterResumeSpy } = vi.hoisted(() => ({ parseRecruiterResumeSpy: vi.fn() }));
+const { parseRecruiterResumeSpy, createCandidateProfileSpy } = vi.hoisted(() => ({ parseRecruiterResumeSpy: vi.fn(), createCandidateProfileSpy: vi.fn() }));
 
 vi.mock("./resumeParserService", () => ({ parseRecruiterResume: parseRecruiterResumeSpy }));
+vi.mock("./db", () => ({ createCandidateProfile: createCandidateProfileSpy }));
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -18,7 +19,7 @@ function createContext(role: "admin" | "recruiter" | "consultant"): TrpcContext 
 const resumeText = "Alex Morgan is a full-stack engineer with TypeScript, React, AWS, cloud delivery, and six years of documented experience across web platforms.";
 
 describe("recruiting.parseResume", () => {
-  beforeEach(() => parseRecruiterResumeSpy.mockReset());
+  beforeEach(() => { parseRecruiterResumeSpy.mockReset(); createCandidateProfileSpy.mockReset(); createCandidateProfileSpy.mockResolvedValue({ id: 1, candidateName: "Alex Morgan" }); });
 
   it("allows recruiters to parse bounded resume text", async () => {
     parseRecruiterResumeSpy.mockResolvedValue({ profile: { candidateName: "Alex Morgan", skills: ["TypeScript"] }, model: "test", unavailable: false });

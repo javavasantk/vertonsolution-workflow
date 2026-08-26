@@ -132,7 +132,11 @@
 - [x] Connect the bottom-right AI assistant to structured candidate/project query results instead of supplying database records through unrestricted free-text prompts.
 - [x] Add tests for assistant query authorization, candidate/project lookup bounds, profile persistence, inline edit validation, and audit activity.
 - [x] Verify desktop/mobile assistant lookup and inline editing workflows, then save a completed project checkpoint.
-- [ ] Verify the latest project checkpoint and repository export readiness for vertonsolution-workflow.
-- [ ] Create the requested private GitHub repository and push the current Workforce Hub source code.
-- [ ] Connect vertonsolutions.live through the project domain settings and provide the required DNS verification records if domain-owner action is needed.
-- [ ] Confirm the GitHub repository and custom-domain deployment status.
+- [x] Verify the latest project checkpoint and repository export readiness for vertonsolution-workflow.
+- [x] Create the requested private GitHub repository and push the current Workforce Hub source code.
+- [x] Connect vertonsolutions.live through the project domain settings and provide the required DNS verification records if domain-owner action is needed.
+- [x] Confirm the GitHub repository and custom-domain deployment status.
+- [x] Inventory only the implemented Workforce Hub capabilities, data models, roles, workflows, APIs, and safety boundaries.
+- [x] Map the implemented end-to-end flows from secure sign-in through role-scoped workspaces, operational records, AI assistance, resume parsing, and export workflows.
+- [x] Write implementation prompts that reproduce or extend existing functionality without proposing unimplemented capabilities.
+- [ ] Deliver an implementation prompt guide with explicit current-state boundaries and no speculative features.

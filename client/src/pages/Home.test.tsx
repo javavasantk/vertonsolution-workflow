@@ -67,7 +67,7 @@ vi.mock("@/lib/trpc", () => ({
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       listCandidates: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
-      prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadUrl: "https://upload.example.test/resume", expiresAt: new Date() }; }, isPending: false, error: null }) },
+      prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadPath: "/api/recruiter/resume-upload/f4c4c2a6-17fb-4d62-b119-784831553898", expiresAt: new Date() }; }, isPending: false, error: null }) },
       completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, isPending: false, error: null }) },
     },
     ai: {
@@ -316,7 +316,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.upload(screen.getByLabelText("Resume file upload"), file);
     await user.click(screen.getByRole("button", { name: /Upload & parse resume/ }));
     await waitFor(() => expect(resumeTestState.uploadMutate).toHaveBeenCalledWith(expect.objectContaining({ fileName: "alex-morgan.pdf", fileSize: file.size })));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("https://upload.example.test/resume", expect.objectContaining({ method: "PUT" })));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/api/recruiter/resume-upload/f4c4c2a6-17fb-4d62-b119-784831553898", expect.objectContaining({ method: "PUT" })));
     expect(screen.getByRole("button", { name: /CSV/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /PDF/ })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /CSV/ }));

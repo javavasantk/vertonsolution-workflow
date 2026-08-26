@@ -98,7 +98,13 @@
 - [x] Verify desktop/mobile workflows and prepare the completed project checkpoint.
 - [x] Replace base64-over-tRPC resume submission with an explicit protected upload flow that obtains a short-lived upload target and validates file metadata server-side before parsing.
 - [x] Add end-to-end tests for accepted PDF/DOCX upload, invalid or oversized file rejection, storage linkage, and recruiter/admin authorization.
-- [ ] Re-verify the hardened recruiter upload workflow on desktop and mobile and save a final checkpoint.
+- [x] Re-verify the hardened recruiter upload workflow on desktop and mobile and save a final checkpoint.
+- [x] Capture fresh authenticated desktop and mobile recruiter workflow evidence after signed-upload hardening, including upload, candidate filters, and export controls.
+- [x] Extend the real-browser recruiter test to exercise the direct upload preparation and completion workflow through the authenticated UI.
+- [ ] Re-run the full suite, verify fresh recruiter evidence, and save the final checkpoint.
+- [x] Add an authenticated real-browser recruiter journey that uploads a valid PDF/DOCX fixture, completes signed upload and AI parsing, and verifies structured result rendering.
+- [x] Capture fresh desktop and mobile evidence after a completed recruiter upload, showing parsed results, CSV/PDF export controls, and candidate filters.
+- [ ] Re-run the complete suite and save a final checkpoint after true browser upload coverage.
 - [x] Add protected upload-path coverage for safe human-review fallback when AI extraction is unavailable.
 - [x] Add CSV and PDF export-content tests that verify structured candidate details are included in generated downloads.
 - [x] Re-run full validation after upload fallback and export-content coverage, then prepare the completed project checkpoint.

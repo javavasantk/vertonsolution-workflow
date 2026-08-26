@@ -62,7 +62,7 @@ export async function parseRecruiterResume(resumeText: string, callModel: ModelI
   try {
     const result = await callModel({
       model: "gpt-5-mini",
-      maxTokens: 900,
+      maxCompletionTokens: 900,
       messages: [
         {
           role: "system",
@@ -75,7 +75,8 @@ export async function parseRecruiterResume(resumeText: string, callModel: ModelI
     const content = result.choices[0]?.message.content;
     const raw = typeof content === "string" ? content : content?.filter(part => part.type === "text").map(part => part.text).join("") ?? "";
     return { profile: resumeParseSchema.parse(JSON.parse(raw)), model: result.model, unavailable: false };
-  } catch {
+  } catch (error) {
+    console.warn("[Resume parser] Managed extraction unavailable:", error instanceof Error ? error.message : "unknown provider error");
     return { profile: unavailableResult, model: "unavailable", unavailable: true };
   }
 }

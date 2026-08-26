@@ -7,7 +7,7 @@ import { sdk } from "./_core/sdk";
 import { generateAiBriefing } from "./aiService";
 import { parseRecruiterResume } from "./resumeParserService";
 import { extractResumeTextFromBytes, validateResumeMetadata } from "./resumeFileService";
-import { storageCreateUploadTarget, storageGetSignedUrl } from "./storage";
+import { storageGetSignedUrl } from "./storage";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
 
@@ -162,8 +162,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const metadata = validateResumeMetadata(input);
         const session = await db.createResumeUploadSession(ctx.user.id, { originalFileName: metadata.fileName, mimeType: input.mimeType, fileSize: input.fileSize });
-        const target = await storageCreateUploadTarget(session.fileKey, input.mimeType);
-        return { sessionId: session.id, uploadUrl: target.uploadUrl, expiresAt: session.expiresAt };
+        return { sessionId: session.id, uploadPath: `/api/recruiter/resume-upload/${session.id}`, expiresAt: session.expiresAt };
       }),
     completeResumeUpload: recruiterProcedure
       .input(resumeUploadCompletionSchema)

@@ -627,7 +627,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
       setResumeUploadMessage("");
       try {
         const prepared = await prepareResumeUploadMutation.mutateAsync({ fileName: resumeFile.name, mimeType: resumeFile.type as "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileSize: resumeFile.size });
-        const uploadResponse = await fetch(prepared.uploadUrl, { method: "PUT", headers: { "Content-Type": resumeFile.type }, body: resumeFile });
+        const uploadResponse = await fetch(prepared.uploadPath, { method: "PUT", headers: { "Content-Type": resumeFile.type }, body: resumeFile });
         if (!uploadResponse.ok) throw new Error("The resume file could not be uploaded. Try again.");
         completeResumeUploadMutation.mutate({ sessionId: prepared.sessionId });
       } catch (error) {

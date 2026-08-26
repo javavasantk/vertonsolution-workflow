@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+import { jsPDF } from "jspdf";
 import { describe, expect, it } from "vitest";
 
 const runBrowserJourney = process.env.RUN_BROWSER_TESTS === "1" ? it : it.skip;
@@ -24,6 +25,15 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await page.screenshot({ path: `/home/ubuntu/auth-journey-workspace-${suffix}.png`, fullPage: true });
 }
 
+function signedUploadResumeFixture() {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  doc.setFontSize(12);
+  doc.text([
+    "Alex Morgan", "alex.morgan@example.com | Austin, TX | 555-0100", "Full-stack engineer with six years of TypeScript, React, AWS, and cloud delivery experience.", "Skills: TypeScript, React, Node.js, AWS, PostgreSQL", "Experience: Software Engineer — Northstar Digital — 2020 to Present", "Education: B.S. Computer Science — University of Texas",
+  ], 48, 72, { maxWidth: 500, lineHeightFactor: 1.55 });
+  return Buffer.from(doc.output("arraybuffer"));
+}
+
 describe("real browser demo authentication journey", () => {
   runBrowserJourney("recovers the consultant demo password and enters the assigned workspace", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
@@ -36,7 +46,7 @@ describe("real browser demo authentication journey", () => {
     }
   }, 45_000);
 
-  runBrowserJourney("opens the recruiter resume parser only after credential authentication", async () => {
+  runBrowserJourney("opens the signed-upload recruiter workflow only after credential authentication", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 
     try {
@@ -50,7 +60,15 @@ describe("real browser demo authentication journey", () => {
         await page.goto(`${baseUrl}/workspace/recruiting`, { waitUntil: "networkidle" });
         await expect.poll(() => page.getByText("AI resume parser").count()).toBe(1);
         await expect.poll(() => page.getByText("Recruiter workspace").count()).toBeGreaterThan(0);
-        await page.screenshot({ path: `/home/ubuntu/authenticated-recruiter-resume-parser-${suffix}.png`, fullPage: true });
+        await expect.poll(() => page.getByLabel("Resume file upload").count()).toBe(1);
+        await expect.poll(() => page.getByLabel("Search candidates").count()).toBe(1);
+        await expect.poll(() => page.getByLabel("Filter by skill").count()).toBe(1);
+        await page.getByLabel("Resume file upload").setInputFiles({ name: "alex-morgan.pdf", mimeType: "application/pdf", buffer: signedUploadResumeFixture() });
+        await page.getByRole("button", { name: /Upload & parse resume/ }).click();
+        await expect.poll(() => page.getByText(/Parsed profile will appear here/).count(), { timeout: 30_000 }).toBe(0);
+        await expect.poll(() => page.getByRole("button", { name: "CSV" }).count(), { timeout: 30_000 }).toBe(1);
+        await expect.poll(() => page.getByRole("button", { name: "PDF" }).count(), { timeout: 30_000 }).toBe(1);
+        await page.screenshot({ path: `/home/ubuntu/signed-upload-recruiter-workflow-${suffix}.png`, fullPage: true });
       }
     } finally {
       await browser.close();

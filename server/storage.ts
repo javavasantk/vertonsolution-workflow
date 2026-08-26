@@ -71,6 +71,24 @@ export async function storagePut(
   return { key, url: `/manus-storage/${key}` };
 }
 
+export async function storagePutAtKey(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream",
+): Promise<{ key: string; url: string }> {
+  const { forgeUrl, forgeKey } = getForgeConfig();
+  const key = normalizeKey(relKey);
+  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
+  presignUrl.searchParams.set("path", key);
+  const presignResp = await fetch(presignUrl, { headers: { Authorization: `Bearer ${forgeKey}` } });
+  if (!presignResp.ok) throw new Error(`Storage presign failed (${presignResp.status})`);
+  const { url: s3Url } = (await presignResp.json()) as { url: string };
+  const body = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data as any], { type: contentType });
+  const uploadResp = await fetch(s3Url, { method: "PUT", headers: { "Content-Type": contentType }, body });
+  if (!uploadResp.ok) throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
+  return { key, url: `/manus-storage/${key}` };
+}
+
 export async function storageCreateUploadTarget(
   relKey: string,
   contentType: string,

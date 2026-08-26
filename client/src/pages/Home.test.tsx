@@ -36,6 +36,8 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
   resumeTestState: {
     mutate: vi.fn(),
     uploadMutate: vi.fn(),
+    candidateUpdateMutate: vi.fn(),
+    candidates: [{ id: 31, candidateName: "Lena Garcia", email: "lena@example.com", location: "Denver, CO", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending" }, { id: 32, candidateName: "Owen Miller", email: "owen@example.com", location: "Chicago, IL", yearsExperience: "8 years", skills: ["Java", "Spring"], reviewState: "reviewed" }] as any[],
     isPending: false,
     error: null as Error | null,
     response: { profile: { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Full-stack engineer with cloud delivery experience.", yearsExperience: "6 years", skills: ["TypeScript", "React", "AWS"], recentRoles: [{ title: "Software Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm project availability with the candidate."], confidence: "high" }, model: "test-model", unavailable: false } as any,
@@ -70,18 +72,20 @@ vi.mock("@/lib/trpc", () => ({
       requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     portal: {
-      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, status: "approved", hours: 40, weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] } }) },
+      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, status: "approved", hours: 40, weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: vi.fn() }) },
+      updateProject: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (_input: unknown) => options?.onSuccess?.(), isPending: false }) },
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
-      listCandidates: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+      listCandidates: { useQuery: () => ({ data: resumeTestState.candidates, isLoading: false, refetch: vi.fn() }) },
+      updateCandidate: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { resumeTestState.candidateUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
       prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadPath: "/api/recruiter/resume-upload/f4c4c2a6-17fb-4d62-b119-784831553898", expiresAt: new Date() }; }, isPending: false, error: null }) },
       completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); const result = { ...resumeTestState.response, fileName: "alex-morgan.pdf" }; options?.onSuccess?.(result); return result; }, isPending: false, error: null }) },
     },
     ai: {
       assist: { useMutation: (options?: { onSuccess?: (data: { briefing: string; task: string; model: string }) => void }) => ({ mutate: (input: unknown) => { aiTestState.mutate(input); if (aiTestState.response) options?.onSuccess?.(aiTestState.response); }, isPending: aiTestState.isPending, error: aiTestState.error }) },
-      workspaceAssistant: { useMutation: (options?: { onSuccess?: (data: { reply: string; model: string; unavailable: boolean }) => void }) => ({ mutate: (input: unknown) => { workspaceAssistantState.mutate(input); options?.onSuccess?.(workspaceAssistantState.response); }, isPending: workspaceAssistantState.isPending, error: workspaceAssistantState.error }) },
+      workspaceAssistant: { useMutation: (options?: { onSuccess?: (data: { reply: string; model: string; unavailable: boolean; lookupKind?: string; records?: unknown[] }) => void }) => ({ mutate: (input: unknown) => { workspaceAssistantState.mutate(input); options?.onSuccess?.(workspaceAssistantState.response); }, isPending: workspaceAssistantState.isPending, error: workspaceAssistantState.error }) },
     },
   },
 }));
@@ -131,12 +135,15 @@ afterEach(() => {
   workspaceAssistantState.mutate.mockReset();
   workspaceAssistantState.isPending = false;
   workspaceAssistantState.error = null;
+  workspaceAssistantState.response = { reply: "Use the assigned workflow controls and confirm the designated human owner before acting.", model: "test-model", unavailable: false };
   demoAuthState.loginMutate.mockReset();
   demoAuthState.resetRequestMutate.mockReset();
   demoAuthState.resetMutate.mockReset();
   demoAuthState.loginAs = null;
   resumeTestState.mutate.mockReset();
   resumeTestState.uploadMutate.mockReset();
+  resumeTestState.candidateUpdateMutate.mockReset();
+  resumeTestState.candidates = [{ id: 31, candidateName: "Lena Garcia", email: "lena@example.com", location: "Denver, CO", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending" }, { id: 32, candidateName: "Owen Miller", email: "owen@example.com", location: "Chicago, IL", yearsExperience: "8 years", skills: ["Java", "Spring"], reviewState: "reviewed" }];
   resumeTestState.isPending = false;
   resumeTestState.error = null;
   window.history.pushState({}, "", "/");
@@ -374,6 +381,20 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(within(finder).getByText(/No candidate profiles match these filters/)).toBeTruthy();
   });
 
+  it("edits a database-backed candidate row inline and submits validated recruiter changes", async () => {
+    const user = userEvent.setup();
+    resumeTestState.candidates = [{ id: 41, candidateName: "Alex Morgan", email: "alex@example.com", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending" }];
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+
+    await user.click(screen.getByRole("button", { name: "Edit Alex Morgan" }));
+    const nameInput = screen.getByLabelText("Edit candidate name") as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, "Alex Morgan Updated");
+    await user.click(screen.getByRole("button", { name: "Save candidate edit" }));
+    expect(resumeTestState.candidateUpdateMutate).toHaveBeenCalledWith(expect.objectContaining({ candidateId: 41, candidateName: "Alex Morgan Updated", skills: ["TypeScript", "React"] }));
+  });
+
   it("shows onboarding drafting only in its active workflow context and renders the returned briefing", async () => {
     const user = userEvent.setup();
     aiTestState.response = { briefing: "Summary\nHuman follow-up\nBoundary", task: "onboarding_guidance", model: "test-model" };
@@ -396,6 +417,19 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
     expect(screen.getByText(/The assistant is unavailable/)).toBeTruthy();
+  });
+
+  it("renders bounded database candidate matches returned through the recruiter assistant", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.response = { reply: "I found a recruiter-visible match.", model: "test-model", unavailable: false, lookupKind: "candidate", records: [{ id: 41, candidateName: "Alex Morgan", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"] }] } as any;
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    await user.click(screen.getByRole("button", { name: "Find candidate profiles with Java skills" }));
+    expect(workspaceAssistantState.mutate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "Find candidate profiles with Java skills" }));
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Database matches (candidate)"))).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Alex Morgan — Austin, TX"))).length).toBeGreaterThan(0);
   });
 
   it("disables floating assistant prompts while a response is being prepared", async () => {

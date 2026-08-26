@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { parseRecruiterResumeSpy, createCandidateProfileSpy } = vi.hoisted(() => ({ parseRecruiterResumeSpy: vi.fn(), createCandidateProfileSpy: vi.fn() }));
+const { parseRecruiterResumeSpy, createCandidateProfileSpy, updateCandidateProfileSpy } = vi.hoisted(() => ({ parseRecruiterResumeSpy: vi.fn(), createCandidateProfileSpy: vi.fn(), updateCandidateProfileSpy: vi.fn() }));
 
 vi.mock("./resumeParserService", () => ({ parseRecruiterResume: parseRecruiterResumeSpy }));
-vi.mock("./db", () => ({ createCandidateProfile: createCandidateProfileSpy }));
+vi.mock("./db", () => ({ createCandidateProfile: createCandidateProfileSpy, updateCandidateProfile: updateCandidateProfileSpy }));
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -19,7 +19,7 @@ function createContext(role: "admin" | "recruiter" | "consultant"): TrpcContext 
 const resumeText = "Alex Morgan is a full-stack engineer with TypeScript, React, AWS, cloud delivery, and six years of documented experience across web platforms.";
 
 describe("recruiting.parseResume", () => {
-  beforeEach(() => { parseRecruiterResumeSpy.mockReset(); createCandidateProfileSpy.mockReset(); createCandidateProfileSpy.mockResolvedValue({ id: 1, candidateName: "Alex Morgan" }); });
+  beforeEach(() => { parseRecruiterResumeSpy.mockReset(); createCandidateProfileSpy.mockReset(); updateCandidateProfileSpy.mockReset(); createCandidateProfileSpy.mockResolvedValue({ id: 1, candidateName: "Alex Morgan" }); });
 
   it("allows recruiters to parse bounded resume text", async () => {
     parseRecruiterResumeSpy.mockResolvedValue({ profile: { candidateName: "Alex Morgan", skills: ["TypeScript"] }, model: "test", unavailable: false });
@@ -27,6 +27,14 @@ describe("recruiting.parseResume", () => {
 
     await expect(caller.recruiting.parseResume({ resumeText })).resolves.toMatchObject({ profile: { candidateName: "Alex Morgan" } });
     expect(parseRecruiterResumeSpy).toHaveBeenCalledWith(resumeText);
+    expect(createCandidateProfileSpy).toHaveBeenCalledWith(91, expect.objectContaining({ candidateName: "Alex Morgan", skills: ["TypeScript"] }));
+  });
+
+  it("allows recruiters to persist reviewed inline candidate updates", async () => {
+    updateCandidateProfileSpy.mockResolvedValue({ id: 1, candidateName: "Alex Morgan", skills: ["TypeScript", "React"] });
+    const input = { candidateId: 1, candidateName: "Alex Morgan", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"] };
+    await expect(appRouter.createCaller(createContext("recruiter")).recruiting.updateCandidate(input)).resolves.toMatchObject({ candidateName: "Alex Morgan" });
+    expect(updateCandidateProfileSpy).toHaveBeenCalledWith(1, 91, expect.objectContaining({ skills: ["TypeScript", "React"] }));
   });
 
   it("allows administrators and rejects consultants", async () => {

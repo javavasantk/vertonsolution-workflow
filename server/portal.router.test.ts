@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getDemoPortalSummarySpy } = vi.hoisted(() => ({
+const { getDemoPortalSummarySpy, updateClientProjectSpy } = vi.hoisted(() => ({
   getDemoPortalSummarySpy: vi.fn(),
+  updateClientProjectSpy: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
   getDemoPortalSummary: getDemoPortalSummarySpy,
+  updateClientProject: updateClientProjectSpy,
 }));
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-function createContext(): TrpcContext {
+function createContext(role: "consultant" | "delivery_manager" = "consultant"): TrpcContext {
   return {
     user: {
       id: 12,
@@ -20,7 +22,7 @@ function createContext(): TrpcContext {
       name: "Demo Consultant",
       loginMethod: "demo-credentials",
       isDemo: true,
-      role: "consultant",
+      role,
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
@@ -31,7 +33,7 @@ function createContext(): TrpcContext {
 }
 
 describe("portal.demoSummary", () => {
-  beforeEach(() => getDemoPortalSummarySpy.mockReset());
+  beforeEach(() => { getDemoPortalSummarySpy.mockReset(); updateClientProjectSpy.mockReset(); });
 
   it("returns protected seeded portal records for an authenticated workspace user", async () => {
     getDemoPortalSummarySpy.mockResolvedValue({
@@ -48,5 +50,13 @@ describe("portal.demoSummary", () => {
       activities: [{ title: "Demo assignment extension review" }],
     });
     expect(getDemoPortalSummarySpy).toHaveBeenCalledOnce();
+  });
+
+  it("allows delivery owners to update projects and rejects roles without delivery authority", async () => {
+    updateClientProjectSpy.mockResolvedValue({ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "at_risk", projectManagerName: "Casey Rivera" });
+    const input = { projectId: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "at_risk" as const, projectManagerName: "Casey Rivera" };
+    await expect(appRouter.createCaller(createContext("consultant")).portal.updateProject(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(appRouter.createCaller(createContext("delivery_manager")).portal.updateProject(input)).resolves.toMatchObject({ deliveryStatus: "at_risk" });
+    expect(updateClientProjectSpy).toHaveBeenCalledWith(1, 12, input);
   });
 });

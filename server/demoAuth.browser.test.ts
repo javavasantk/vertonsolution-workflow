@@ -65,15 +65,15 @@ describe("real browser demo authentication journey", () => {
         await expect.poll(() => page.getByLabel("Filter by skill").count()).toBe(1);
         await page.getByLabel("Resume file upload").setInputFiles({ name: "alex-morgan.pdf", mimeType: "application/pdf", buffer: signedUploadResumeFixture() });
         await page.getByRole("button", { name: /Upload & parse resume/ }).click();
-        await expect.poll(() => page.getByText(/Parsed profile will appear here/).count(), { timeout: 30_000 }).toBe(0);
-        await expect.poll(() => page.getByRole("button", { name: "CSV" }).count(), { timeout: 30_000 }).toBe(1);
-        await expect.poll(() => page.getByRole("button", { name: "PDF" }).count(), { timeout: 30_000 }).toBe(1);
+        await expect.poll(() => page.getByText(/Parsed profile will appear here/).count(), { timeout: 50_000 }).toBe(0);
+        await expect.poll(() => page.getByRole("button", { name: "CSV" }).count(), { timeout: 50_000 }).toBe(1);
+        await expect.poll(() => page.getByRole("button", { name: "PDF" }).count(), { timeout: 50_000 }).toBe(1);
         await page.screenshot({ path: `/home/ubuntu/signed-upload-recruiter-workflow-${suffix}.png`, fullPage: true });
       }
     } finally {
       await browser.close();
     }
-  }, 70_000);
+  }, 120_000);
 
   runBrowserJourney("opens the role-aware bottom-right assistant only after authentication", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });

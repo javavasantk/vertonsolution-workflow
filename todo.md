@@ -117,7 +117,7 @@
 - [x] Verify the database-backed portal experience and floating AI assistant on desktop and mobile, then save a completed project checkpoint.
 - [x] Capture authenticated desktop evidence for database-backed overview, delivery, and time-billing workspace records.
 - [x] Capture authenticated mobile evidence for the same database-backed portal views and confirm finance masking remains role-scoped.
-- [ ] Save a final checkpoint after database-backed workspace view visual validation.
+- [x] Save a final checkpoint after database-backed workspace view visual validation.
 - [x] Add an in-app data-source note that identifies MySQL-compatible TiDB with Drizzle ORM and distinguishes database-backed modules from client-only representative UI.
 - [x] Extend the idempotent demo seed to include clearly labeled recruiter candidate profiles for Candidate Finder.
 - [x] Replace remaining hardcoded delivery lifecycle, demand, assignment, time, and activity datasets with protected database summary records while retaining role-scoped masking.
@@ -125,3 +125,10 @@
 - [x] Replace remaining hardcoded staffing demand and timesheet display arrays with protected portal summary records while retaining finance masking.
 - [x] Add connected-view tests proving seeded demand, assignment, timesheet, and activity records render instead of static fallbacks.
 - [x] Re-run automated and browser validation after all connected operational views use seeded database records.
+- [x] Define role-scoped assistant lookup boundaries for recruiter candidate profiles and project-status records, without exposing restricted HR, readiness, or finance fields.
+- [x] Add protected database APIs for exact/bounded candidate and project lookup, and recruiter/admin inline update mutations with validation and audit activity.
+- [x] Ensure every successful AI resume parse creates or updates a database-backed candidate profile, with clear recruiter review state and no automatic hiring decision.
+- [x] Add inline editing controls to recruiter candidate and delivery project tables with save, cancel, validation, and optimistic refresh behavior.
+- [x] Connect the bottom-right AI assistant to structured candidate/project query results instead of supplying database records through unrestricted free-text prompts.
+- [x] Add tests for assistant query authorization, candidate/project lookup bounds, profile persistence, inline edit validation, and audit activity.
+- [ ] Verify desktop/mobile assistant lookup and inline editing workflows, then save a completed project checkpoint.

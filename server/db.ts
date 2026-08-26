@@ -290,6 +290,15 @@ function presentCandidate(row: typeof candidateProfiles.$inferSelect) {
 export async function createCandidateProfile(createdByUserId: number, input: CandidateProfileInput, upload?: { fileKey: string; originalFileName: string; mimeType: string; fileSize: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
+  if (input.email) {
+    const existing = await db.select().from(candidateProfiles).where(eq(candidateProfiles.email, input.email.trim().toLowerCase())).limit(1);
+    if (existing[0]) {
+      await db.update(candidateProfiles).set(serializeCandidateProfile(input)).where(eq(candidateProfiles.id, existing[0].id));
+      const updated = await db.select().from(candidateProfiles).where(eq(candidateProfiles.id, existing[0].id)).limit(1);
+      if (upload) await db.insert(resumeUploads).values({ candidateProfileId: existing[0].id, uploadedByUserId: createdByUserId, ...upload });
+      return presentCandidate(updated[0] ?? existing[0]);
+    }
+  }
   await db.insert(candidateProfiles).values({ createdByUserId, ...serializeCandidateProfile(input) });
   const created = await db.select().from(candidateProfiles).where(eq(candidateProfiles.createdByUserId, createdByUserId)).orderBy(desc(candidateProfiles.id)).limit(1);
   const candidate = created[0];
@@ -303,6 +312,54 @@ export async function listRecruiterCandidates() {
   if (!db) return [];
   const rows = await db.select().from(candidateProfiles).orderBy(desc(candidateProfiles.updatedAt));
   return rows.map(presentCandidate);
+}
+
+export async function updateCandidateProfile(candidateId: number, updatedByUserId: number, input: Pick<CandidateProfileInput, "candidateName" | "location" | "yearsExperience" | "skills">) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const existing = await db.select().from(candidateProfiles).where(eq(candidateProfiles.id, candidateId)).limit(1);
+  if (!existing[0]) throw new Error("Candidate profile was not found");
+  await db.update(candidateProfiles).set({ candidateName: input.candidateName, location: input.location || null, yearsExperience: input.yearsExperience || null, skillsJson: JSON.stringify(input.skills) }).where(eq(candidateProfiles.id, candidateId));
+  await db.insert(operationalActivities).values({ demoKey: `candidate-update-${candidateId}-${Date.now()}`, entityType: "candidate", title: `Candidate profile updated: ${input.candidateName}`, detail: `Updated by recruiter/admin user ${updatedByUserId}`, activityState: "complete" });
+  const updated = await db.select().from(candidateProfiles).where(eq(candidateProfiles.id, candidateId)).limit(1);
+  return presentCandidate(updated[0] ?? existing[0]);
+}
+
+export async function updateClientProject(projectId: number, updatedByUserId: number, input: { name: string; deliveryStatus: "planned" | "active" | "at_risk" | "closing"; projectManagerName: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const existing = await db.select().from(clientProjects).where(eq(clientProjects.id, projectId)).limit(1);
+  if (!existing[0]) throw new Error("Project record was not found");
+  await db.update(clientProjects).set({ name: input.name, deliveryStatus: input.deliveryStatus, projectManagerName: input.projectManagerName || null }).where(eq(clientProjects.id, projectId));
+  await db.insert(operationalActivities).values({ demoKey: `project-update-${projectId}-${Date.now()}`, entityType: "project", title: `Project status updated: ${input.name}`, detail: `Updated by authorized user ${updatedByUserId}`, activityState: input.deliveryStatus === "at_risk" ? "attention" : "complete" });
+  const updated = await db.select().from(clientProjects).where(eq(clientProjects.id, projectId)).limit(1);
+  return updated[0] ?? existing[0];
+}
+
+export async function getWorkspaceAssistantLookup(role: string, prompt: string) {
+  const db = await getDb();
+  if (!db) return { kind: "none" as const, records: [] as Array<Record<string, unknown>>, context: "No database records are available." };
+  const normalized = prompt.toLowerCase();
+  const candidateRoles = ["admin", "recruiter"];
+  const projectRoles = ["admin", "recruiter", "account_manager", "delivery_manager", "project_manager"];
+  if (candidateRoles.includes(role) && /candidate|resume|profile|skill|experience/.test(normalized)) {
+    const rows = (await db.select().from(candidateProfiles).orderBy(desc(candidateProfiles.updatedAt)).limit(12)).filter(row => {
+      const searchable = `${row.candidateName} ${row.location ?? ""} ${row.skillsJson}`.toLowerCase();
+      const terms = normalized.split(/[^a-z0-9+#.]+/).filter(term => term.length >= 3 && !["candidate", "profile", "resume", "show", "find", "with", "skill", "skills", "experience"].includes(term));
+      return terms.length === 0 || terms.some(term => searchable.includes(term));
+    }).slice(0, 5).map(presentCandidate);
+    const context = rows.length ? rows.map(row => `Candidate: ${row.candidateName}; location: ${row.location ?? "not stated"}; experience: ${row.yearsExperience ?? "not stated"}; skills: ${row.skills.join(", ") || "not stated"}; review: ${row.reviewState}.`).join("\n") : "No matching recruiter-visible candidate profiles were found.";
+    return { kind: "candidate" as const, records: rows, context };
+  }
+  if (projectRoles.includes(role) && /project|delivery|status|client|assignment/.test(normalized)) {
+    const rows = (await db.select().from(clientProjects).orderBy(desc(clientProjects.updatedAt)).limit(12)).filter(row => {
+      const terms = normalized.split(/[^a-z0-9+#.]+/).filter(term => term.length >= 3 && !["project", "delivery", "status", "client", "assignment", "show", "find", "with"].includes(term));
+      return terms.length === 0 || terms.some(term => `${row.name} ${row.deliveryStatus} ${row.projectManagerName ?? ""}`.toLowerCase().includes(term));
+    }).slice(0, 5);
+    const context = rows.length ? rows.map(row => `Project: ${row.name}; delivery status: ${row.deliveryStatus}; project manager: ${row.projectManagerName ?? "not assigned"}.`).join("\n") : "No matching project-status records were found.";
+    return { kind: "project" as const, records: rows, context };
+  }
+  return { kind: "none" as const, records: [], context: "No database lookup applies to this question. Provide workflow guidance only." };
 }
 
 export async function getDemoPortalSummary() {

@@ -49,6 +49,21 @@ const workspaceAssistantInputSchema = z.object({
   prompt: z.string().trim().min(4).max(600),
 });
 
+const candidateInlineUpdateSchema = z.object({
+  candidateId: z.number().int().positive(),
+  candidateName: z.string().trim().min(2).max(255),
+  location: z.string().trim().max(180),
+  yearsExperience: z.string().trim().max(64),
+  skills: z.array(z.string().trim().min(1).max(64)).max(20),
+});
+
+const projectInlineUpdateSchema = z.object({
+  projectId: z.number().int().positive(),
+  name: z.string().trim().min(2).max(255),
+  deliveryStatus: z.enum(["planned", "active", "at_risk", "closing"]),
+  projectManagerName: z.string().trim().max(255),
+});
+
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
   mimeType: z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]),
@@ -154,11 +169,18 @@ export const appRouter = router({
 
   portal: router({
     demoSummary: protectedProcedure.query(() => db.getDemoPortalSummary()),
+    updateProject: protectedProcedure.input(projectInlineUpdateSchema).mutation(async ({ ctx, input }) => {
+      if (!["admin", "account_manager", "delivery_manager", "project_manager"].includes(ctx.user.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your assigned role cannot edit project records." });
+      }
+      return db.updateClientProject(input.projectId, ctx.user.id, input);
+    }),
   }),
 
   recruiting: router({
     newHireProgress: recruiterProcedure.query(() => db.listRecruiterNewHireProgress()),
     listCandidates: recruiterProcedure.query(() => db.listRecruiterCandidates()),
+    updateCandidate: recruiterProcedure.input(candidateInlineUpdateSchema).mutation(({ ctx, input }) => db.updateCandidateProfile(input.candidateId, ctx.user.id, input)),
     parseResume: recruiterProcedure
       .input(z.object({ resumeText: z.string().trim().min(80).max(12_000) }))
       .mutation(async ({ ctx, input }) => {
@@ -212,7 +234,11 @@ export const appRouter = router({
       }),
     workspaceAssistant: protectedProcedure
       .input(workspaceAssistantInputSchema)
-      .mutation(({ ctx, input }) => generateWorkspaceAssistantReply({ role: ctx.user.role, page: input.page, prompt: input.prompt })),
+      .mutation(async ({ ctx, input }) => {
+        const lookup = await db.getWorkspaceAssistantLookup(ctx.user.role, input.prompt);
+        const response = await generateWorkspaceAssistantReply({ role: ctx.user.role, page: input.page, prompt: input.prompt, databaseContext: lookup.context });
+        return { ...response, lookupKind: lookup.kind, records: lookup.records };
+      }),
   }),
 
 });

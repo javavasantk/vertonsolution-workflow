@@ -90,7 +90,7 @@ describe("ai.assist tRPC procedure", () => {
     const caller = appRouter.createCaller(createContext("recruiter"));
 
     await expect(caller.ai.workspaceAssistant({ page: "New-hire progress", prompt: "How do I use Candidate Finder?" })).resolves.toMatchObject({ reply: "Use Candidate Finder to review recruiter-visible skills." });
-    expect(generateWorkspaceAssistantReplySpy).toHaveBeenCalledWith({ role: "recruiter", page: "New-hire progress", prompt: "How do I use Candidate Finder?" });
+    expect(generateWorkspaceAssistantReplySpy).toHaveBeenCalledWith(expect.objectContaining({ role: "recruiter", page: "New-hire progress", prompt: "How do I use Candidate Finder?", databaseContext: expect.stringContaining("candidate") }));
   });
 
   it("rejects an oversized workspace assistant prompt before calling the model", async () => {

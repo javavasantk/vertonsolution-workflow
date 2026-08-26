@@ -41,14 +41,14 @@ export async function generateAiBriefing(task: AiTask, context: string, callMode
   return { briefing, task, model: result.model, unavailable: false };
 }
 
-export async function generateWorkspaceAssistantReply(input: { role: string; page: string; prompt: string }, callModel: ModelInvoker = invokeLLM) {
+export async function generateWorkspaceAssistantReply(input: { role: string; page: string; prompt: string; databaseContext?: string }, callModel: ModelInvoker = invokeLLM) {
   try {
     const result = await callModel({
       model: "gpt-5-mini",
       maxCompletionTokens: 500,
       messages: [
         { role: "system", content: "You are Verton Workforce Hub's concise workspace assistant. Help the signed-in user understand available workflow actions and next human owners, based only on their role, page, and question. Do not invent records, request documents, make hiring decisions, make legal or immigration conclusions, determine work authorization, assess eligibility, or grant permissions. If a question needs a restricted human reviewer, state that boundary clearly." },
-        { role: "user", content: `Assigned role: ${input.role}\nCurrent workspace page: ${input.page}\nQuestion: ${input.prompt}` },
+        { role: "user", content: `Assigned role: ${input.role}\nCurrent workspace page: ${input.page}\nQuestion: ${input.prompt}\nStructured database context (if supplied):\n${input.databaseContext ?? "No database lookup applies."}` },
       ],
     });
     const content = result.choices[0]?.message.content;

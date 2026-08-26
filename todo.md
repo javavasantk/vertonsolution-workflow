@@ -42,7 +42,7 @@
 - [x] Map the protected Workforce Hub access, profile, onboarding, and recruiter-progress boundaries into the FastAPI reference contract with server-side authorization checks.
 - [x] Add role-aware AI assistance for recruiter next-step summaries, employee onboarding guidance, and administrator access-review summaries; keep work-authorization decisions human-reviewed and non-automated.
 - [x] Add FastAPI contract tests and frontend/server validation for authorization and AI input boundaries.
-- [ ] Verify the no-cost AI experience and FastAPI reference implementation, then save a completed project checkpoint.
+- [x] Verify the no-cost AI experience and FastAPI reference implementation, then save a completed project checkpoint.
 - [x] Preserve the current no-monthly-cost live backend while limiting FastAPI to a future-facing reference implementation.
 - [x] Add protected AI assistance to the existing backend for recruiter handoff summaries, employee onboarding guidance, and administrator access-review summaries.
 - [x] Add an in-product AI assistance panel with clear human-review and no-eligibility-decision safeguards.
@@ -51,4 +51,12 @@
 - [x] Derive AI assistance context from the currently loaded administrator, employee, recruiter, and onboarding workflow data instead of static prompts.
 - [x] Add FastAPI endpoint-level tests for JWT failures, role denial, and AI request validation.
 - [x] Add frontend AI-panel tests for mutation input, pending/error state, and returned-briefing rendering.
-- [ ] Test the no-cost AI routes and FastAPI reference service, verify the user experience, and save a completed project checkpoint.
+- [x] Test the no-cost AI routes and FastAPI reference service, verify the user experience, and save a completed project checkpoint.
+- [x] Visually verify AI assistance in administrator access-review, recruiter handoff, and employee onboarding contexts.
+- [x] Add server-procedure integration coverage for AI success and provider-failure handling across permitted role and task combinations.
+- [ ] Re-run all validation and save a checkpoint after role-specific AI verification.
+- [x] Add a safe non-production authenticated preview mechanism to visually verify AI panels with role-specific workspace data.
+- [x] Add tRPC procedure-level tests for allowed AI tasks, bounded input validation, and provider-unavailable fallback across administrator, recruiter, and consultant roles.
+- [x] Add a development-only role-scoped preview data mode that renders representative admin, recruiter, and employee AI context without authenticated backend requests.
+- [x] Extend tRPC AI procedure tests so provider-unavailable fallback is verified for each permitted role and task combination.
+- [ ] Re-run full validation after role-scoped preview and cross-role fallback coverage, then save a final checkpoint.

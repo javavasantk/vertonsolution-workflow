@@ -35,4 +35,25 @@ describe("real browser demo authentication journey", () => {
       await browser.close();
     }
   }, 45_000);
+
+  runBrowserJourney("opens the recruiter resume parser only after credential authentication", async () => {
+    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+
+    try {
+      for (const [suffix, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]] as const) {
+        const page = await browser.newPage({ viewport });
+        await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+        await page.getByLabel("Email address").fill("recruiter@demo.vertonsolutions.com");
+        await page.getByLabel("Password").fill("VertonDemo!2026");
+        await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
+        await page.waitForURL(`${baseUrl}/workspace`);
+        await page.goto(`${baseUrl}/workspace/recruiting`, { waitUntil: "networkidle" });
+        await expect.poll(() => page.getByText("AI resume parser").count()).toBe(1);
+        await expect.poll(() => page.getByText("Recruiter workspace").count()).toBeGreaterThan(0);
+        await page.screenshot({ path: `/home/ubuntu/authenticated-recruiter-resume-parser-${suffix}.png`, fullPage: true });
+      }
+    } finally {
+      await browser.close();
+    }
+  }, 45_000);
 });

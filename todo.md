@@ -82,7 +82,9 @@
 - [x] Add a recruiter- and administrator-protected AI resume parsing API with bounded plain-text input, structured candidate detail extraction, and explicit human-review guidance.
 - [x] Build a recruiter dashboard resume-parser panel for pasting resume text, reviewing extracted candidate information, and copying results into the recruiting workflow.
 - [x] Add tests for login-page access control, recruiter/admin parser authorization, bounded input validation, safe AI fallback, and parsed-result rendering.
-- [ ] Verify the streamlined login and recruiter resume parser on desktop and mobile, then save a completed project checkpoint.
+- [x] Verify the streamlined login and recruiter resume parser on desktop and mobile, then save a completed project checkpoint.
 - [x] Remove the development-only workspace preview bypass from normal `/workspace*` routes so unauthenticated users cannot render a workspace through URL parameters.
 - [x] Re-run login and workspace access-control tests and visual verification after enforcing the strict workspace route gate.
-- [ ] Save a checkpoint after strict workspace route protection is fully validated.
+- [x] Save a checkpoint after strict workspace route protection is fully validated.
+- [x] Visually verify the final authenticated recruiter resume parser on desktop and mobile after strict workspace route gating.
+- [ ] Save a final checkpoint after the authenticated recruiter parser and streamlined login are re-verified together.

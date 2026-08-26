@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -35,4 +35,58 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Controlled employee self-service record. This stores workflow status only;
+ * it intentionally excludes copies of identity or work-authorization documents.
+ */
+export const employeeProfiles = mysqlTable("employee_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique().references(() => users.id),
+  employmentType: varchar("employmentType", { length: 96 }),
+  workAuthorizationStatus: mysqlEnum("workAuthorizationStatus", [
+    "not_started",
+    "details_requested",
+    "human_review",
+    "verified",
+    "expiry_watch",
+  ]).default("not_started").notNull(),
+  statusNote: varchar("statusNote", { length: 500 }),
+  expiryDate: timestamp("expiryDate"),
+  updatedByUserId: int("updatedByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Recruiter-visible operational progress, separate from restricted reviewer detail. */
+export const onboardingAssignments = mysqlTable("onboarding_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique().references(() => users.id),
+  onboardingStage: mysqlEnum("onboardingStage", [
+    "not_started",
+    "profile_in_progress",
+    "manager_confirmation",
+    "ready_for_assignment",
+    "assigned",
+  ]).default("not_started").notNull(),
+  progressPercent: int("progressPercent").default(0).notNull(),
+  managerConfirmed: boolean("managerConfirmed").default(false).notNull(),
+  projectName: varchar("projectName", { length: 180 }),
+  assignmentState: mysqlEnum("assignmentState", ["unassigned", "pending", "active", "roll_off"]).default("unassigned").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable operational history for role changes made through administrator controls. */
+export const accessRoleChanges = mysqlTable("access_role_changes", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  changedByUserId: int("changedByUserId").notNull().references(() => users.id),
+  previousRole: varchar("previousRole", { length: 64 }).notNull(),
+  nextRole: varchar("nextRole", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
+export type InsertEmployeeProfile = typeof employeeProfiles.$inferInsert;
+export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
+export type InsertOnboardingAssignment = typeof onboardingAssignments.$inferInsert;
+export type AccessRoleChange = typeof accessRoleChanges.$inferSelect;

@@ -24,6 +24,24 @@ vi.mock("@/const", () => ({
   startLogin: startLoginSpy,
 }));
 
+vi.mock("@/lib/trpc", () => ({
+  trpc: {
+    access: {
+      listUsers: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+      assignRole: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      permissionGroups: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+      roleChangeHistory: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+    },
+    profile: {
+      mine: { useQuery: () => ({ data: undefined, refetch: vi.fn() }) },
+      requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    recruiting: {
+      newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+    },
+  },
+}));
+
 import Home, { countCompletedOnboardingTasks, getAllowedNavigation, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage } from "./Home";
 
 function setAuthenticatedRole(role: string, name = "Avery Morgan") {
@@ -74,7 +92,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "Onboarding", "Delivery", "Time & billing"]);
+    expect(items).toEqual(["Overview", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });

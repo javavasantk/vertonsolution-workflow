@@ -26,3 +26,14 @@
 - [x] Extend automated tests for login, account-assigned role access, protected workspace entry, and sign-out behavior.
 - [x] Verify the updated login and role-access experience on desktop and mobile, then create a final checkpoint.
 - [x] Verify the secure login screen at a mobile breakpoint with the official Verton logo, sign-in action, and role-access messaging visible.
+- [x] Define role-specific permission groups and restricted work-authorization data boundaries for administrator, recruiter, and employee workflows.
+- [x] Add protected data structures and administrator-only APIs for user roles, permission groups, employee readiness profiles, onboarding progress, and assignment summaries.
+- [x] Build an administrator dashboard for user search, role assignment, permission review, and auditable access changes.
+- [x] Build an employee profile page for viewing and requesting updates to personal work-authorization readiness fields without automated eligibility decisions.
+- [x] Build a recruiter dashboard for new-hire onboarding progress, pending readiness tasks, manager handoffs, and project-assignment signals.
+- [x] Add automated tests for administrator protection, employee profile ownership, recruiter workflow visibility, and authorization-update boundaries.
+- [ ] Verify the new dashboards on desktop and mobile and save a completed project checkpoint.
+- [x] Establish privacy boundaries: only administrative status metadata is stored; employees may update only their own profile; recruiter views exclude restricted detail; and all authorization decisions remain human-reviewed.
+- [x] Add a protected permission-group API so the administrator dashboard’s permission review is served from the backend rather than client-only configuration.
+- [x] Add administrator directory search and role-change audit history to the control center.
+- [x] Add explicit server tests proving employee profile reads and updates are restricted to the authenticated employee’s own record.

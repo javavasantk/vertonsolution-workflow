@@ -36,6 +36,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -92,7 +93,27 @@ export const navItems: NavItem[] = [
   { label: "Delivery", icon: BriefcaseBusiness, roles: ["Administrator", "Account Manager", "Delivery Manager", "Project Manager", "Consultant"] },
   { label: "Time & billing", icon: Clock3, roles: ["Administrator", "Finance", "Project Manager", "Consultant"] },
   { label: "Controls", icon: LockKeyhole, roles: ["Administrator", "HR & Compliance", "Finance"] },
+  { label: "Admin center", icon: UserCog, roles: ["Administrator"] },
+  { label: "My profile", icon: UserCheck, roles: allRoles },
+  { label: "New-hire progress", icon: TrendingUp, roles: ["Administrator", "Recruiter"] },
 ];
+
+const storedRoleOptions = ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance", "consultant"] as const;
+
+function formatStoredRole(role?: string | null) {
+  return getRoleKeyFromStoredRole(role);
+}
+
+function formatReadinessStatus(status?: string | null) {
+  const labels: Record<string, string> = {
+    not_started: "Not started",
+    details_requested: "Update submitted",
+    human_review: "Human review",
+    verified: "Review complete",
+    expiry_watch: "Expiry watch",
+  };
+  return labels[status ?? "not_started"] ?? "Not started";
+}
 
 export function getAllowedNavigation(role: RoleKey) {
   return navItems.filter(item => item.roles.includes(role));
@@ -323,10 +344,10 @@ function Login({ returnToLanding, openWorkspace }: { returnToLanding: () => void
   return <div className="min-h-screen overflow-hidden bg-[#f7faff] text-[#12345a]"><div className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]"><section className="relative hidden overflow-hidden bg-[#09264b] p-10 text-white lg:flex lg:flex-col"><div className="verton-grid absolute inset-0 opacity-60" /><div className="absolute -right-20 top-20 h-96 w-96 rounded-full bg-[#0b57d0]/35 blur-[100px]" /><div className="relative"><Logo dark /><div className="mt-24 max-w-md"><p className="font-mono-ui text-[11px] font-medium uppercase tracking-[.18em] text-[#78e2d4]">Secure workforce operations</p><h1 className="mt-5 text-balance text-5xl font-extrabold tracking-[-.065em]">One controlled access point for the work that moves Verton forward.</h1><p className="mt-6 text-sm leading-7 text-blue-100/78">Your account assignment determines the workspace, actions, and data available to you. Every sensitive workflow remains role-scoped and auditable.</p></div></div><div className="relative mt-auto grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/10 bg-white/6 p-4"><ShieldCheck className="text-[#78e2d4]" size={18} /><p className="mt-4 text-xs font-bold">Role-scoped visibility</p><p className="mt-1 text-[10px] leading-4 text-blue-100/65">Access follows your account assignment.</p></div><div className="rounded-2xl border border-white/10 bg-white/6 p-4"><FileCheck2 className="text-[#78e2d4]" size={18} /><p className="mt-4 text-xs font-bold">Accountable operations</p><p className="mt-1 text-[10px] leading-4 text-blue-100/65">Material activity is captured in context.</p></div></div></section><section className="relative flex items-center justify-center px-5 py-10 sm:px-8"><button onClick={returnToLanding} className="absolute left-5 top-5 flex items-center gap-2 text-xs font-bold text-[#5d7593] transition hover:text-[#0b57d0]"><ArrowRight className="rotate-180" size={15} /> Back to Verton</button><div className="w-full max-w-md"><div className="lg:hidden"><Logo /></div><div className="mt-16 rounded-[24px] border border-[#dce7f3] bg-white p-6 shadow-[0_22px_50px_rgba(18,52,90,.10)] sm:p-8"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f2ff] text-[#0b57d0]"><LockKeyhole size={19} /></div><p className="mt-6 font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Secure sign in</p><h2 className="mt-2 text-3xl font-extrabold tracking-[-.055em]">Welcome to Workforce Hub.</h2><p className="mt-3 text-sm leading-6 text-[#7185a0]">Sign in with your approved identity to enter your assigned Verton workspace.</p><button onClick={() => startLogin()} disabled={loading} className="mt-8 w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-sm font-bold text-white shadow-[0_10px_20px_rgba(11,87,208,.20)] transition hover:-translate-y-0.5 hover:bg-[#094db9] disabled:cursor-not-allowed disabled:opacity-70">{loading ? "Checking secure session…" : "Sign in securely"} <ArrowRight className="ml-1 inline" size={16} /></button><div className="mt-6 border-t border-[#ebf0f6] pt-5"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#7c91a9]">Workspace access profiles</p><div className="mt-3 grid grid-cols-2 gap-2">{roles.map(role => <div key={role.name} className="rounded-xl bg-[#f7faff] p-2.5"><span className="text-[10px] font-extrabold text-[#335575]">{role.name}</span><span className="mt-1 block text-[9px] leading-3 text-[#8092a8]">Assigned by administration</span></div>)}</div></div><p className="mt-5 text-center text-[10px] leading-4 text-[#8193a9]">Your role is assigned and reviewed by Verton administration. This screen does not allow users to self-select access.</p></div></div></section></div></div>;
 }
 
-function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
+function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspace: () => void; requestedPage?: string }) {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const activeRole = getRoleKeyFromStoredRole(user?.role);
-  const [activePage, setActivePage] = useState("Overview");
+  const [activePage, setActivePage] = useState(() => resolveWorkspacePage(activeRole, requestedPage));
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [candidateQuery, setCandidateQuery] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<typeof candidates[number] | null>(candidates[0]);
@@ -335,13 +356,30 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
   const [onboardingPersonaId, setOnboardingPersonaId] = useState(0);
   const [timeApproved, setTimeApproved] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [profileEmploymentType, setProfileEmploymentType] = useState("");
+  const [profileStatusNote, setProfileStatusNote] = useState("");
+  const [profileSubmitted, setProfileSubmitted] = useState(false);
+  const [adminUserSearch, setAdminUserSearch] = useState("");
   const [, setLocation] = useLocation();
+
+  const accessUsersQuery = trpc.access.listUsers.useQuery(undefined, { enabled: activeRole === "Administrator" });
+  const permissionGroupsQuery = trpc.access.permissionGroups.useQuery(undefined, { enabled: activeRole === "Administrator" });
+  const roleChangeHistoryQuery = trpc.access.roleChangeHistory.useQuery(undefined, { enabled: activeRole === "Administrator" });
+  const roleMutation = trpc.access.assignRole.useMutation({ onSuccess: () => { accessUsersQuery.refetch(); roleChangeHistoryQuery.refetch(); } });
+  const myProfileQuery = trpc.profile.mine.useQuery(undefined, { enabled: isAuthenticated });
+  const profileMutation = trpc.profile.requestReview.useMutation({ onSuccess: () => { setProfileSubmitted(true); myProfileQuery.refetch(); } });
+  const recruiterProgressQuery = trpc.recruiting.newHireProgress.useQuery(undefined, { enabled: activeRole === "Administrator" || activeRole === "Recruiter" });
 
   const allowedNav = getAllowedNavigation(activeRole);
   const activeRoleInfo = roles.find(role => role.name === activeRole)!;
   const filteredCandidates = useMemo(() => candidates.filter(candidate => `${candidate.name} ${candidate.role} ${candidate.skills}`.toLowerCase().includes(candidateQuery.toLowerCase())), [candidateQuery]);
   const completedTasks = countCompletedOnboardingTasks(onboarding);
   const onboardingPersona = onboardingPersonas[onboardingPersonaId];
+  const filteredAdminUsers = useMemo(() => {
+    const query = adminUserSearch.trim().toLowerCase();
+    if (!query) return accessUsersQuery.data ?? [];
+    return (accessUsersQuery.data ?? []).filter(account => `${account.name ?? ""} ${account.email ?? ""} ${formatStoredRole(account.role)}`.toLowerCase().includes(query));
+  }, [accessUsersQuery.data, adminUserSearch]);
 
   useEffect(() => {
     const permittedPage = resolveWorkspacePage(activeRole, activePage);
@@ -349,8 +387,18 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
   }, [activeRole, activePage]);
 
   useEffect(() => {
+    setActivePage(resolveWorkspacePage(activeRole, requestedPage));
+  }, [activeRole, requestedPage]);
+
+  useEffect(() => {
     setOnboarding(onboardingPersona.tasks.map(task => ({ ...task })));
   }, [onboardingPersonaId]);
+
+  useEffect(() => {
+    if (!myProfileQuery.data) return;
+    setProfileEmploymentType(myProfileQuery.data.employmentType ?? "");
+    setProfileStatusNote(myProfileQuery.data.statusNote ?? "");
+  }, [myProfileQuery.data]);
 
   const changePage = (page: string) => {
     setActivePage(resolveWorkspacePage(activeRole, page));
@@ -401,6 +449,30 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
 
   const FinanceScope = () => <div className={`mt-5 rounded-2xl border p-5 ${isFinanceRole(activeRole) ? "border-[#bfeade] bg-[#f1fbf8]" : "border-[#dce7f3] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">Commercial data scope</p><p className="mt-1 text-xs text-[#7185a0]">Sample commercial fields are protected in the demo by the active role profile.</p></div><Pill tone={isFinanceRole(activeRole) ? "green" : "slate"}>{isFinanceRole(activeRole) ? "Finance access" : "Masked"}</Pill></div><div className="mt-4 grid gap-3 sm:grid-cols-3">{[["Client bill rate", "$142/hr"], ["Consultant pay rate", "$92/hr"], ["Assignment contribution", "35.2%"]].map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3 ring-1 ring-[#dfeae7]"><p className="text-[10px] font-bold text-[#7185a0]">{label}</p><p className="mt-2 font-mono-ui text-sm font-medium text-[#284968]">{isFinanceRole(activeRole) ? value : "••••••"}</p></div>)}</div></div>;
 
+  const AdminCenter = () => {
+    const permissionGroups = permissionGroupsQuery.data ?? [];
+    const roleChanges = roleChangeHistoryQuery.data ?? [];
+    return <><div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><p className="font-mono-ui text-[10px] font-medium uppercase tracking-[.16em] text-[#0b57d0]">Administrator control center</p><h1 className="mt-2 text-2xl font-extrabold tracking-[-.055em] sm:text-3xl">Users, roles & permissions</h1><p className="mt-1.5 max-w-2xl text-sm text-[#7185a0]">Assign approved roles, inspect backend-governed permission groups, and keep access changes accountable.</p></div><Pill tone="green"><ShieldCheck size={13} /> Administrator access</Pill></div><div className="mt-6 grid gap-5 xl:grid-cols-[1.28fr_.72fr]"><section className="overflow-hidden rounded-2xl border border-[#dce7f3] bg-white"><div className="flex flex-col gap-3 border-b border-[#e8eef5] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-extrabold">Directory & role assignment</p><p className="mt-1 text-xs text-[#7185a0]">Role changes apply through protected administrative controls.</p></div><div className="flex items-center gap-2"><div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8094ad]" size={14} /><input aria-label="Search user directory" value={adminUserSearch} onChange={event => setAdminUserSearch(event.target.value)} placeholder="Search users" className="w-36 rounded-lg border border-[#d8e4f0] bg-[#f8fbff] py-2 pl-8 pr-2 text-[11px] font-semibold text-[#365575] outline-none sm:w-44" /></div><Pill tone="slate">{filteredAdminUsers.length} accounts</Pill></div></div><div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left"><thead className="bg-[#f8fbff] text-[10px] uppercase tracking-[.1em] text-[#7890aa]"><tr><th className="px-5 py-3 font-bold">User</th><th className="px-3 py-3 font-bold">Role</th><th className="px-3 py-3 font-bold">Last sign-in</th><th className="px-3 py-3 font-bold">Access state</th></tr></thead><tbody>{filteredAdminUsers.map(account => <tr key={account.id} className="border-t border-[#edf2f7] text-xs"><td className="px-5 py-4"><p className="font-extrabold text-[#294969]">{account.name || "Verton user"}</p><p className="mt-1 text-[10px] text-[#7185a0]">{account.email || "No email recorded"}</p></td><td className="px-3 py-4"><select aria-label={`Role for ${account.name || account.id}`} value={account.role === "user" ? "consultant" : account.role} onChange={event => roleMutation.mutate({ userId: account.id, role: event.target.value as typeof storedRoleOptions[number] })} className="rounded-lg border border-[#d8e4f0] bg-[#f8fbff] px-2.5 py-2 text-[11px] font-bold text-[#375675] outline-none"><option value="admin">Administrator</option><option value="recruiter">Recruiter</option><option value="hr_compliance">HR & Compliance</option><option value="account_manager">Account manager</option><option value="delivery_manager">Delivery manager</option><option value="project_manager">Project manager</option><option value="finance">Finance</option><option value="consultant">Consultant</option></select></td><td className="px-3 py-4 text-[11px] text-[#7185a0]">{new Date(account.lastSignedIn).toLocaleDateString()}</td><td className="px-3 py-4"><Pill tone={roleMutation.isPending ? "amber" : "green"}>{roleMutation.isPending ? "Saving" : "Active"}</Pill></td></tr>)}{!accessUsersQuery.isLoading && filteredAdminUsers.length === 0 && <tr><td colSpan={4} className="px-5 py-10 text-center text-xs text-[#7185a0]">No accounts match this search. New accounts receive a consultant role until an administrator assigns another approved role.</td></tr>}</tbody></table></div></section><aside className="rounded-2xl bg-[#09264b] p-5 text-white"><p className="text-sm font-extrabold">Permission model</p><p className="mt-1 text-xs leading-5 text-blue-100/70">Permission groups are served by the protected access API. Employees cannot self-escalate access.</p><div className="mt-5 space-y-3">{permissionGroups.map(group => <div key={group.role} className="rounded-xl border border-white/10 bg-white/5 p-3"><div className="flex items-center justify-between gap-2"><p className="text-xs font-bold">{group.label}</p><span className="text-[9px] font-bold text-[#79e4d6]">{group.permissions.length} controls</span></div><p className="mt-2 text-[10px] leading-4 text-blue-100/65">{group.permissions.join(" · ")}</p></div>)}{permissionGroupsQuery.isLoading && <p className="text-xs text-blue-100/65">Loading permission groups…</p>}</div></aside></div><section className="mt-5 overflow-hidden rounded-2xl border border-[#dce7f3] bg-white"><div className="flex items-center justify-between border-b border-[#e8eef5] p-5"><div><p className="text-sm font-extrabold">Role-change audit</p><p className="mt-1 text-xs text-[#7185a0]">Protected operational history for administrative role changes.</p></div><Pill tone="slate">{roleChanges.length} events</Pill></div><div className="divide-y divide-[#edf2f7]">{roleChanges.length ? roleChanges.map(change => <div key={change.id} className="flex flex-col gap-1 px-5 py-4 text-xs sm:flex-row sm:items-center sm:justify-between"><p className="font-extrabold text-[#304e6e]">{change.targetName || "User"}: {formatStoredRole(change.previousRole)} <ArrowRight className="mx-1 inline text-[#0b57d0]" size={13} /> {formatStoredRole(change.nextRole)}</p><p className="text-[10px] text-[#7185a0]">Changed by {change.changedByName || "Administrator"} · {new Date(change.createdAt).toLocaleString()}</p></div>) : <p className="px-5 py-8 text-center text-xs text-[#7185a0]">No role changes recorded yet.</p>}</div></section><div className="mt-5 rounded-2xl border border-[#ffe3a8] bg-[#fffaf0] p-4 text-xs leading-5 text-[#8b681d]"><LockKeyhole className="mr-2 inline text-[#c67c00]" size={15} /><b>Access boundary:</b> Role changes govern operational navigation and protected API actions. Restricted authorization readiness decisions remain human-reviewed and are not determined by this platform.</div></>;
+  };
+
+  const EmployeeProfile = () => {
+    const profile = myProfileQuery.data;
+    const currentStatus = formatReadinessStatus(profile?.workAuthorizationStatus);
+    const readyToSubmit = profileEmploymentType.trim().length >= 2 && profileStatusNote.trim().length >= 8;
+    return <><div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><p className="font-mono-ui text-[10px] font-medium uppercase tracking-[.16em] text-[#0b57d0]">Employee self-service</p><h1 className="mt-2 text-2xl font-extrabold tracking-[-.055em] sm:text-3xl">My work readiness profile</h1><p className="mt-1.5 max-w-2xl text-sm text-[#7185a0]">View your administrative status and submit a concise update for authorized human review.</p></div><Pill tone={profile?.workAuthorizationStatus === "verified" ? "green" : profile?.workAuthorizationStatus === "expiry_watch" ? "amber" : "blue"}>{currentStatus}</Pill></div><div className="mt-6 grid gap-5 xl:grid-cols-[.9fr_1.1fr]"><section className="rounded-2xl bg-[#09264b] p-5 text-white"><div className="flex items-start justify-between"><div><p className="text-sm font-extrabold">Your controlled status</p><p className="mt-1 text-xs leading-5 text-blue-100/70">This profile displays workflow status only. It does not retain authorization documents or make employment decisions.</p></div><ShieldCheck className="text-[#78e2d4]" size={19} /></div><div className="mt-6 space-y-4"><div className="rounded-xl border border-white/10 bg-white/5 p-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#79e4d6]">Current administrative state</p><p className="mt-2 text-lg font-extrabold">{currentStatus}</p><p className="mt-2 text-[11px] leading-5 text-blue-100/65">{profile?.statusNote || "No update has been submitted yet. Provide a brief status note when you are ready for human review."}</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl border border-white/10 p-3"><p className="text-[9px] font-bold uppercase tracking-[.1em] text-blue-200/60">Employment type</p><p className="mt-2 text-xs font-bold">{profile?.employmentType || "Not provided"}</p></div><div className="rounded-xl border border-white/10 p-3"><p className="text-[9px] font-bold uppercase tracking-[.1em] text-blue-200/60">Review ownership</p><p className="mt-2 text-xs font-bold">Authorized reviewer</p></div></div></div></section><section className="rounded-2xl border border-[#dce7f3] bg-white p-5"><p className="text-sm font-extrabold">Request profile review</p><p className="mt-1 text-xs leading-5 text-[#7185a0]">Submit administrative information for follow-up. Do not upload documents or provide legal conclusions in this form.</p><div className="mt-5 grid gap-4"><label className="text-xs font-bold text-[#466381]">Work authorization category<select aria-label="Work authorization category" value={profileEmploymentType} onChange={event => setProfileEmploymentType(event.target.value)} className="mt-2 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none"><option value="">Select a category</option><option value="H-1B">H-1B</option><option value="Employment authorization document">Employment authorization document</option><option value="F-1 OPT">F-1 OPT</option><option value="F-1 STEM OPT">F-1 STEM OPT</option><option value="Permanent resident">Permanent resident</option><option value="Other authorized status">Other authorized status</option></select></label><label className="text-xs font-bold text-[#466381]">Status note<textarea aria-label="Status note" value={profileStatusNote} onChange={event => setProfileStatusNote(event.target.value)} placeholder="For example: I am requesting an administrative status review and will respond to authorized reviewer instructions." className="mt-2 min-h-32 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] p-3 text-xs font-medium leading-5 text-[#365575] outline-none focus:border-[#5f9cf7] focus:ring-4 focus:ring-blue-100" /></label><button onClick={() => profileMutation.mutate({ employmentType: profileEmploymentType, statusNote: profileStatusNote })} disabled={!readyToSubmit || profileMutation.isPending} className="rounded-xl bg-[#0b57d0] px-4 py-3 text-xs font-bold text-white shadow-[0_8px_16px_rgba(11,87,208,.16)] disabled:cursor-not-allowed disabled:opacity-50">{profileMutation.isPending ? "Submitting…" : "Submit update for human review"} <ArrowRight className="ml-1 inline" size={14} /></button>{profileSubmitted && <p className="rounded-xl bg-[#effaf7] p-3 text-xs font-semibold text-[#267669]"><CheckCircle2 className="mr-1 inline" size={14} /> Update submitted. An authorized reviewer will determine the appropriate next step.</p>}</div></section></div></>;
+  };
+
+  const RecruiterDashboard = () => {
+    const liveRows = recruiterProgressQuery.data ?? [];
+    const demoRows = [
+      { userId: -1, name: "Priya Shah", email: "demo@verton.local", onboardingStage: "profile_in_progress", progressPercent: 65, managerConfirmed: false, projectName: "Northstar Retail", assignmentState: "pending", readinessStatus: "details_requested" },
+      { userId: -2, name: "Owen Miller", email: "demo@verton.local", onboardingStage: "manager_confirmation", progressPercent: 82, managerConfirmed: true, projectName: "Arcfield Health", assignmentState: "pending", readinessStatus: "human_review" },
+      { userId: -3, name: "Lena Garcia", email: "demo@verton.local", onboardingStage: "ready_for_assignment", progressPercent: 92, managerConfirmed: true, projectName: "Moraine Foods", assignmentState: "active", readinessStatus: "verified" },
+    ];
+    const rows = liveRows.length ? liveRows : demoRows;
+    return <><div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><p className="font-mono-ui text-[10px] font-medium uppercase tracking-[.16em] text-[#0b57d0]">Recruiter workspace</p><h1 className="mt-2 text-2xl font-extrabold tracking-[-.055em] sm:text-3xl">New-hire launchboard</h1><p className="mt-1.5 max-w-2xl text-sm text-[#7185a0]">Track onboarding handoffs and project-assignment signals without opening restricted readiness details.</p></div><Pill tone="blue"><TrendingUp size={13} /> {rows.length} tracked hires</Pill></div><div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="New hires" value={`${rows.length}`} note="Current onboarding cohort" icon={UsersRound} /><StatCard label="Manager handoffs" value={`${rows.filter(row => !row.managerConfirmed).length}`} note="Awaiting confirmation" icon={UserCheck} accent="amber" /><StatCard label="Assignment ready" value={`${rows.filter(row => row.assignmentState === "active" || row.assignmentState === "pending").length}`} note="Project signal present" icon={BriefcaseBusiness} accent="teal" /><StatCard label="Workflow follow-up" value={`${rows.filter(row => row.readinessStatus !== "verified").length}`} note="Status only; no document detail" icon={ShieldCheck} accent="violet" /></div><section className="mt-5 overflow-hidden rounded-2xl border border-[#dce7f3] bg-white"><div className="flex flex-col gap-3 border-b border-[#e8eef5] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-extrabold">Onboarding and assignment progress</p><p className="mt-1 text-xs text-[#7185a0]">{liveRows.length ? "Live operational records" : "Representative demo queue shown until eligible employees are assigned."}</p></div><button onClick={() => changePage("Talent pipeline")} className="rounded-xl border border-[#d8e4f0] px-3 py-2 text-xs font-bold text-[#466381]">Open talent pipeline <ArrowRight className="ml-1 inline" size={13} /></button></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#f8fbff] text-[10px] uppercase tracking-[.1em] text-[#7890aa]"><tr><th className="px-5 py-3 font-bold">New hire</th><th className="px-3 py-3 font-bold">Onboarding</th><th className="px-3 py-3 font-bold">Manager</th><th className="px-3 py-3 font-bold">Assignment</th><th className="px-3 py-3 font-bold">Readiness signal</th></tr></thead><tbody>{rows.map(row => <tr key={row.userId} className="border-t border-[#edf2f7] text-xs"><td className="px-5 py-4"><p className="font-extrabold text-[#294969]">{row.name || "New employee"}</p><p className="mt-1 text-[10px] text-[#7185a0]">{row.email || "Operational profile pending"}</p></td><td className="px-3 py-4"><div className="min-w-36"><div className="flex justify-between text-[10px] font-bold text-[#4f6c8b]"><span>{String(row.onboardingStage || "not_started").replaceAll("_", " ")}</span><span>{row.progressPercent || 0}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#eaf0f6]"><div className="h-full rounded-full bg-[#0b57d0]" style={{ width: `${row.progressPercent || 0}%` }} /></div></div></td><td className="px-3 py-4"><Pill tone={row.managerConfirmed ? "green" : "amber"}>{row.managerConfirmed ? "Confirmed" : "Action due"}</Pill></td><td className="px-3 py-4"><p className="font-semibold text-[#466381]">{row.projectName || "No project assigned"}</p><p className="mt-1 text-[10px] text-[#7185a0]">{row.assignmentState || "unassigned"}</p></td><td className="px-3 py-4"><Pill tone={row.readinessStatus === "verified" ? "green" : row.readinessStatus === "human_review" ? "amber" : "blue"}>{formatReadinessStatus(row.readinessStatus)}</Pill></td></tr>)}</tbody></table></div></section><div className="mt-5 rounded-2xl border border-[#ffe3a8] bg-[#fffaf0] p-4 text-xs leading-5 text-[#8b681d]"><ShieldCheck className="mr-2 inline text-[#c67c00]" size={15} /><b>Recruiter access boundary:</b> This view provides onboarding progress and assignment signals only. Restricted documents, detailed work-authorization facts, and authorization decisions remain unavailable to recruiting users.</div></>;
+  };
+
   const PageContent = () => {
     const permittedPage = resolveWorkspacePage(activeRole, activePage);
     if (permittedPage !== activePage) return <Overview />;
@@ -410,6 +482,9 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
     if (activePage === "Delivery") return <><Delivery /><DeliveryLifecycle /></>;
     if (activePage === "Time & billing") return <><TimeBilling /><FinanceScope /></>;
     if (activePage === "Controls") return <Controls />;
+    if (activePage === "Admin center") return <AdminCenter />;
+    if (activePage === "My profile") return <EmployeeProfile />;
+    if (activePage === "New-hire progress") return <RecruiterDashboard />;
     return <Overview />;
   };
 
@@ -425,8 +500,13 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
 export default function Home() {
   const [location, setLocation] = useLocation();
   const inLogin = location === "/login";
-  const inWorkspace = location === "/workspace";
-  if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} />;
+  const inWorkspace = location.startsWith("/workspace");
+  const requestedWorkspacePages: Record<string, string> = {
+    "/workspace/admin": "Admin center",
+    "/workspace/profile": "My profile",
+    "/workspace/recruiting": "New-hire progress",
+  };
+  if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} requestedPage={requestedWorkspacePages[location] ?? "Overview"} />;
   if (inLogin) return <Login returnToLanding={() => setLocation("/")} openWorkspace={() => setLocation("/workspace")} />;
   return <Landing launchWorkspace={() => setLocation("/login")} />;
 }

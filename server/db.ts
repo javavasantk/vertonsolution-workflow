@@ -1,6 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { accessRoleChanges, employeeProfiles, InsertUser, onboardingAssignments, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -105,11 +106,101 @@ export async function listWorkforceUsers() {
     .orderBy(desc(users.lastSignedIn));
 }
 
-export async function assignWorkforceRole(userId: number, role: InsertUser["role"]) {
+type StoredWorkforceRole = NonNullable<InsertUser["role"]>;
+
+export async function assignWorkforceRole(userId: number, role: StoredWorkforceRole, changedByUserId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
 
+  const current = await db.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+  const previousRole = current[0]?.role ?? "consultant";
+  if (!current[0]) throw new Error("User account was not found");
+  if (previousRole === role) return;
+
   await db.update(users).set({ role }).where(eq(users.id, userId));
+  await db.insert(accessRoleChanges).values({
+    userId,
+    changedByUserId,
+    previousRole,
+    nextRole: role,
+  });
+}
+
+export async function listAccessRoleChanges() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const targetUser = alias(users, "access_role_change_target");
+  const changedByUser = alias(users, "access_role_change_actor");
+
+  return db
+    .select({
+      id: accessRoleChanges.id,
+      previousRole: accessRoleChanges.previousRole,
+      nextRole: accessRoleChanges.nextRole,
+      createdAt: accessRoleChanges.createdAt,
+      targetName: targetUser.name,
+      changedByName: changedByUser.name,
+    })
+    .from(accessRoleChanges)
+    .innerJoin(targetUser, eq(accessRoleChanges.userId, targetUser.id))
+    .innerJoin(changedByUser, eq(accessRoleChanges.changedByUserId, changedByUser.id))
+    .orderBy(desc(accessRoleChanges.createdAt));
+}
+
+export async function getEmployeeProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const results = await db.select().from(employeeProfiles).where(eq(employeeProfiles.userId, userId)).limit(1);
+  return results[0];
+}
+
+export async function submitEmployeeProfileUpdate(userId: number, input: { employmentType: string; statusNote: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  const values = {
+    userId,
+    employmentType: input.employmentType,
+    statusNote: input.statusNote,
+    workAuthorizationStatus: "details_requested" as const,
+    updatedByUserId: userId,
+  };
+
+  await db.insert(employeeProfiles).values(values).onDuplicateKeyUpdate({
+    set: {
+      employmentType: values.employmentType,
+      statusNote: values.statusNote,
+      workAuthorizationStatus: values.workAuthorizationStatus,
+      updatedByUserId: values.updatedByUserId,
+    },
+  });
+}
+
+export async function listRecruiterNewHireProgress() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      userId: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      onboardingStage: onboardingAssignments.onboardingStage,
+      progressPercent: onboardingAssignments.progressPercent,
+      managerConfirmed: onboardingAssignments.managerConfirmed,
+      projectName: onboardingAssignments.projectName,
+      assignmentState: onboardingAssignments.assignmentState,
+      updatedAt: onboardingAssignments.updatedAt,
+      readinessStatus: employeeProfiles.workAuthorizationStatus,
+    })
+    .from(users)
+    .leftJoin(onboardingAssignments, eq(onboardingAssignments.userId, users.id))
+    .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
+    .where(inArray(users.role, ["user", "consultant"]))
+    .orderBy(desc(onboardingAssignments.updatedAt));
 }
 
 // TODO: add feature queries here as your schema grows.

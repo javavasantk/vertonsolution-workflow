@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import * as db from "./db";
 
-function createContext(role: "user" | "admin"): TrpcContext {
+function createContext(role: "user" | "admin", userId = 1): TrpcContext {
   return {
     user: {
-      id: 1,
+      id: userId,
       openId: "role-test-user",
       email: "role-test@example.com",
       name: "Role Test User",
@@ -26,5 +27,45 @@ describe("access router", () => {
 
     await expect(caller.access.listUsers()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
-});
 
+  it("prevents an administrator from removing their own administrator access", async () => {
+    const caller = appRouter.createCaller(createContext("admin"));
+
+    await expect(caller.access.assignRole({ userId: 1, role: "consultant" })).rejects.toThrow("cannot remove their own administrator access");
+  });
+
+  it("serves permission groups only to administrator accounts", async () => {
+    const employeeCaller = appRouter.createCaller(createContext("user"));
+    const adminCaller = appRouter.createCaller(createContext("admin"));
+
+    await expect(employeeCaller.access.permissionGroups()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(adminCaller.access.permissionGroups()).resolves.toHaveLength(8);
+  });
+
+  it("rejects recruiter progress data for a consultant account", async () => {
+    const caller = appRouter.createCaller(createContext("user"));
+
+    await expect(caller.recruiting.newHireProgress()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects oversized employee readiness update notes before persisting them", async () => {
+    const caller = appRouter.createCaller(createContext("user"));
+
+    await expect(caller.profile.requestReview({ employmentType: "H-1B", statusNote: "x".repeat(501) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("always reads and updates the authenticated employee's own profile record", async () => {
+    const getProfile = vi.spyOn(db, "getEmployeeProfile").mockResolvedValue(undefined);
+    const updateProfile = vi.spyOn(db, "submitEmployeeProfileUpdate").mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(createContext("user", 17));
+    const input = { employmentType: "H-1B", statusNote: "I am requesting an administrative status review." };
+
+    await caller.profile.mine();
+    await caller.profile.requestReview(input);
+
+    expect(getProfile).toHaveBeenCalledWith(17);
+    expect(updateProfile).toHaveBeenCalledWith(17, input);
+    getProfile.mockRestore();
+    updateProfile.mockRestore();
+  });
+});

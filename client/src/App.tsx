@@ -12,6 +12,9 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/login"} component={Home} />
       <Route path={"/workspace"} component={Home} />
+      <Route path={"/workspace/admin"} component={Home} />
+      <Route path={"/workspace/profile"} component={Home} />
+      <Route path={"/workspace/recruiting"} component={Home} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

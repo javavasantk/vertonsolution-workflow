@@ -3,7 +3,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
 
 const workforceRoleSchema = z.enum([
   "user",
@@ -16,6 +16,22 @@ const workforceRoleSchema = z.enum([
   "finance",
   "consultant",
 ]);
+
+const employeeProfileUpdateSchema = z.object({
+  employmentType: z.string().trim().min(2).max(96),
+  statusNote: z.string().trim().min(8).max(500),
+});
+
+const workforcePermissionGroups = [
+  { role: "admin", label: "Administrator", permissions: ["Full workspace visibility", "User roles", "Permission review", "Audit controls"] },
+  { role: "recruiter", label: "Recruiter", permissions: ["Talent pipeline", "New-hire tracking", "Assignment signals"] },
+  { role: "hr_compliance", label: "HR & Compliance", permissions: ["Readiness review", "Onboarding coordination", "Audit controls"] },
+  { role: "account_manager", label: "Account Manager", permissions: ["Client demand", "Talent submissions", "Delivery visibility"] },
+  { role: "delivery_manager", label: "Delivery Manager", permissions: ["Onboarding coordination", "Assignments", "Redeployment"] },
+  { role: "project_manager", label: "Project Manager", permissions: ["Delivery visibility", "Time approvals", "Assignment status"] },
+  { role: "finance", label: "Finance", permissions: ["Billing readiness", "Commercial fields", "Operational controls"] },
+  { role: "consultant", label: "Consultant", permissions: ["Personal profile", "Onboarding tasks", "Assignment visibility"] },
+] as const;
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -35,10 +51,29 @@ export const appRouter = router({
     listUsers: adminProcedure.query(() => db.listWorkforceUsers()),
     assignRole: adminProcedure
       .input(z.object({ userId: z.number().int().positive(), role: workforceRoleSchema }))
-      .mutation(async ({ input }) => {
-        await db.assignWorkforceRole(input.userId, input.role);
+      .mutation(async ({ ctx, input }) => {
+        if (input.userId === ctx.user.id && input.role !== "admin") {
+          throw new Error("Administrators cannot remove their own administrator access");
+        }
+        await db.assignWorkforceRole(input.userId, input.role, ctx.user.id);
         return { success: true } as const;
       }),
+    permissionGroups: adminProcedure.query(() => workforcePermissionGroups),
+    roleChangeHistory: adminProcedure.query(() => db.listAccessRoleChanges()),
+  }),
+
+  profile: router({
+    mine: protectedProcedure.query(({ ctx }) => db.getEmployeeProfile(ctx.user.id)),
+    requestReview: protectedProcedure
+      .input(employeeProfileUpdateSchema)
+      .mutation(async ({ ctx, input }) => {
+        await db.submitEmployeeProfileUpdate(ctx.user.id, input);
+        return { success: true, reviewState: "details_requested" as const };
+      }),
+  }),
+
+  recruiting: router({
+    newHireProgress: recruiterProcedure.query(() => db.listRecruiterNewHireProgress()),
   }),
 
 });

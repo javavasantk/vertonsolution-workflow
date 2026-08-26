@@ -146,8 +146,8 @@
 - [x] Migrate the existing protected portal operations to FastAPI behind a transitional SuperJSON/tRPC transport, preserving current database records and server-enforced role boundaries.
 - [ ] Replace frontend tRPC integration with a typed FastAPI client layer and validate every authenticated workflow end to end.
 - [ ] Verify the custom-domain deployment and GitHub source after the FastAPI migration, then save a completed project checkpoint.
-- [ ] Compare current low-cost FastAPI-capable hosts for the implemented Workforce Hub API, TiDB/MySQL connectivity, private upload storage, AI API calls, and custom-domain migration.
-- [ ] Document the provider trade-offs, expected operational limitations, and a recommended next step before selecting a FastAPI cutover path.
+- [x] Compare current low-cost FastAPI-capable hosts for the implemented Workforce Hub API, TiDB/MySQL connectivity, private upload storage, AI API calls, and custom-domain migration.
+- [x] Document provider trade-offs, expected operational limitations, and the Railway selection before the FastAPI cutover path.
 - [x] Define the Railway deployment topology, required environment variables, database connectivity checks, custom-domain rollback plan, and zero-downtime cutover sequence.
 - [x] Build the FastAPI backend for existing Workforce Hub capabilities using Python, request validation, SQLAlchemy, JWT/session controls, object storage, and independently configured AI calls.
 - [x] Provide an end-to-end FastAPI-compatible API surface for the existing role-scoped frontend through a temporary SuperJSON/tRPC transport while retaining REST v1 routes for the deliberate client migration.

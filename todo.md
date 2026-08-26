@@ -1,0 +1,22 @@
+# Project TODO
+
+- [x] Review Verton’s current public-site positioning and service language to establish the Workforce Hub product narrative.
+- [x] Define and apply a distinct Verton Workforce Hub brand system, including typography, colors, tone, and layout motifs.
+- [x] Create a polished public landing page for Workforce Hub with product narrative, enterprise capabilities, workflow overview, role coverage, and secure calls to action.
+- [x] Build a responsive, role-aware workspace shell with protected navigation and role switching for administrator, recruiter, HR/compliance reviewer, account manager, delivery manager, project manager, finance user, and consultant experiences.
+- [x] Implement an exploreable executive and operations dashboard showing recruiting funnel, open demand, active assignments, bench, utilization, upcoming actions, and workflow risks.
+- [x] Implement a candidate CRM and recruiting pipeline with searchable talent profiles, screening status, submissions, interviews, offers, and activity history.
+- [x] Implement a restricted work-authorization readiness workspace with configurable checklist views, human review states, expiry dates, field masking, and audit-friendly interaction history; do not make automated eligibility decisions.
+- [x] Implement a personalized onboarding workspace for profile, policy, document, equipment/access, and manager confirmation tasks.
+- [x] Implement client, demand, project, assignment, availability, extension, roll-off, and redeployment management views.
+- [x] Implement timesheet, approval, operational exception, and billing-readiness views with role-scoped sensitive financial information.
+- [x] Add representative, clearly labeled demo operational data so all primary workflows can be explored without presenting it as user-generated content.
+- [x] Add automated tests for role gating and core demo workflow data behavior.
+- [x] Verify the site visually on desktop and mobile, resolve errors, and create a final project checkpoint.
+- [x] Add demo-level route/view guards so role switching cannot render a workspace that the selected role is not authorized to access.
+- [x] Expand restricted readiness into checklist-based review sections with a contextual audit-history panel.
+- [x] Make onboarding workflows personalized by a selected employee persona, assignment context, and ownership model.
+- [x] Add dedicated client, project, and availability views to complete the client-to-delivery lifecycle demonstration.
+- [x] Implement actual finance-role field masking for sample pay/bill/margin data rather than describing the scope only.
+- [x] Extend automated tests to cover core interactive demo workflow behavior beyond navigation.
+- [ ] Create and save the final validated project checkpoint.

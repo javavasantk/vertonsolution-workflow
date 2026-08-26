@@ -114,7 +114,10 @@
 - [x] Remove repeated “Draft next-step guidance” actions and retain contextual AI actions only where a user has an active workflow task.
 - [x] Add a role-aware bottom-right AI assistant that uses bounded workspace context and preserves existing human-review safeguards.
 - [x] Add automated tests for seeded records, contextual AI action visibility, assistant authorization, and mobile behavior.
-- [ ] Verify the database-backed portal experience and floating AI assistant on desktop and mobile, then save a completed project checkpoint.
+- [x] Verify the database-backed portal experience and floating AI assistant on desktop and mobile, then save a completed project checkpoint.
+- [x] Capture authenticated desktop evidence for database-backed overview, delivery, and time-billing workspace records.
+- [x] Capture authenticated mobile evidence for the same database-backed portal views and confirm finance masking remains role-scoped.
+- [ ] Save a final checkpoint after database-backed workspace view visual validation.
 - [x] Add an in-app data-source note that identifies MySQL-compatible TiDB with Drizzle ORM and distinguishes database-backed modules from client-only representative UI.
 - [x] Extend the idempotent demo seed to include clearly labeled recruiter candidate profiles for Candidate Finder.
 - [x] Replace remaining hardcoded delivery lifecycle, demand, assignment, time, and activity datasets with protected database summary records while retaining role-scoped masking.

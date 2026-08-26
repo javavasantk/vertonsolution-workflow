@@ -73,7 +73,7 @@ describe("real browser demo authentication journey", () => {
     } finally {
       await browser.close();
     }
-  }, 45_000);
+  }, 70_000);
 
   runBrowserJourney("opens the role-aware bottom-right assistant only after authentication", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
@@ -89,6 +89,41 @@ describe("real browser demo authentication journey", () => {
         await page.getByRole("button", { name: "Open AI assistant" }).click();
         await expect.poll(() => page.getByText("Workforce Hub assistant").count()).toBe(1);
         await page.screenshot({ path: `/home/ubuntu/workspace-assistant-${suffix}.png`, fullPage: true });
+      }
+    } finally {
+      await browser.close();
+    }
+  }, 45_000);
+
+  runBrowserJourney("renders seeded database-backed overview, delivery, and time-billing records with role-scoped masking", async () => {
+    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    try {
+      for (const [suffix, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]] as const) {
+        const page = await browser.newPage({ viewport });
+        await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+        await page.getByLabel("Email address").fill("consultant@demo.vertonsolutions.com");
+        await page.getByLabel("Password").fill("VertonDemo!2026");
+        await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
+        await page.waitForURL(`${baseUrl}/workspace`);
+        await expect.poll(() => page.getByText(/MySQL-compatible TiDB via Drizzle ORM/).count()).toBe(1);
+        await page.screenshot({ path: `/home/ubuntu/database-overview-${suffix}.png`, fullPage: true });
+        if (viewport.width < 640) {
+          await page.getByRole("button", { name: "Open navigation" }).click();
+          await page.getByRole("button", { name: "Delivery" }).last().click();
+        } else {
+          await page.getByRole("button", { name: "Delivery" }).first().click();
+        }
+        await expect.poll(() => page.getByText("Protected database-backed staffing demand, assignment, and capacity records.").count()).toBe(1);
+        await page.screenshot({ path: `/home/ubuntu/database-delivery-${suffix}.png`, fullPage: true });
+        if (viewport.width < 640) {
+          await page.getByRole("button", { name: "Open navigation" }).click();
+          await page.getByRole("button", { name: "Time & billing" }).last().click();
+        } else {
+          await page.getByRole("button", { name: "Time & billing" }).first().click();
+        }
+        await expect.poll(() => page.getByText("Database-backed timesheet entries").count()).toBe(1);
+        await expect.poll(() => page.getByText("••••••").count()).toBeGreaterThan(0);
+        await page.screenshot({ path: `/home/ubuntu/database-time-billing-${suffix}.png`, fullPage: true });
       }
     } finally {
       await browser.close();

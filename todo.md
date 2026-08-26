@@ -19,4 +19,9 @@
 - [x] Add dedicated client, project, and availability views to complete the client-to-delivery lifecycle demonstration.
 - [x] Implement actual finance-role field masking for sample pay/bill/margin data rather than describing the scope only.
 - [x] Extend automated tests to cover core interactive demo workflow behavior beyond navigation.
-- [ ] Create and save the final validated project checkpoint.
+- [x] Create and save the final validated project checkpoint.
+- [x] Retrieve and apply the official Verton Solutions logo as a managed project asset in the landing page, login screen, and workspace shell.
+- [x] Add a polished Workforce Hub login experience that presents permitted demo access profiles without exposing sensitive workflow information before sign-in.
+- [x] Add role-based session handling, route protection, sign-out behavior, and role-scoped access routing for administrator, recruiter, HR/compliance, account manager, delivery manager, project manager, finance, and consultant users.
+- [x] Extend automated tests for login, account-assigned role access, protected workspace entry, and sign-out behavior.
+- [ ] Verify the updated login and role-access experience on desktop and mobile, then create a final checkpoint.

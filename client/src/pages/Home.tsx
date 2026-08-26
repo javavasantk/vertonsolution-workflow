@@ -34,6 +34,8 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -63,6 +65,23 @@ const roles: { name: RoleKey; initials: string; description: string }[] = [
   { name: "Finance", initials: "FN", description: "Time, billing-readiness, and operational controls" },
   { name: "Consultant", initials: "CT", description: "Personal tasks, time, and assignment visibility" },
 ];
+
+const logoAssetUrl = "/manus-storage/verton-solutions-logo_81cf4419.jpg";
+
+export function getRoleKeyFromStoredRole(role?: string | null): RoleKey {
+  const roleMap: Record<string, RoleKey> = {
+    admin: "Administrator",
+    recruiter: "Recruiter",
+    hr_compliance: "HR & Compliance",
+    account_manager: "Account Manager",
+    delivery_manager: "Delivery Manager",
+    project_manager: "Project Manager",
+    finance: "Finance",
+    consultant: "Consultant",
+    user: "Consultant",
+  };
+  return roleMap[role ?? "consultant"] ?? "Consultant";
+}
 
 const allRoles = roles.map(role => role.name);
 export const navItems: NavItem[] = [
@@ -148,12 +167,10 @@ const toneStyles: Record<string, string> = {
 function Logo({ dark = false }: { dark?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div className={`grid h-10 w-10 place-items-center rounded-xl ${dark ? "bg-white/12 ring-1 ring-white/15" : "bg-[#0b57d0] shadow-[0_8px_22px_rgba(11,87,208,.25)]"}`}>
-        <span className="font-mono-ui text-lg font-medium text-white">V</span>
-      </div>
+      <div className={`flex h-10 w-[54px] items-center justify-center overflow-hidden rounded-lg ${dark ? "bg-white shadow-sm" : "bg-white ring-1 ring-[#dce7f3]"}`}><img src={logoAssetUrl} alt="Verton Solutions, Inc." className="h-full w-full object-contain" /></div>
       <div className="leading-none">
-        <p className={`text-base font-extrabold tracking-[-0.04em] ${dark ? "text-white" : "text-[#12345a]"}`}>VERTON</p>
-        <p className={`mt-1 text-[9px] font-bold uppercase tracking-[0.22em] ${dark ? "text-blue-200" : "text-[#5a7190]"}`}>Workforce Hub</p>
+        <p className={`text-[13px] font-extrabold tracking-[-0.03em] ${dark ? "text-white" : "text-[#12345a]"}`}>Workforce Hub</p>
+        <p className={`mt-1 text-[8px] font-bold uppercase tracking-[0.2em] ${dark ? "text-blue-200" : "text-[#5a7190]"}`}>Verton Solutions</p>
       </div>
     </div>
   );
@@ -295,11 +312,21 @@ function Landing({ launchWorkspace }: { launchWorkspace: () => void }) {
   );
 }
 
+function Login({ returnToLanding, openWorkspace }: { returnToLanding: () => void; openWorkspace: () => void }) {
+  const { isAuthenticated, loading, user } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) openWorkspace();
+  }, [isAuthenticated, openWorkspace]);
+
+  return <div className="min-h-screen overflow-hidden bg-[#f7faff] text-[#12345a]"><div className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]"><section className="relative hidden overflow-hidden bg-[#09264b] p-10 text-white lg:flex lg:flex-col"><div className="verton-grid absolute inset-0 opacity-60" /><div className="absolute -right-20 top-20 h-96 w-96 rounded-full bg-[#0b57d0]/35 blur-[100px]" /><div className="relative"><Logo dark /><div className="mt-24 max-w-md"><p className="font-mono-ui text-[11px] font-medium uppercase tracking-[.18em] text-[#78e2d4]">Secure workforce operations</p><h1 className="mt-5 text-balance text-5xl font-extrabold tracking-[-.065em]">One controlled access point for the work that moves Verton forward.</h1><p className="mt-6 text-sm leading-7 text-blue-100/78">Your account assignment determines the workspace, actions, and data available to you. Every sensitive workflow remains role-scoped and auditable.</p></div></div><div className="relative mt-auto grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/10 bg-white/6 p-4"><ShieldCheck className="text-[#78e2d4]" size={18} /><p className="mt-4 text-xs font-bold">Role-scoped visibility</p><p className="mt-1 text-[10px] leading-4 text-blue-100/65">Access follows your account assignment.</p></div><div className="rounded-2xl border border-white/10 bg-white/6 p-4"><FileCheck2 className="text-[#78e2d4]" size={18} /><p className="mt-4 text-xs font-bold">Accountable operations</p><p className="mt-1 text-[10px] leading-4 text-blue-100/65">Material activity is captured in context.</p></div></div></section><section className="relative flex items-center justify-center px-5 py-10 sm:px-8"><button onClick={returnToLanding} className="absolute left-5 top-5 flex items-center gap-2 text-xs font-bold text-[#5d7593] transition hover:text-[#0b57d0]"><ArrowRight className="rotate-180" size={15} /> Back to Verton</button><div className="w-full max-w-md"><div className="lg:hidden"><Logo /></div><div className="mt-16 rounded-[24px] border border-[#dce7f3] bg-white p-6 shadow-[0_22px_50px_rgba(18,52,90,.10)] sm:p-8"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f2ff] text-[#0b57d0]"><LockKeyhole size={19} /></div><p className="mt-6 font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Secure sign in</p><h2 className="mt-2 text-3xl font-extrabold tracking-[-.055em]">Welcome to Workforce Hub.</h2><p className="mt-3 text-sm leading-6 text-[#7185a0]">Sign in with your approved identity to enter your assigned Verton workspace.</p><button onClick={() => startLogin()} disabled={loading} className="mt-8 w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-sm font-bold text-white shadow-[0_10px_20px_rgba(11,87,208,.20)] transition hover:-translate-y-0.5 hover:bg-[#094db9] disabled:cursor-not-allowed disabled:opacity-70">{loading ? "Checking secure session…" : "Sign in securely"} <ArrowRight className="ml-1 inline" size={16} /></button><div className="mt-6 border-t border-[#ebf0f6] pt-5"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#7c91a9]">Workspace access profiles</p><div className="mt-3 grid grid-cols-2 gap-2">{roles.map(role => <div key={role.name} className="rounded-xl bg-[#f7faff] p-2.5"><span className="text-[10px] font-extrabold text-[#335575]">{role.name}</span><span className="mt-1 block text-[9px] leading-3 text-[#8092a8]">Assigned by administration</span></div>)}</div></div><p className="mt-5 text-center text-[10px] leading-4 text-[#8193a9]">Your role is assigned and reviewed by Verton administration. This screen does not allow users to self-select access.</p></div></div></section></div></div>;
+}
+
 function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
-  const [activeRole, setActiveRole] = useState<RoleKey>("Administrator");
+  const { user, isAuthenticated, loading, logout } = useAuth();
+  const activeRole = getRoleKeyFromStoredRole(user?.role);
   const [activePage, setActivePage] = useState("Overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [candidateQuery, setCandidateQuery] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<typeof candidates[number] | null>(candidates[0]);
   const [masked, setMasked] = useState(true);
@@ -325,9 +352,13 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
   }, [onboardingPersonaId]);
 
   const changePage = (page: string) => {
-    setActivePage(page);
+    setActivePage(resolveWorkspacePage(activeRole, page));
     setMobileNavOpen(false);
   };
+
+  if (loading) return <div className="grid min-h-screen place-items-center bg-[#f7faff] text-[#365575]"><div className="text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#e8f2ff] text-[#0b57d0]"><ShieldCheck size={20} /></span><p className="mt-4 text-sm font-bold">Verifying secure workspace access…</p></div></div>;
+
+  if (!isAuthenticated) return <Login returnToLanding={exitWorkspace} openWorkspace={() => {}} />;
 
   const WorkspaceNav = ({ mobile = false }: { mobile?: boolean }) => (
     <nav className={mobile ? "p-4" : "px-3 py-4"}>
@@ -382,8 +413,8 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
   };
 
   return <div className="min-h-screen bg-[#f7faff] text-[#12345a]"><div className="flex min-h-screen">
-    <aside className={`fixed inset-y-0 left-0 z-40 hidden shrink-0 flex-col bg-[#09264b] text-white transition-all duration-300 lg:flex ${sidebarOpen ? "w-[252px]" : "w-[76px]"}`}><div className="flex h-[76px] items-center justify-between border-b border-white/10 px-4">{sidebarOpen ? <Logo dark /> : <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/12 font-mono-ui text-lg text-white">V</span>}<button onClick={() => setSidebarOpen(value => !value)} className="grid h-8 w-8 place-items-center rounded-lg text-blue-100/70 transition hover:bg-white/10 hover:text-white">{sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button></div><div className="flex-1 overflow-y-auto"><WorkspaceNav /></div><div className="border-t border-white/10 p-3"><button onClick={exitWorkspace} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold text-blue-100/75 transition hover:bg-white/7 hover:text-white"><ArrowRight className="rotate-180" size={16} />{sidebarOpen && "Back to Verton"}</button></div></aside>
-    <div className={`min-w-0 flex-1 transition-all duration-300 ${sidebarOpen ? "lg:ml-[252px]" : "lg:ml-[76px]"}`}><header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-[#e4ecf5] bg-[#f7faff]/90 px-4 backdrop-blur-xl sm:px-6"><div className="flex items-center gap-3"><button onClick={() => setMobileNavOpen(true)} className="grid h-9 w-9 place-items-center rounded-lg border border-[#dce7f3] bg-white text-[#385676] lg:hidden"><Menu size={18} /></button><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#7790aa]">{activeRoleInfo.name} workspace</p><p className="mt-0.5 text-xs font-semibold text-[#3e5b7c]">{activeRoleInfo.description}</p></div></div><div className="flex items-center gap-2"><button className="relative grid h-9 w-9 place-items-center rounded-lg border border-[#dce7f3] bg-white text-[#52708e]"><Bell size={16} /><span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ed7b50]" /></button><div className="relative"><button onClick={() => setRoleMenuOpen(value => !value)} className="flex items-center gap-2 rounded-xl border border-[#dce7f3] bg-white p-1.5 pl-2 shadow-sm"><span className="hidden text-right sm:block"><span className="block text-[10px] font-extrabold text-[#395674]">Demo user</span><span className="block text-[9px] text-[#7790aa]">{activeRole}</span></span><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e1eeff] text-[9px] font-extrabold text-[#0b57d0]">{activeRoleInfo.initials}</span><ChevronDown size={14} className="mr-0.5 text-[#7590a9]" /></button>{roleMenuOpen && <div className="absolute right-0 top-11 z-50 w-60 overflow-hidden rounded-xl border border-[#dce7f3] bg-white py-1 shadow-[0_16px_40px_rgba(20,56,96,.16)]"><p className="px-3 py-2 text-[9px] font-bold uppercase tracking-[.13em] text-[#8294aa]">Switch demo role</p>{roles.map(role => <button key={role.name} onClick={() => { setActiveRole(role.name); setRoleMenuOpen(false); }} className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-[#f3f8ff] ${activeRole === role.name ? "bg-[#f3f8ff]" : ""}`}><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e4efff] text-[9px] font-extrabold text-[#0b57d0]">{role.initials}</span><span><span className="block text-xs font-extrabold text-[#385675]">{role.name}</span><span className="block text-[9px] text-[#8193aa]">{role.description}</span></span>{activeRole === role.name && <Check className="ml-auto text-[#0b57d0]" size={14} />}</button>)}</div>}</div></div></header>
+    <aside className={`fixed inset-y-0 left-0 z-40 hidden shrink-0 flex-col bg-[#09264b] text-white transition-all duration-300 lg:flex ${sidebarOpen ? "w-[252px]" : "w-[76px]"}`}><div className="flex h-[76px] items-center justify-between border-b border-white/10 px-4">{sidebarOpen ? <Logo dark /> : <img src={logoAssetUrl} alt="Verton Solutions, Inc." className="h-9 w-9 rounded-lg bg-white object-contain" />}<button onClick={() => setSidebarOpen(value => !value)} className="grid h-8 w-8 place-items-center rounded-lg text-blue-100/70 transition hover:bg-white/10 hover:text-white">{sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button></div><div className="flex-1 overflow-y-auto"><WorkspaceNav /></div><div className="border-t border-white/10 p-3"><button onClick={exitWorkspace} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold text-blue-100/75 transition hover:bg-white/7 hover:text-white"><ArrowRight className="rotate-180" size={16} />{sidebarOpen && "Back to Verton"}</button></div></aside>
+    <div className={`min-w-0 flex-1 transition-all duration-300 ${sidebarOpen ? "lg:ml-[252px]" : "lg:ml-[76px]"}`}><header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-[#e4ecf5] bg-[#f7faff]/90 px-4 backdrop-blur-xl sm:px-6"><div className="flex items-center gap-3"><button onClick={() => setMobileNavOpen(true)} className="grid h-9 w-9 place-items-center rounded-lg border border-[#dce7f3] bg-white text-[#385676] lg:hidden"><Menu size={18} /></button><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#7790aa]">{activeRoleInfo.name} workspace</p><p className="mt-0.5 text-xs font-semibold text-[#3e5b7c]">{activeRoleInfo.description}</p></div></div><div className="flex items-center gap-2"><button className="relative grid h-9 w-9 place-items-center rounded-lg border border-[#dce7f3] bg-white text-[#52708e]"><Bell size={16} /><span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ed7b50]" /></button><div className="flex items-center gap-2 rounded-xl border border-[#dce7f3] bg-white p-1.5 pl-2 shadow-sm"><span className="hidden text-right sm:block"><span className="block max-w-28 truncate text-[10px] font-extrabold text-[#395674]">{user?.name || "Verton user"}</span><span className="block text-[9px] text-[#7790aa]">{activeRole}</span></span><span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e1eeff] text-[9px] font-extrabold text-[#0b57d0]">{activeRoleInfo.initials}</span><button onClick={async () => { await logout(); setLocation("/login"); }} aria-label="Sign out" className="grid h-7 w-7 place-items-center rounded-lg text-[#7890aa] transition hover:bg-[#f5f8fc] hover:text-[#0b57d0]"><ArrowRight size={14} /></button></div></div></header>
       <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><PageContent /></main></div>
   </div>
   {mobileNavOpen && <div className="fixed inset-0 z-[60] lg:hidden"><button aria-label="Close menu" onClick={() => setMobileNavOpen(false)} className="absolute inset-0 bg-[#061a33]/55" /><div className="relative flex h-full w-[280px] flex-col bg-[#09264b] text-white shadow-2xl"><div className="flex h-[76px] items-center justify-between border-b border-white/10 px-4"><Logo dark /><button onClick={() => setMobileNavOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-blue-100"><X size={18} /></button></div><WorkspaceNav mobile /></div></div>}
@@ -392,7 +423,9 @@ function Workspace({ exitWorkspace }: { exitWorkspace: () => void }) {
 
 export default function Home() {
   const [location, setLocation] = useLocation();
+  const inLogin = location === "/login";
   const inWorkspace = location === "/workspace";
   if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} />;
-  return <Landing launchWorkspace={() => setLocation("/workspace")} />;
+  if (inLogin) return <Login returnToLanding={() => setLocation("/")} openWorkspace={() => setLocation("/workspace")} />;
+  return <Landing launchWorkspace={() => setLocation("/login")} />;
 }

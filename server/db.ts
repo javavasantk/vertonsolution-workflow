@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -87,6 +87,29 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function listWorkforceUsers() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      lastSignedIn: users.lastSignedIn,
+    })
+    .from(users)
+    .orderBy(desc(users.lastSignedIn));
+}
+
+export async function assignWorkforceRole(userId: number, role: InsertUser["role"]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  await db.update(users).set({ role }).where(eq(users.id, userId));
 }
 
 // TODO: add feature queries here as your schema grows.

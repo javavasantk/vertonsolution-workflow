@@ -6,18 +6,18 @@ const baseUrl = process.env.WORKFORCE_HUB_URL ?? "http://localhost:3000";
 
 async function completeRecoveryJourney(page: import("playwright-core").Page, suffix: "desktop" | "mobile") {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
-  await page.getByText("Consultant", { exact: true }).first().click();
   await page.getByRole("button", { name: "Forgot password?" }).click();
   await page.getByLabel("Reset email").fill("consultant@demo.vertonsolutions.com");
-  await page.getByRole("button", { name: "Generate demo reset code" }).click();
-  await page.getByLabel("New demo password").fill("VertonDemo!2026");
-  await page.getByLabel("Confirm demo password").fill("VertonDemo!2026");
+  await page.getByRole("button", { name: "Generate reset code" }).click();
+  await page.getByLabel("New password").fill("VertonDemo!2026");
+  await page.getByLabel("Confirm password").fill("VertonDemo!2026");
   await page.getByRole("button", { name: "Save new password" }).click();
   await expect.poll(() => page.getByText(/Password reset successfully/).count()).toBe(1);
   await page.screenshot({ path: `/home/ubuntu/auth-journey-reset-success-${suffix}.png`, fullPage: true });
 
-  await page.getByText("Consultant", { exact: true }).first().click();
-  await page.getByRole("button", { name: /Open assigned workspace/ }).click();
+  await page.getByLabel("Email address").fill("consultant@demo.vertonsolutions.com");
+  await page.getByLabel("Password").fill("VertonDemo!2026");
+  await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
   await page.waitForURL(`${baseUrl}/workspace`);
   await expect.poll(() => page.getByText("Consultant workspace").count()).toBe(1);
   await expect.poll(() => page.getByText("Readiness", { exact: true }).count()).toBe(0);

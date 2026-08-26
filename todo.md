@@ -71,9 +71,18 @@
 - [x] Add integration coverage proving a demo credential session resolves to its role-scoped workspace access without mocked client mutations.
 - [x] Visually verify the complete role-directory login, forgot-password, reset-code, reset-success, and workspace-entry journey on desktop and mobile.
 - [x] Add browser-level interaction coverage for the demo login and password-recovery flow through to role-scoped workspace entry.
-- [ ] Re-run full validation and save a checkpoint after browser-level authentication journey verification.
+- [x] Re-run full validation and save a checkpoint after browser-level authentication journey verification.
 - [x] Visually verify reset-success and actual post-login workspace entry as part of the complete desktop and mobile authentication journey.
 - [x] Add non-mocked browser interaction coverage that completes credential login or recovery and enters the assigned workspace through the real authentication flow.
-- [ ] Re-run all validation and save a checkpoint after real authentication journey verification.
+- [x] Re-run all validation and save a checkpoint after real authentication journey verification.
 - [x] Capture the reset-success state on desktop and mobile after completing the forgot-password flow.
 - [x] Capture the authenticated post-login workspace-entry state on desktop and mobile immediately after a demo credential login or recovery.
+- [x] Remove all role-directory cards and shared demonstration credentials from the public first-login page.
+- [x] Make the public URL open on a single first-login form and prevent unauthenticated users from entering any Workforce Hub workspace route.
+- [x] Add a recruiter- and administrator-protected AI resume parsing API with bounded plain-text input, structured candidate detail extraction, and explicit human-review guidance.
+- [x] Build a recruiter dashboard resume-parser panel for pasting resume text, reviewing extracted candidate information, and copying results into the recruiting workflow.
+- [x] Add tests for login-page access control, recruiter/admin parser authorization, bounded input validation, safe AI fallback, and parsed-result rendering.
+- [ ] Verify the streamlined login and recruiter resume parser on desktop and mobile, then save a completed project checkpoint.
+- [x] Remove the development-only workspace preview bypass from normal `/workspace*` routes so unauthenticated users cannot render a workspace through URL parameters.
+- [x] Re-run login and workspace access-control tests and visual verification after enforcing the strict workspace route gate.
+- [ ] Save a checkpoint after strict workspace route protection is fully validated.

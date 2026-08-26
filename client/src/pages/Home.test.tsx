@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, demoAuthState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, demoAuthState, resumeTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -26,6 +26,12 @@ const { authState, startLoginSpy, aiTestState, demoAuthState } = vi.hoisted(() =
     resetMutate: vi.fn(),
     accounts: [{ id: 2, name: "Riley Brooks", email: "recruiter@demo.vertonsolutions.com", role: "recruiter" }],
     loginAs: null as any,
+  },
+  resumeTestState: {
+    mutate: vi.fn(),
+    isPending: false,
+    error: null as Error | null,
+    response: { profile: { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Full-stack engineer with cloud delivery experience.", yearsExperience: "6 years", skills: ["TypeScript", "React", "AWS"], recentRoles: [{ title: "Software Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm project availability with the candidate."], confidence: "high" }, model: "test-model", unavailable: false } as any,
   },
 }));
 
@@ -58,6 +64,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+      parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
     },
     ai: {
       assist: { useMutation: (options?: { onSuccess?: (data: { briefing: string; task: string; model: string }) => void }) => ({ mutate: (input: unknown) => { aiTestState.mutate(input); if (aiTestState.response) options?.onSuccess?.(aiTestState.response); }, isPending: aiTestState.isPending, error: aiTestState.error }) },
@@ -94,7 +101,7 @@ function setUnauthenticated() {
   authState.logout = vi.fn();
 }
 
-function renderRoute(path: "/" | "/login" | "/workspace") {
+function renderRoute(path: "/" | "/login" | "/workspace" | "/workspace/recruiting") {
   window.history.pushState({}, "", path);
   return render(<Home />);
 }
@@ -111,6 +118,9 @@ afterEach(() => {
   demoAuthState.resetRequestMutate.mockReset();
   demoAuthState.resetMutate.mockReset();
   demoAuthState.loginAs = null;
+  resumeTestState.mutate.mockReset();
+  resumeTestState.isPending = false;
+  resumeTestState.error = null;
   window.history.pushState({}, "", "/");
 });
 
@@ -145,7 +155,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     setUnauthenticated();
     renderRoute("/login");
 
-    expect(screen.getByText("Choose a role, then sign in.")).toBeTruthy();
+    expect(screen.getByText("Sign in to Workforce Hub.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /Use approved identity/ }));
     expect(startLoginSpy).toHaveBeenCalledTimes(1);
   });
@@ -154,7 +164,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     setUnauthenticated();
     renderRoute("/workspace");
 
-    expect(screen.getByText("Choose a role, then sign in.")).toBeTruthy();
+    expect(screen.getByText("Sign in to Workforce Hub.")).toBeTruthy();
     expect(screen.queryByText("Good morning, Verton.")).toBeNull();
   });
 
@@ -197,17 +207,18 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(authState.logout).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Choose a role, then sign in.")).toBeTruthy();
+    expect(screen.getByText("Sign in to Workforce Hub.")).toBeTruthy();
   });
 
-  it("prefills a role credential and submits the demo login flow", async () => {
+  it("submits an explicit credential login without exposing role choices", async () => {
     const user = userEvent.setup();
     setUnauthenticated();
     renderRoute("/login");
 
-    await user.click(screen.getByText("Recruiter"));
-    expect((screen.getByLabelText("Demo email") as HTMLInputElement).value).toBe("recruiter@demo.vertonsolutions.com");
-    await user.click(screen.getByRole("button", { name: /Open assigned workspace/ }));
+    expect(screen.queryByText("Recruiter")).toBeNull();
+    await user.type(screen.getByLabelText("Email address"), "recruiter@demo.vertonsolutions.com");
+    await user.type(screen.getByLabelText("Password"), "VertonDemo!2026");
+    await user.click(screen.getByRole("button", { name: /Enter Workforce Hub/ }));
     expect(demoAuthState.loginMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com", password: "VertonDemo!2026" });
   });
 
@@ -218,9 +229,9 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     await user.click(screen.getByRole("button", { name: "Forgot password?" }));
     await user.type(screen.getByLabelText("Reset email"), "recruiter@demo.vertonsolutions.com");
-    await user.click(screen.getByRole("button", { name: /Generate demo reset code/ }));
-    await user.type(screen.getByLabelText("New demo password"), "ReplacementDemo!2026");
-    await user.type(screen.getByLabelText("Confirm demo password"), "ReplacementDemo!2026");
+    await user.click(screen.getByRole("button", { name: /Generate reset code/ }));
+    await user.type(screen.getByLabelText("New password"), "ReplacementDemo!2026");
+    await user.type(screen.getByLabelText("Confirm password"), "ReplacementDemo!2026");
     await user.click(screen.getByRole("button", { name: "Save new password" }));
     expect(demoAuthState.resetRequestMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com" });
     expect(demoAuthState.resetMutate).toHaveBeenCalledWith(expect.objectContaining({ password: "ReplacementDemo!2026" }));
@@ -245,20 +256,37 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     await user.click(screen.getByRole("button", { name: "Forgot password?" }));
     await user.type(screen.getByLabelText("Reset email"), "recruiter@demo.vertonsolutions.com");
-    await user.click(screen.getByRole("button", { name: /Generate demo reset code/ }));
-    await user.type(screen.getByLabelText("New demo password"), "ReplacementDemo!2026");
-    await user.type(screen.getByLabelText("Confirm demo password"), "ReplacementDemo!2026");
+    await user.click(screen.getByRole("button", { name: /Generate reset code/ }));
+    await user.type(screen.getByLabelText("New password"), "ReplacementDemo!2026");
+    await user.type(screen.getByLabelText("Confirm password"), "ReplacementDemo!2026");
     await user.click(screen.getByRole("button", { name: "Save new password" }));
     expect(screen.getByText(/Password reset successfully/)).toBeTruthy();
 
-    await user.clear(screen.getByLabelText("Demo email"));
-    await user.type(screen.getByLabelText("Demo email"), "recruiter@demo.vertonsolutions.com");
-    await user.type(screen.getByLabelText("Demo password"), "ReplacementDemo!2026");
-    await user.click(screen.getByRole("button", { name: /Open assigned workspace/ }));
+    await user.clear(screen.getByLabelText("Email address"));
+    await user.type(screen.getByLabelText("Email address"), "recruiter@demo.vertonsolutions.com");
+    await user.type(screen.getByLabelText("Password"), "ReplacementDemo!2026");
+    await user.click(screen.getByRole("button", { name: /Enter Workforce Hub/ }));
 
     expect(demoAuthState.loginMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com", password: "ReplacementDemo!2026" });
     expect(screen.getByText("Recruiter workspace")).toBeTruthy();
     expect(screen.queryByText("Readiness")).toBeNull();
+  });
+
+  it("lets a recruiter parse pasted resume text and review extracted candidate details", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+
+    const resumeInput = screen.getByLabelText("Resume text") as HTMLTextAreaElement;
+    await user.type(resumeInput, "Alex Morgan is a full-stack engineer with six years of TypeScript, React, AWS, and cloud delivery experience. Alex has delivered web platforms for Northstar and is based in Austin, Texas. Contact alex@example.com.");
+    expect(resumeInput.value.length).toBeGreaterThan(80);
+    const parseButton = screen.getByRole("button", { name: /Parse resume details/ }) as HTMLButtonElement;
+    expect(parseButton.disabled).toBe(false);
+    await user.click(parseButton);
+    expect(resumeTestState.mutate).toHaveBeenCalledWith(expect.objectContaining({ resumeText: expect.stringContaining("Alex Morgan") }));
+    expect(screen.getByText("Alex Morgan")).toBeTruthy();
+    expect(screen.getByText("TypeScript")).toBeTruthy();
+    expect(screen.getByText(/Prepare for human review/)).toBeTruthy();
   });
 
   it("sends bounded onboarding state to the AI assistant and renders the returned briefing", async () => {

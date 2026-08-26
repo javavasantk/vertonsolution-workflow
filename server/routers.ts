@@ -5,6 +5,7 @@ import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
 import { generateAiBriefing } from "./aiService";
+import { parseRecruiterResume } from "./resumeParserService";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
 
@@ -138,6 +139,9 @@ export const appRouter = router({
 
   recruiting: router({
     newHireProgress: recruiterProcedure.query(({ ctx }) => ctx.user.isDemo ? [] : db.listRecruiterNewHireProgress()),
+    parseResume: recruiterProcedure
+      .input(z.object({ resumeText: z.string().trim().min(80).max(12_000) }))
+      .mutation(async ({ input }) => parseRecruiterResume(input.resumeText)),
   }),
 
   ai: router({

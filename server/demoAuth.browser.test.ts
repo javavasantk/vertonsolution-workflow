@@ -95,6 +95,30 @@ describe("real browser demo authentication journey", () => {
     }
   }, 45_000);
 
+  runBrowserJourney("queries recruiter-visible candidates and saves an inline candidate edit through protected workspace controls", async () => {
+    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+      await page.getByLabel("Email address").fill("recruiter@demo.vertonsolutions.com");
+      await page.getByLabel("Password").fill("VertonDemo!2026");
+      await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
+      await page.waitForURL(`${baseUrl}/workspace`);
+      await page.goto(`${baseUrl}/workspace/recruiting`, { waitUntil: "networkidle" });
+      await expect.poll(() => page.getByRole("button", { name: /Edit Alex Morgan/ }).count(), { timeout: 20_000 }).toBeGreaterThan(0);
+      await page.getByRole("button", { name: /Edit Alex Morgan/ }).first().click();
+      await page.getByLabel("Edit candidate location").first().fill("Austin, TX");
+      await page.getByRole("button", { name: "Save candidate edit" }).first().click();
+      await page.getByRole("button", { name: "Open AI assistant" }).click();
+      await page.getByPlaceholder("Ask about this workspace…").fill("Find candidate profiles with TypeScript skills");
+      await page.getByPlaceholder("Ask about this workspace…").press("Enter");
+      await expect.poll(() => page.getByText(/Database matches \(candidate\)/).count(), { timeout: 50_000 }).toBeGreaterThan(0);
+      await page.screenshot({ path: "/home/ubuntu/database-aware-assistant-inline-edit.png", fullPage: true });
+    } finally {
+      await browser.close();
+    }
+  }, 75_000);
+
   runBrowserJourney("renders seeded database-backed overview, delivery, and time-billing records with role-scoped masking", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
     try {

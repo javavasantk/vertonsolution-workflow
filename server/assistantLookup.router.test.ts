@@ -28,6 +28,15 @@ describe("ai.workspaceAssistant database lookups", () => {
     expect(assistantSpy).toHaveBeenCalledWith(expect.objectContaining({ databaseContext: expect.stringContaining("Alex Morgan") }));
   });
 
+  it("returns database-backed project status records through a bounded lookup", async () => {
+    lookupSpy.mockResolvedValue({ kind: "project", context: "Project: Northstar Commerce Cloud · Demo; status: active; manager: Casey Rivera.", records: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }] });
+    assistantSpy.mockResolvedValue({ reply: "Northstar Commerce Cloud is active and owned by Casey Rivera.", model: "test", unavailable: false });
+
+    await expect(appRouter.createCaller(createContext("recruiter")).ai.workspaceAssistant({ page: "New-hire progress", prompt: "What is the status of the Northstar project?" })).resolves.toMatchObject({ lookupKind: "project", records: [{ deliveryStatus: "active" }] });
+    expect(lookupSpy).toHaveBeenCalledWith("recruiter", "What is the status of the Northstar project?");
+    expect(assistantSpy).toHaveBeenCalledWith(expect.objectContaining({ databaseContext: expect.stringContaining("Northstar Commerce Cloud") }));
+  });
+
   it("keeps unsupported-role prompts bounded when no database lookup is applicable", async () => {
     lookupSpy.mockResolvedValue({ kind: "none", context: "No database lookup applies to this question. Provide workflow guidance only.", records: [] });
     assistantSpy.mockResolvedValue({ reply: "Continue with the designated human owner.", model: "test", unavailable: false });

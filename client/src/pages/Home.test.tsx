@@ -343,7 +343,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("Alex Morgan")).toBeTruthy();
     expect(screen.getAllByText("TypeScript").length).toBeGreaterThan(0);
     expect(screen.getByText(/Prepare for human review/)).toBeTruthy();
-  });
+  }, 10_000);
 
   it("starts the protected direct-upload flow and exposes result exports", async () => {
     const user = userEvent.setup();

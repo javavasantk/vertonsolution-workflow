@@ -131,4 +131,8 @@
 - [x] Add inline editing controls to recruiter candidate and delivery project tables with save, cancel, validation, and optimistic refresh behavior.
 - [x] Connect the bottom-right AI assistant to structured candidate/project query results instead of supplying database records through unrestricted free-text prompts.
 - [x] Add tests for assistant query authorization, candidate/project lookup bounds, profile persistence, inline edit validation, and audit activity.
-- [ ] Verify desktop/mobile assistant lookup and inline editing workflows, then save a completed project checkpoint.
+- [x] Verify desktop/mobile assistant lookup and inline editing workflows, then save a completed project checkpoint.
+- [ ] Verify the latest project checkpoint and repository export readiness for vertonsolution-workflow.
+- [ ] Create the requested private GitHub repository and push the current Workforce Hub source code.
+- [ ] Connect vertonsolutions.live through the project domain settings and provide the required DNS verification records if domain-owner action is needed.
+- [ ] Confirm the GitHub repository and custom-domain deployment status.

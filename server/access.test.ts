@@ -48,6 +48,12 @@ describe("access router", () => {
     await expect(caller.recruiting.newHireProgress()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("denies role-restricted AI tasks before reaching the model provider", async () => {
+    const caller = appRouter.createCaller(createContext("user"));
+
+    await expect(caller.ai.assist({ task: "recruiter_summary", context: "New hire onboarding progress requires a manager handoff." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("rejects oversized employee readiness update notes before persisting them", async () => {
     const caller = appRouter.createCaller(createContext("user"));
 

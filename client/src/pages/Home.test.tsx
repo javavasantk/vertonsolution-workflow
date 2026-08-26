@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -14,6 +14,12 @@ const { authState, startLoginSpy } = vi.hoisted(() => ({
     logout: vi.fn(),
   },
   startLoginSpy: vi.fn(),
+  aiTestState: {
+    mutate: vi.fn(),
+    isPending: false,
+    error: null as Error | null,
+    response: null as { briefing: string; task: string; model: string } | null,
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -38,6 +44,9 @@ vi.mock("@/lib/trpc", () => ({
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+    },
+    ai: {
+      assist: { useMutation: (options?: { onSuccess?: (data: { briefing: string; task: string; model: string }) => void }) => ({ mutate: (input: unknown) => { aiTestState.mutate(input); if (aiTestState.response) options?.onSuccess?.(aiTestState.response); }, isPending: aiTestState.isPending, error: aiTestState.error }) },
     },
   },
 }));
@@ -80,6 +89,10 @@ afterEach(() => {
   cleanup();
   setUnauthenticated();
   startLoginSpy.mockReset();
+  aiTestState.mutate.mockReset();
+  aiTestState.isPending = false;
+  aiTestState.error = null;
+  aiTestState.response = null;
   window.history.pushState({}, "", "/");
 });
 
@@ -167,5 +180,33 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(authState.logout).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Welcome to Workforce Hub.")).toBeTruthy();
+  });
+
+  it("sends bounded onboarding state to the AI assistant and renders the returned briefing", async () => {
+    const user = userEvent.setup();
+    aiTestState.response = { briefing: "Summary\nHuman follow-up\nBoundary", task: "onboarding_guidance", model: "test-model" };
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    await user.click(screen.getByRole("button", { name: /Draft next-step guidance/ }));
+    expect(aiTestState.mutate).toHaveBeenCalledWith(expect.objectContaining({ task: "onboarding_guidance", context: expect.stringContaining("Current employee onboarding signals") }));
+    expect(screen.getByText(/Summary/)).toBeTruthy();
+    expect(screen.getByText(/Human follow-up/)).toBeTruthy();
+  });
+
+  it("shows the unavailable fallback when the AI service returns an error", () => {
+    aiTestState.error = new Error("provider unavailable");
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    expect(screen.getByText(/AI assistance is unavailable right now/)).toBeTruthy();
+  });
+
+  it("disables AI action controls while an AI briefing is being prepared", () => {
+    aiTestState.isPending = true;
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    expect(screen.getByRole("button", { name: /Preparing/ }).hasAttribute("disabled")).toBe(true);
   });
 });

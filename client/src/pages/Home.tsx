@@ -360,6 +360,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
   const [profileStatusNote, setProfileStatusNote] = useState("");
   const [profileSubmitted, setProfileSubmitted] = useState(false);
   const [adminUserSearch, setAdminUserSearch] = useState("");
+  const [aiBriefing, setAiBriefing] = useState("");
   const [, setLocation] = useLocation();
 
   const accessUsersQuery = trpc.access.listUsers.useQuery(undefined, { enabled: activeRole === "Administrator" });
@@ -369,6 +370,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
   const myProfileQuery = trpc.profile.mine.useQuery(undefined, { enabled: isAuthenticated });
   const profileMutation = trpc.profile.requestReview.useMutation({ onSuccess: () => { setProfileSubmitted(true); myProfileQuery.refetch(); } });
   const recruiterProgressQuery = trpc.recruiting.newHireProgress.useQuery(undefined, { enabled: activeRole === "Administrator" || activeRole === "Recruiter" });
+  const aiMutation = trpc.ai.assist.useMutation({ onSuccess: data => setAiBriefing(data.briefing) });
 
   const allowedNav = getAllowedNavigation(activeRole);
   const activeRoleInfo = roles.find(role => role.name === activeRole)!;
@@ -449,6 +451,41 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
 
   const FinanceScope = () => <div className={`mt-5 rounded-2xl border p-5 ${isFinanceRole(activeRole) ? "border-[#bfeade] bg-[#f1fbf8]" : "border-[#dce7f3] bg-white"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">Commercial data scope</p><p className="mt-1 text-xs text-[#7185a0]">Sample commercial fields are protected in the demo by the active role profile.</p></div><Pill tone={isFinanceRole(activeRole) ? "green" : "slate"}>{isFinanceRole(activeRole) ? "Finance access" : "Masked"}</Pill></div><div className="mt-4 grid gap-3 sm:grid-cols-3">{[["Client bill rate", "$142/hr"], ["Consultant pay rate", "$92/hr"], ["Assignment contribution", "35.2%"]].map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3 ring-1 ring-[#dfeae7]"><p className="text-[10px] font-bold text-[#7185a0]">{label}</p><p className="mt-2 font-mono-ui text-sm font-medium text-[#284968]">{isFinanceRole(activeRole) ? value : "••••••"}</p></div>)}</div></div>;
 
+  const AiAssistPanel = () => {
+    const liveRecruiterRows = recruiterProgressQuery.data ?? [];
+    const currentProfile = myProfileQuery.data;
+    const safeRecruiterContext = liveRecruiterRows.map(row => ({
+      onboardingStage: row.onboardingStage,
+      progressPercent: row.progressPercent,
+      managerConfirmed: row.managerConfirmed,
+      projectAssigned: Boolean(row.projectName),
+      assignmentState: row.assignmentState,
+      readinessSignal: row.readinessStatus,
+    }));
+    const safeAccessContext = {
+      accountCount: accessUsersQuery.data?.length ?? 0,
+      roleDistribution: (accessUsersQuery.data ?? []).reduce<Record<string, number>>((summary, account) => {
+        summary[account.role] = (summary[account.role] ?? 0) + 1;
+        return summary;
+      }, {}),
+      permissionGroups: (permissionGroupsQuery.data ?? []).map(group => ({ role: group.role, controls: group.permissions.length })),
+      recentRoleChanges: (roleChangeHistoryQuery.data ?? []).slice(0, 5).map(change => ({ previousRole: change.previousRole, nextRole: change.nextRole })),
+    };
+    const safeOnboardingContext = {
+      selectedPersona: onboardingPersona.role,
+      completedTasks,
+      totalTasks: onboarding.length,
+      onboardingStages: onboarding.map(task => ({ task: task.title, done: task.done })),
+      profileReviewState: currentProfile?.workAuthorizationStatus ?? "not_started",
+    };
+    const config = activePage === "New-hire progress"
+      ? { task: "recruiter_summary" as const, title: "Draft recruiter handoff", detail: "Summarize onboarding and assignment signals into a human-owned follow-up brief.", context: `Current operational recruiter signals: ${JSON.stringify({ trackedHireCount: safeRecruiterContext.length, rows: safeRecruiterContext })}` }
+      : activePage === "Admin center"
+        ? { task: "access_review" as const, title: "Draft access review", detail: "Summarize role, permission, and audit observations for an administrator.", context: `Current access-governance signals: ${JSON.stringify(safeAccessContext)}` }
+        : { task: "onboarding_guidance" as const, title: "Draft next-step guidance", detail: "Create a focused, human-reviewed onboarding guidance note from the current workflow context.", context: `Current employee onboarding signals: ${JSON.stringify(safeOnboardingContext)}` };
+    return <section className="mt-6 overflow-hidden rounded-2xl border border-[#cfe2fb] bg-gradient-to-br from-[#f4f9ff] to-[#f9fffd] shadow-[0_8px_20px_rgba(25,86,150,.05)]"><div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#dceeff] text-[#0b57d0]"><Sparkles size={18} /></span><div><p className="text-sm font-extrabold text-[#274a6c]">AI operations assist</p><p className="mt-1 text-xs leading-5 text-[#64809e]">{config.detail}</p></div></div><button onClick={() => { setAiBriefing(""); aiMutation.mutate({ task: config.task, context: config.context }); }} disabled={aiMutation.isPending} className="shrink-0 rounded-xl bg-[#0b57d0] px-3.5 py-2.5 text-xs font-bold text-white shadow-[0_7px_15px_rgba(11,87,208,.16)] disabled:cursor-not-allowed disabled:opacity-60">{aiMutation.isPending ? "Preparing…" : config.title} <Sparkles className="ml-1 inline" size={13} /></button></div><div className="border-t border-[#d7e7f8] px-5 py-3"><p className="text-[10px] leading-4 text-[#7389a4]"><ShieldCheck className="mr-1 inline text-[#0b57d0]" size={12} /> AI uses bounded operational context only. It does not view documents, determine eligibility, or replace human review.</p></div>{aiBriefing && <div className="border-t border-[#d7e7f8] bg-white/70 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#6683a1]">AI briefing · review before acting</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#365575]">{aiBriefing}</p></div>}{aiMutation.error && <div className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-xs font-semibold text-rose-700">AI assistance is unavailable right now. Please continue the workflow with the designated human owner.</div>}</section>;
+  };
+
   const AdminCenter = () => {
     const permissionGroups = permissionGroupsQuery.data ?? [];
     const roleChanges = roleChangeHistoryQuery.data ?? [];
@@ -476,16 +513,17 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
   const PageContent = () => {
     const permittedPage = resolveWorkspacePage(activeRole, activePage);
     if (permittedPage !== activePage) return <Overview />;
-    if (activePage === "Talent pipeline") return <Talent />;
-    if (activePage === "Readiness") return <><Readiness /><ReadinessChecklist /></>;
-    if (activePage === "Onboarding") return <><OnboardingContext /><Onboarding /></>;
-    if (activePage === "Delivery") return <><Delivery /><DeliveryLifecycle /></>;
-    if (activePage === "Time & billing") return <><TimeBilling /><FinanceScope /></>;
-    if (activePage === "Controls") return <Controls />;
-    if (activePage === "Admin center") return <AdminCenter />;
-    if (activePage === "My profile") return <EmployeeProfile />;
-    if (activePage === "New-hire progress") return <RecruiterDashboard />;
-    return <Overview />;
+    const content = activePage === "Talent pipeline" ? <Talent />
+      : activePage === "Readiness" ? <><Readiness /><ReadinessChecklist /></>
+      : activePage === "Onboarding" ? <><OnboardingContext /><Onboarding /></>
+      : activePage === "Delivery" ? <><Delivery /><DeliveryLifecycle /></>
+      : activePage === "Time & billing" ? <><TimeBilling /><FinanceScope /></>
+      : activePage === "Controls" ? <Controls />
+      : activePage === "Admin center" ? <AdminCenter />
+      : activePage === "My profile" ? <EmployeeProfile />
+      : activePage === "New-hire progress" ? <RecruiterDashboard />
+      : <Overview />;
+    return <>{content}<AiAssistPanel /></>;
   };
 
   return <div className="min-h-screen bg-[#f7faff] text-[#12345a]"><div className="flex min-h-screen">

@@ -32,8 +32,23 @@
 - [x] Build an employee profile page for viewing and requesting updates to personal work-authorization readiness fields without automated eligibility decisions.
 - [x] Build a recruiter dashboard for new-hire onboarding progress, pending readiness tasks, manager handoffs, and project-assignment signals.
 - [x] Add automated tests for administrator protection, employee profile ownership, recruiter workflow visibility, and authorization-update boundaries.
-- [ ] Verify the new dashboards on desktop and mobile and save a completed project checkpoint.
+- [x] Verify the new dashboards on desktop and mobile and save a completed project checkpoint.
 - [x] Establish privacy boundaries: only administrative status metadata is stored; employees may update only their own profile; recruiter views exclude restricted detail; and all authorization decisions remain human-reviewed.
 - [x] Add a protected permission-group API so the administrator dashboard’s permission review is served from the backend rather than client-only configuration.
 - [x] Add administrator directory search and role-change audit history to the control center.
 - [x] Add explicit server tests proving employee profile reads and updates are restricted to the authenticated employee’s own record.
+- [x] Define the FastAPI migration boundary, preserving the current authentication and data model while moving business and AI APIs to Python in a future dedicated runtime.
+- [x] Add a future-facing FastAPI application structure, typed request models, health endpoint, and gateway-oriented API contract without changing the current deployed runtime.
+- [x] Map the protected Workforce Hub access, profile, onboarding, and recruiter-progress boundaries into the FastAPI reference contract with server-side authorization checks.
+- [x] Add role-aware AI assistance for recruiter next-step summaries, employee onboarding guidance, and administrator access-review summaries; keep work-authorization decisions human-reviewed and non-automated.
+- [x] Add FastAPI contract tests and frontend/server validation for authorization and AI input boundaries.
+- [ ] Verify the no-cost AI experience and FastAPI reference implementation, then save a completed project checkpoint.
+- [x] Preserve the current no-monthly-cost live backend while limiting FastAPI to a future-facing reference implementation.
+- [x] Add protected AI assistance to the existing backend for recruiter handoff summaries, employee onboarding guidance, and administrator access-review summaries.
+- [x] Add an in-product AI assistance panel with clear human-review and no-eligibility-decision safeguards.
+- [x] Add a FastAPI reference service, API contract documentation, and local development instructions without changing the deployed runtime.
+- [x] Add FastAPI reference request and response contracts for access, employee profile, onboarding, and recruiter-progress boundaries.
+- [x] Derive AI assistance context from the currently loaded administrator, employee, recruiter, and onboarding workflow data instead of static prompts.
+- [x] Add FastAPI endpoint-level tests for JWT failures, role denial, and AI request validation.
+- [x] Add frontend AI-panel tests for mutation input, pending/error state, and returned-briefing rendering.
+- [ ] Test the no-cost AI routes and FastAPI reference service, verify the user experience, and save a completed project checkpoint.

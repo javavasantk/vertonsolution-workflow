@@ -1,7 +1,9 @@
 import { COOKIE_NAME } from "@shared/const";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
 
@@ -32,6 +34,23 @@ const workforcePermissionGroups = [
   { role: "finance", label: "Finance", permissions: ["Billing readiness", "Commercial fields", "Operational controls"] },
   { role: "consultant", label: "Consultant", permissions: ["Personal profile", "Onboarding tasks", "Assignment visibility"] },
 ] as const;
+
+const aiAssistantInputSchema = z.object({
+  task: z.enum(["recruiter_summary", "onboarding_guidance", "access_review"]),
+  context: z.string().trim().min(12).max(1600),
+});
+
+function mayUseAiTask(role: string, task: z.infer<typeof aiAssistantInputSchema>["task"]) {
+  if (task === "recruiter_summary") return ["admin", "recruiter"].includes(role);
+  if (task === "access_review") return role === "admin";
+  return true;
+}
+
+const aiTaskInstructions = {
+  recruiter_summary: "Create a concise recruiter handoff summary from the supplied onboarding and assignment signals. Prioritize human follow-up actions.",
+  onboarding_guidance: "Create practical onboarding guidance for the signed-in employee based only on the supplied task context. Suggest a human owner for each follow-up.",
+  access_review: "Create a concise administrator access-review briefing from the supplied role and audit context. Identify governance follow-ups without changing or recommending automatic permissions.",
+} as const;
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -74,6 +93,38 @@ export const appRouter = router({
 
   recruiting: router({
     newHireProgress: recruiterProcedure.query(() => db.listRecruiterNewHireProgress()),
+  }),
+
+  ai: router({
+    assist: protectedProcedure
+      .input(aiAssistantInputSchema)
+      .mutation(async ({ ctx, input }) => {
+        if (!mayUseAiTask(ctx.user.role, input.task)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "This AI workspace is not available for your assigned role." });
+        }
+
+        const result = await invokeLLM({
+          model: "claude-haiku-4-5",
+          maxTokens: 500,
+          messages: [
+            {
+              role: "system",
+              content: "You are Verton Workforce Hub's operational writing assistant. Produce a short, practical briefing using only the supplied context. Do not make legal, immigration, or work-authorization eligibility decisions. Do not request documents or infer authorization status. Use clear headings: Summary, Human follow-up, Boundary.",
+            },
+            {
+              role: "user",
+              content: `${aiTaskInstructions[input.task]}\n\nContext:\n${input.context}`,
+            },
+          ],
+        });
+
+        const content = result.choices[0]?.message.content;
+        const briefing = typeof content === "string"
+          ? content
+          : content?.filter(part => part.type === "text").map(part => part.text).join("\n") ?? "No AI briefing was returned.";
+
+        return { briefing, task: input.task, model: result.model };
+      }),
   }),
 
 });

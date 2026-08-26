@@ -347,15 +347,17 @@ function Login({ returnToLanding, openWorkspace }: { returnToLanding: () => void
 }
 
 function CredentialLogin({ returnToLanding, openWorkspace }: { returnToLanding: () => void; openWorkspace: () => void }) {
-  const [mode, setMode] = useState<"login" | "forgot" | "reset">("login");
+  const requestedFlow = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("demoFlow") : null;
+  const [mode, setMode] = useState<"login" | "forgot" | "reset">(requestedFlow === "forgot" || requestedFlow === "reset" ? requestedFlow : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [message, setMessage] = useState("");
+  const trpcUtils = trpc.useUtils();
   const accountsQuery = trpc.auth.demoAccounts.useQuery();
-  const loginMutation = trpc.auth.demoLogin.useMutation({ onSuccess: () => openWorkspace() });
+  const loginMutation = trpc.auth.demoLogin.useMutation({ onSuccess: async () => { await trpcUtils.auth.me.invalidate(); openWorkspace(); } });
   const requestResetMutation = trpc.auth.requestDemoPasswordReset.useMutation({
     onSuccess: data => {
       setMessage(data.message);

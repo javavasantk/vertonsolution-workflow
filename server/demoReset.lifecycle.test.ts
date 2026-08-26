@@ -21,7 +21,7 @@ describe("demo password reset lifecycle", () => {
     try {
       const expiredToken = await requestDemoPasswordReset(email);
       expect(expiredToken).toBeTruthy();
-      await db.update(users).set({ resetTokenExpiresAt: new Date(Date.now() - 1) }).where(eq(users.email, email));
+      await db.update(users).set({ resetTokenExpiresAt: new Date(Date.now() - 60_000) }).where(eq(users.email, email));
       await expect(resetDemoPassword(expiredToken!, replacementPassword)).resolves.toBe(false);
 
       const validToken = await requestDemoPasswordReset(email);

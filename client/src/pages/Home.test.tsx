@@ -25,6 +25,7 @@ const { authState, startLoginSpy, aiTestState, demoAuthState } = vi.hoisted(() =
     resetRequestMutate: vi.fn(),
     resetMutate: vi.fn(),
     accounts: [{ id: 2, name: "Riley Brooks", email: "recruiter@demo.vertonsolutions.com", role: "recruiter" }],
+    loginAs: null as any,
   },
 }));
 
@@ -38,9 +39,10 @@ vi.mock("@/const", () => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({ auth: { me: { invalidate: vi.fn(async () => undefined) } } }),
     auth: {
       demoAccounts: { useQuery: () => ({ data: { accounts: demoAuthState.accounts, sharedPassword: "VertonDemo!2026" } }) },
-      demoLogin: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.loginMutate(input); options?.onSuccess?.(); }, isPending: false, error: null }) },
+      demoLogin: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.loginMutate(input); if (demoAuthState.loginAs) { authState.user = demoAuthState.loginAs; authState.isAuthenticated = true; } options?.onSuccess?.(); }, isPending: false, error: null }) },
       requestDemoPasswordReset: { useMutation: (options?: { onSuccess?: (data: { message: string; resetToken: string | null }) => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetRequestMutate(input); options?.onSuccess?.({ message: "A one-time demonstration reset code is ready.", resetToken: "demo-reset-token-1234567890" }); }, isPending: false, error: null }) },
       resetDemoPassword: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetMutate(input); options?.onSuccess?.(); }, isPending: false, error: null }) },
     },
@@ -108,6 +110,7 @@ afterEach(() => {
   demoAuthState.loginMutate.mockReset();
   demoAuthState.resetRequestMutate.mockReset();
   demoAuthState.resetMutate.mockReset();
+  demoAuthState.loginAs = null;
   window.history.pushState({}, "", "/");
 });
 
@@ -221,6 +224,41 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.click(screen.getByRole("button", { name: "Save new password" }));
     expect(demoAuthState.resetRequestMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com" });
     expect(demoAuthState.resetMutate).toHaveBeenCalledWith(expect.objectContaining({ password: "ReplacementDemo!2026" }));
+  });
+
+  it("completes the demo recovery journey and opens the assigned recruiter workspace", async () => {
+    const user = userEvent.setup();
+    demoAuthState.loginAs = {
+      id: 2,
+      openId: "demo_recruiter",
+      email: "recruiter@demo.vertonsolutions.com",
+      name: "Riley Brooks",
+      loginMethod: "demo-credentials",
+      role: "recruiter",
+      isDemo: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    };
+    setUnauthenticated();
+    renderRoute("/login");
+
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.type(screen.getByLabelText("Reset email"), "recruiter@demo.vertonsolutions.com");
+    await user.click(screen.getByRole("button", { name: /Generate demo reset code/ }));
+    await user.type(screen.getByLabelText("New demo password"), "ReplacementDemo!2026");
+    await user.type(screen.getByLabelText("Confirm demo password"), "ReplacementDemo!2026");
+    await user.click(screen.getByRole("button", { name: "Save new password" }));
+    expect(screen.getByText(/Password reset successfully/)).toBeTruthy();
+
+    await user.clear(screen.getByLabelText("Demo email"));
+    await user.type(screen.getByLabelText("Demo email"), "recruiter@demo.vertonsolutions.com");
+    await user.type(screen.getByLabelText("Demo password"), "ReplacementDemo!2026");
+    await user.click(screen.getByRole("button", { name: /Open assigned workspace/ }));
+
+    expect(demoAuthState.loginMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com", password: "ReplacementDemo!2026" });
+    expect(screen.getByText("Recruiter workspace")).toBeTruthy();
+    expect(screen.queryByText("Readiness")).toBeNull();
   });
 
   it("sends bounded onboarding state to the AI assistant and renders the returned briefing", async () => {

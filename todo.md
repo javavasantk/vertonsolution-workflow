@@ -66,6 +66,14 @@
 - [x] Add credential login, sign-out, forgot-password, reset-password, and reset-success interfaces.
 - [x] Connect demo sessions to existing role-gated workspace behavior without weakening the OAuth production path.
 - [x] Add automated tests for successful and failed demo login, reset-token expiry, password reset, and role-specific workspace access.
-- [ ] Verify the full authentication and recovery journey on desktop and mobile, then save a completed project checkpoint.
+- [x] Verify the full authentication and recovery journey on desktop and mobile, then save a completed project checkpoint.
 - [x] Add backend lifecycle tests for valid and expired demonstration reset tokens, successful password replacement, and new-password sign-in.
 - [x] Add integration coverage proving a demo credential session resolves to its role-scoped workspace access without mocked client mutations.
+- [x] Visually verify the complete role-directory login, forgot-password, reset-code, reset-success, and workspace-entry journey on desktop and mobile.
+- [x] Add browser-level interaction coverage for the demo login and password-recovery flow through to role-scoped workspace entry.
+- [ ] Re-run full validation and save a checkpoint after browser-level authentication journey verification.
+- [x] Visually verify reset-success and actual post-login workspace entry as part of the complete desktop and mobile authentication journey.
+- [x] Add non-mocked browser interaction coverage that completes credential login or recovery and enters the assigned workspace through the real authentication flow.
+- [ ] Re-run all validation and save a checkpoint after real authentication journey verification.
+- [x] Capture the reset-success state on desktop and mobile after completing the forgot-password flow.
+- [x] Capture the authenticated post-login workspace-entry state on desktop and mobile immediately after a demo credential login or recovery.

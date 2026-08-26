@@ -16,6 +16,13 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
+  /** Demo-only accounts use a salted password hash. OAuth accounts never use this field. */
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  /** Single-use password reset token digest for demo accounts only. */
+  resetTokenHash: varchar("resetTokenHash", { length: 128 }),
+  resetTokenExpiresAt: timestamp("resetTokenExpiresAt"),
+  /** Keeps public demonstration credentials isolated from production OAuth identities. */
+  isDemo: boolean("isDemo").default(false).notNull(),
   role: mysqlEnum("role", [
     "user",
     "admin",

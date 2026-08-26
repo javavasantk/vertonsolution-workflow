@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  Copy,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -16,6 +17,7 @@ import {
   Gauge,
   Grid2X2,
   LockKeyhole,
+  Mail,
   Menu,
   MoreHorizontal,
   PanelLeftClose,
@@ -344,6 +346,50 @@ function Login({ returnToLanding, openWorkspace }: { returnToLanding: () => void
   return <div className="min-h-screen overflow-hidden bg-[#f7faff] text-[#12345a]"><div className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]"><section className="relative hidden overflow-hidden bg-[#09264b] p-10 text-white lg:flex lg:flex-col"><div className="verton-grid absolute inset-0 opacity-60" /><div className="absolute -right-20 top-20 h-96 w-96 rounded-full bg-[#0b57d0]/35 blur-[100px]" /><div className="relative"><Logo dark /><div className="mt-24 max-w-md"><p className="font-mono-ui text-[11px] font-medium uppercase tracking-[.18em] text-[#78e2d4]">Secure workforce operations</p><h1 className="mt-5 text-balance text-5xl font-extrabold tracking-[-.065em]">One controlled access point for the work that moves Verton forward.</h1><p className="mt-6 text-sm leading-7 text-blue-100/78">Your account assignment determines the workspace, actions, and data available to you. Every sensitive workflow remains role-scoped and auditable.</p></div></div><div className="relative mt-auto grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/10 bg-white/6 p-4"><ShieldCheck className="text-[#78e2d4]" size={18} /><p className="mt-4 text-xs font-bold">Role-scoped visibility</p><p className="mt-1 text-[10px] leading-4 text-blue-100/65">Access follows your account assignment.</p></div><div className="rounded-2xl border border-white/10 bg-white/6 p-4"><FileCheck2 className="text-[#78e2d4]" size={18} /><p className="mt-4 text-xs font-bold">Accountable operations</p><p className="mt-1 text-[10px] leading-4 text-blue-100/65">Material activity is captured in context.</p></div></div></section><section className="relative flex items-center justify-center px-5 py-10 sm:px-8"><button onClick={returnToLanding} className="absolute left-5 top-5 flex items-center gap-2 text-xs font-bold text-[#5d7593] transition hover:text-[#0b57d0]"><ArrowRight className="rotate-180" size={15} /> Back to Verton</button><div className="w-full max-w-md"><div className="lg:hidden"><Logo /></div><div className="mt-16 rounded-[24px] border border-[#dce7f3] bg-white p-6 shadow-[0_22px_50px_rgba(18,52,90,.10)] sm:p-8"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f2ff] text-[#0b57d0]"><LockKeyhole size={19} /></div><p className="mt-6 font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Secure sign in</p><h2 className="mt-2 text-3xl font-extrabold tracking-[-.055em]">Welcome to Workforce Hub.</h2><p className="mt-3 text-sm leading-6 text-[#7185a0]">Sign in with your approved identity to enter your assigned Verton workspace.</p><button onClick={() => startLogin()} disabled={loading} className="mt-8 w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-sm font-bold text-white shadow-[0_10px_20px_rgba(11,87,208,.20)] transition hover:-translate-y-0.5 hover:bg-[#094db9] disabled:cursor-not-allowed disabled:opacity-70">{loading ? "Checking secure session…" : "Sign in securely"} <ArrowRight className="ml-1 inline" size={16} /></button><div className="mt-6 border-t border-[#ebf0f6] pt-5"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-[#7c91a9]">Workspace access profiles</p><div className="mt-3 grid grid-cols-2 gap-2">{roles.map(role => <div key={role.name} className="rounded-xl bg-[#f7faff] p-2.5"><span className="text-[10px] font-extrabold text-[#335575]">{role.name}</span><span className="mt-1 block text-[9px] leading-3 text-[#8092a8]">Assigned by administration</span></div>)}</div></div><p className="mt-5 text-center text-[10px] leading-4 text-[#8193a9]">Your role is assigned and reviewed by Verton administration. This screen does not allow users to self-select access.</p></div></div></section></div></div>;
 }
 
+function CredentialLogin({ returnToLanding, openWorkspace }: { returnToLanding: () => void; openWorkspace: () => void }) {
+  const [mode, setMode] = useState<"login" | "forgot" | "reset">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [message, setMessage] = useState("");
+  const accountsQuery = trpc.auth.demoAccounts.useQuery();
+  const loginMutation = trpc.auth.demoLogin.useMutation({ onSuccess: () => openWorkspace() });
+  const requestResetMutation = trpc.auth.requestDemoPasswordReset.useMutation({
+    onSuccess: data => {
+      setMessage(data.message);
+      if (data.resetToken) {
+        setResetToken(data.resetToken);
+        setMode("reset");
+      }
+    },
+  });
+  const resetMutation = trpc.auth.resetDemoPassword.useMutation({
+    onSuccess: () => {
+      setMessage("Password reset successfully. Sign in with your new demonstration password.");
+      setPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setMode("login");
+    },
+  });
+  const accounts = accountsQuery.data?.accounts ?? [];
+  const sharedPassword = accountsQuery.data?.sharedPassword ?? "VertonDemo!2026";
+  const roleLabel = (role: string) => getRoleKeyFromStoredRole(role);
+  const copyText = async (value: string) => {
+    try { await navigator.clipboard.writeText(value); setMessage("Copied to clipboard."); } catch { setMessage(value); }
+  };
+  const useDemoAccount = (account: typeof accounts[number]) => {
+    setEmail(account.email ?? "");
+    setPassword(sharedPassword);
+    setMode("login");
+    setMessage(`Ready to sign in as ${roleLabel(account.role)}.`);
+  };
+
+  return <div className="min-h-screen bg-[#f7faff] text-[#12345a]"><div className="grid min-h-screen lg:grid-cols-[.9fr_1.1fr]"><section className="relative overflow-hidden bg-[#09264b] px-6 py-8 text-white sm:px-10 lg:flex lg:flex-col lg:justify-between"><div className="verton-grid absolute inset-0 opacity-60" /><div className="relative"><button onClick={returnToLanding} className="mb-10 flex items-center gap-2 text-xs font-bold text-blue-100/75 transition hover:text-white"><ArrowRight className="rotate-180" size={15} /> Back to Verton</button><Logo dark /><p className="mt-16 font-mono-ui text-[10px] font-bold uppercase tracking-[.18em] text-[#78e2d4]">Workforce Hub role directory</p><h1 className="mt-4 max-w-xl text-4xl font-extrabold tracking-[-.06em] sm:text-5xl">Start with the workspace that matches your role.</h1><p className="mt-5 max-w-lg text-sm leading-7 text-blue-100/75">Every demonstration account has a defined role boundary. These shared credentials open demo data only; approved company identities continue to use secure OAuth access.</p></div><div className="relative mt-10 rounded-2xl border border-white/10 bg-white/6 p-4"><p className="text-xs font-bold text-[#78e2d4]">Demonstration access only</p><p className="mt-2 text-[11px] leading-5 text-blue-100/70">Credentials and password resets on this page never grant access to production employee, client, authorization, or financial data.</p></div></section><section className="px-5 py-8 sm:px-8 lg:px-12"><div className="mx-auto max-w-3xl"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">First login</p><h2 className="mt-2 text-3xl font-extrabold tracking-[-.055em]">Choose a role, then sign in.</h2><p className="mt-2 text-sm text-[#7185a0]">All eight Workforce Hub roles are available for exploration.</p></div><button onClick={() => startLogin()} className="rounded-xl border border-[#d6e3f1] bg-white px-3.5 py-2.5 text-xs font-bold text-[#315678] shadow-sm transition hover:border-[#8fb7ee]">Use approved identity <ArrowRight className="ml-1 inline" size={14} /></button></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{accounts.map(account => <button key={account.email} onClick={() => useDemoAccount(account)} className="group rounded-2xl border border-[#dce7f3] bg-white p-4 text-left shadow-[0_5px_14px_rgba(18,52,90,.04)] transition hover:-translate-y-0.5 hover:border-[#96bdf2] hover:shadow-[0_12px_24px_rgba(18,52,90,.08)]"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold text-[#244666]">{roleLabel(account.role)}</p><p className="mt-1 text-[11px] font-medium text-[#7185a0]">{account.name}</p></div><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#eaf3ff] text-[10px] font-extrabold text-[#0b57d0]">{roleLabel(account.role).split(" ").map(word => word[0]).join("")}</span></div><div className="mt-4 rounded-xl bg-[#f7faff] p-2.5"><p className="truncate text-[10px] font-bold text-[#456481]">{account.email}</p><p className="mt-1 text-[10px] text-[#7890aa]">Select to prefill sign-in</p></div></button>)}</div><div className="mt-6 grid gap-5 lg:grid-cols-[.92fr_1.08fr]"><section className="rounded-2xl border border-[#dce7f3] bg-white p-5 shadow-[0_10px_24px_rgba(18,52,90,.06)]"><div className="flex items-center justify-between"><div><p className="text-sm font-extrabold">{mode === "login" ? "Sign in" : mode === "forgot" ? "Forgot password" : "Create a new password"}</p><p className="mt-1 text-xs text-[#7185a0]">{mode === "login" ? "Use one of the role-directory accounts." : mode === "forgot" ? "Generate a one-time code for a demo account." : "Reset codes expire after 15 minutes."}</p></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e8f2ff] text-[#0b57d0]">{mode === "login" ? <LockKeyhole size={17} /> : <Mail size={17} />}</span></div>{mode === "login" && <form onSubmit={event => { event.preventDefault(); loginMutation.mutate({ email, password }); }} className="mt-5 space-y-3"><label className="block text-xs font-bold text-[#466381]">Demo email<input aria-label="Demo email" value={email} onChange={event => setEmail(event.target.value)} type="email" required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none focus:border-[#5f9cf7] focus:ring-4 focus:ring-blue-100" /></label><label className="block text-xs font-bold text-[#466381]">Password<input aria-label="Demo password" value={password} onChange={event => setPassword(event.target.value)} type="password" required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none focus:border-[#5f9cf7] focus:ring-4 focus:ring-blue-100" /></label><button disabled={loginMutation.isPending} className="w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-xs font-bold text-white shadow-[0_8px_16px_rgba(11,87,208,.16)] disabled:opacity-60">{loginMutation.isPending ? "Signing in…" : "Open assigned workspace"} <ArrowRight className="ml-1 inline" size={14} /></button><button type="button" onClick={() => { setMessage(""); setMode("forgot"); }} className="w-full text-center text-xs font-bold text-[#0b57d0]">Forgot password?</button></form>}{mode === "forgot" && <form onSubmit={event => { event.preventDefault(); requestResetMutation.mutate({ email }); }} className="mt-5 space-y-3"><label className="block text-xs font-bold text-[#466381]">Demo email<input aria-label="Reset email" value={email} onChange={event => setEmail(event.target.value)} type="email" required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none focus:border-[#5f9cf7] focus:ring-4 focus:ring-blue-100" /></label><button disabled={requestResetMutation.isPending} className="w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-xs font-bold text-white disabled:opacity-60">{requestResetMutation.isPending ? "Preparing code…" : "Generate demo reset code"}</button><button type="button" onClick={() => setMode("login")} className="w-full text-center text-xs font-bold text-[#0b57d0]">Return to sign in</button></form>}{mode === "reset" && <form onSubmit={event => { event.preventDefault(); if (newPassword !== confirmPassword) { setMessage("Passwords do not match."); return; } resetMutation.mutate({ token: resetToken, password: newPassword }); }} className="mt-5 space-y-3"><label className="block text-xs font-bold text-[#466381]">Reset code<input aria-label="Reset code" value={resetToken} onChange={event => setResetToken(event.target.value)} required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none" /></label><label className="block text-xs font-bold text-[#466381]">New password<input aria-label="New demo password" value={newPassword} onChange={event => setNewPassword(event.target.value)} type="password" minLength={12} required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none" /></label><label className="block text-xs font-bold text-[#466381]">Confirm password<input aria-label="Confirm demo password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" minLength={12} required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none" /></label><button disabled={resetMutation.isPending} className="w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-xs font-bold text-white disabled:opacity-60">{resetMutation.isPending ? "Resetting…" : "Save new password"}</button></form>}{(loginMutation.error || requestResetMutation.error || resetMutation.error) && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{loginMutation.error?.message || requestResetMutation.error?.message || resetMutation.error?.message}</p>}{message && <p className="mt-4 rounded-xl bg-[#effaf7] p-3 text-xs font-semibold text-[#267669]">{message}</p>}</section><aside className="rounded-2xl bg-[#eff6ff] p-5"><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.14em] text-[#0b57d0]">Shared demo password</p><p className="mt-3 font-mono-ui text-lg font-extrabold tracking-[-.03em] text-[#173d66]">{sharedPassword}</p><button onClick={() => copyText(sharedPassword)} className="mt-3 rounded-xl border border-[#c9ddf5] bg-white px-3 py-2 text-xs font-bold text-[#315678]"><Copy className="mr-1 inline" size={13} /> Copy password</button><div className="mt-5 border-t border-[#cfe1f5] pt-4"><p className="text-xs font-extrabold text-[#315678]">All demo users</p><p className="mt-2 text-[11px] leading-5 text-[#6783a0]">Each role uses its listed email and this shared password. Password changes affect only the selected demo account and can be reset from this screen.</p></div></aside></div></div></section></div></div>;
+}
+
 function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspace: () => void; requestedPage?: string }) {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const previewRole = typeof window !== "undefined" && import.meta.env.DEV
@@ -425,7 +471,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f7faff] text-[#365575]"><div className="text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#e8f2ff] text-[#0b57d0]"><ShieldCheck size={20} /></span><p className="mt-4 text-sm font-bold">Verifying secure workspace access…</p></div></div>;
 
-  if (!isAuthenticated && !previewMode) return <Login returnToLanding={exitWorkspace} openWorkspace={() => {}} />;
+  if (!isAuthenticated && !previewMode) return <CredentialLogin returnToLanding={exitWorkspace} openWorkspace={() => {}} />;
 
   const WorkspaceNav = ({ mobile = false }: { mobile?: boolean }) => (
     <nav className={mobile ? "p-4" : "px-3 py-4"}>
@@ -561,6 +607,6 @@ export default function Home() {
     "/workspace/recruiting": "New-hire progress",
   };
   if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} requestedPage={requestedWorkspacePages[location] ?? "Overview"} />;
-  if (inLogin) return <Login returnToLanding={() => setLocation("/")} openWorkspace={() => setLocation("/workspace")} />;
+  if (inLogin) return <CredentialLogin returnToLanding={() => setLocation("/")} openWorkspace={() => setLocation("/workspace")} />;
   return <Landing launchWorkspace={() => setLocation("/login")} />;
 }

@@ -54,9 +54,18 @@
 - [x] Test the no-cost AI routes and FastAPI reference service, verify the user experience, and save a completed project checkpoint.
 - [x] Visually verify AI assistance in administrator access-review, recruiter handoff, and employee onboarding contexts.
 - [x] Add server-procedure integration coverage for AI success and provider-failure handling across permitted role and task combinations.
-- [ ] Re-run all validation and save a checkpoint after role-specific AI verification.
+- [x] Re-run all validation and save a checkpoint after role-specific AI verification.
 - [x] Add a safe non-production authenticated preview mechanism to visually verify AI panels with role-specific workspace data.
 - [x] Add tRPC procedure-level tests for allowed AI tasks, bounded input validation, and provider-unavailable fallback across administrator, recruiter, and consultant roles.
 - [x] Add a development-only role-scoped preview data mode that renders representative admin, recruiter, and employee AI context without authenticated backend requests.
 - [x] Extend tRPC AI procedure tests so provider-unavailable fallback is verified for each permitted role and task combination.
-- [ ] Re-run full validation after role-scoped preview and cross-role fallback coverage, then save a final checkpoint.
+- [x] Re-run full validation after role-scoped preview and cross-role fallback coverage, then save a final checkpoint.
+- [x] Define demo credential rules that are clearly separated from production OAuth accounts and document the eight role access profiles.
+- [x] Add credential hashing, demo-session handling, reset-token lifecycle, and authorization checks for the password-based demonstration flow.
+- [x] Add a first-login role directory that shows every assigned workspace role and the designated demo credentials.
+- [x] Add credential login, sign-out, forgot-password, reset-password, and reset-success interfaces.
+- [x] Connect demo sessions to existing role-gated workspace behavior without weakening the OAuth production path.
+- [x] Add automated tests for successful and failed demo login, reset-token expiry, password reset, and role-specific workspace access.
+- [ ] Verify the full authentication and recovery journey on desktop and mobile, then save a completed project checkpoint.
+- [x] Add backend lifecycle tests for valid and expired demonstration reset tokens, successful password replacement, and new-password sign-in.
+- [x] Add integration coverage proving a demo credential session resolves to its role-scoped workspace access without mocked client mutations.

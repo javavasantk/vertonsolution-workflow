@@ -3,6 +3,46 @@ import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 import { accessRoleChanges, employeeProfiles, InsertUser, onboardingAssignments, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+
+const DEMO_PASSWORD = "VertonDemo!2026";
+const RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
+const DEMO_ACCOUNTS = [
+  { openId: "demo_administrator", name: "Avery Morgan", email: "administrator@demo.vertonsolutions.com", role: "admin" },
+  { openId: "demo_recruiter", name: "Riley Brooks", email: "recruiter@demo.vertonsolutions.com", role: "recruiter" },
+  { openId: "demo_hr_compliance", name: "Harper Singh", email: "hr.compliance@demo.vertonsolutions.com", role: "hr_compliance" },
+  { openId: "demo_account_manager", name: "Jordan Lee", email: "account.manager@demo.vertonsolutions.com", role: "account_manager" },
+  { openId: "demo_delivery_manager", name: "Taylor Nguyen", email: "delivery.manager@demo.vertonsolutions.com", role: "delivery_manager" },
+  { openId: "demo_project_manager", name: "Casey Rivera", email: "project.manager@demo.vertonsolutions.com", role: "project_manager" },
+  { openId: "demo_finance", name: "Morgan Patel", email: "finance@demo.vertonsolutions.com", role: "finance" },
+  { openId: "demo_consultant", name: "Jamie Chen", email: "consultant@demo.vertonsolutions.com", role: "consultant" },
+] as const;
+
+type DemoRole = (typeof DEMO_ACCOUNTS)[number]["role"];
+
+function derivePassword(password: string, salt: string) {
+  return new Promise<Buffer>((resolve, reject) => {
+    scrypt(password, salt, 64, (error, derivedKey) => error ? reject(error) : resolve(derivedKey as Buffer));
+  });
+}
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const derived = await derivePassword(password, salt);
+  return `${salt}:${derived.toString("hex")}`;
+}
+
+async function passwordMatches(password: string, stored: string) {
+  const [salt, digest] = stored.split(":");
+  if (!salt || !digest) return false;
+  const candidate = await derivePassword(password, salt);
+  const expected = Buffer.from(digest, "hex");
+  return expected.length === candidate.length && timingSafeEqual(expected, candidate);
+}
+
+function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -202,5 +242,66 @@ export async function listRecruiterNewHireProgress() {
     .where(inArray(users.role, ["user", "consultant"]))
     .orderBy(desc(onboardingAssignments.updatedAt));
 }
+
+export async function ensureDemoAccounts() {
+  const db = await getDb();
+  if (!db) return;
+  const passwordHash = await hashPassword(DEMO_PASSWORD);
+  for (const account of DEMO_ACCOUNTS) {
+    const existing = await db.select({ id: users.id }).from(users).where(eq(users.openId, account.openId)).limit(1);
+    if (existing[0]) continue;
+    await db.insert(users).values({
+      ...account,
+      passwordHash,
+      isDemo: true,
+      loginMethod: "demo-credentials",
+      role: account.role as DemoRole,
+    });
+  }
+}
+
+export async function listDemoAccounts() {
+  await ensureDemoAccounts();
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: users.id, name: users.name, email: users.email, role: users.role, lastSignedIn: users.lastSignedIn }).from(users).where(eq(users.isDemo, true));
+}
+
+export async function authenticateDemoCredentials(email: string, password: string) {
+  await ensureDemoAccounts();
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalizedEmail = email.trim().toLowerCase();
+  const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+  const user = result[0];
+  if (!user?.isDemo || !user.passwordHash || !(await passwordMatches(password, user.passwordHash))) return undefined;
+  return user;
+}
+
+export async function requestDemoPasswordReset(email: string) {
+  await ensureDemoAccounts();
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalizedEmail = email.trim().toLowerCase();
+  const result = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+  const user = result[0];
+  if (!user?.isDemo) return undefined;
+  const token = randomBytes(24).toString("base64url");
+  await db.update(users).set({ resetTokenHash: hashResetToken(token), resetTokenExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS) }).where(eq(users.id, user.id));
+  return token;
+}
+
+export async function resetDemoPassword(token: string, password: string) {
+  const db = await getDb();
+  if (!db) return false;
+  const digest = hashResetToken(token);
+  const result = await db.select().from(users).where(eq(users.resetTokenHash, digest)).limit(1);
+  const user = result[0];
+  if (!user?.isDemo || !user.resetTokenExpiresAt || user.resetTokenExpiresAt.getTime() < Date.now()) return false;
+  await db.update(users).set({ passwordHash: await hashPassword(password), resetTokenHash: null, resetTokenExpiresAt: null }).where(eq(users.id, user.id));
+  return true;
+}
+
+export const demoCredentialDetails = { password: DEMO_PASSWORD, resetTtlMinutes: RESET_TOKEN_TTL_MS / 60 };
 
 // TODO: add feature queries here as your schema grows.

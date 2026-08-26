@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, demoAuthState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -20,6 +20,12 @@ const { authState, startLoginSpy, aiTestState } = vi.hoisted(() => ({
     error: null as Error | null,
     response: null as { briefing: string; task: string; model: string } | null,
   },
+  demoAuthState: {
+    loginMutate: vi.fn(),
+    resetRequestMutate: vi.fn(),
+    resetMutate: vi.fn(),
+    accounts: [{ id: 2, name: "Riley Brooks", email: "recruiter@demo.vertonsolutions.com", role: "recruiter" }],
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -32,6 +38,12 @@ vi.mock("@/const", () => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    auth: {
+      demoAccounts: { useQuery: () => ({ data: { accounts: demoAuthState.accounts, sharedPassword: "VertonDemo!2026" } }) },
+      demoLogin: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.loginMutate(input); options?.onSuccess?.(); }, isPending: false, error: null }) },
+      requestDemoPasswordReset: { useMutation: (options?: { onSuccess?: (data: { message: string; resetToken: string | null }) => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetRequestMutate(input); options?.onSuccess?.({ message: "A one-time demonstration reset code is ready.", resetToken: "demo-reset-token-1234567890" }); }, isPending: false, error: null }) },
+      resetDemoPassword: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetMutate(input); options?.onSuccess?.(); }, isPending: false, error: null }) },
+    },
     access: {
       listUsers: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       assignRole: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -93,6 +105,9 @@ afterEach(() => {
   aiTestState.isPending = false;
   aiTestState.error = null;
   aiTestState.response = null;
+  demoAuthState.loginMutate.mockReset();
+  demoAuthState.resetRequestMutate.mockReset();
+  demoAuthState.resetMutate.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -127,8 +142,8 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     setUnauthenticated();
     renderRoute("/login");
 
-    expect(screen.getByText("Welcome to Workforce Hub.")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: /Sign in securely/ }));
+    expect(screen.getByText("Choose a role, then sign in.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Use approved identity/ }));
     expect(startLoginSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -136,7 +151,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     setUnauthenticated();
     renderRoute("/workspace");
 
-    expect(screen.getByText("Welcome to Workforce Hub.")).toBeTruthy();
+    expect(screen.getByText("Choose a role, then sign in.")).toBeTruthy();
     expect(screen.queryByText("Good morning, Verton.")).toBeNull();
   });
 
@@ -179,7 +194,33 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(authState.logout).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Welcome to Workforce Hub.")).toBeTruthy();
+    expect(screen.getByText("Choose a role, then sign in.")).toBeTruthy();
+  });
+
+  it("prefills a role credential and submits the demo login flow", async () => {
+    const user = userEvent.setup();
+    setUnauthenticated();
+    renderRoute("/login");
+
+    await user.click(screen.getByText("Recruiter"));
+    expect((screen.getByLabelText("Demo email") as HTMLInputElement).value).toBe("recruiter@demo.vertonsolutions.com");
+    await user.click(screen.getByRole("button", { name: /Open assigned workspace/ }));
+    expect(demoAuthState.loginMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com", password: "VertonDemo!2026" });
+  });
+
+  it("generates a demo reset code and submits a matching replacement password", async () => {
+    const user = userEvent.setup();
+    setUnauthenticated();
+    renderRoute("/login");
+
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await user.type(screen.getByLabelText("Reset email"), "recruiter@demo.vertonsolutions.com");
+    await user.click(screen.getByRole("button", { name: /Generate demo reset code/ }));
+    await user.type(screen.getByLabelText("New demo password"), "ReplacementDemo!2026");
+    await user.type(screen.getByLabelText("Confirm demo password"), "ReplacementDemo!2026");
+    await user.click(screen.getByRole("button", { name: "Save new password" }));
+    expect(demoAuthState.resetRequestMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com" });
+    expect(demoAuthState.resetMutate).toHaveBeenCalledWith(expect.objectContaining({ password: "ReplacementDemo!2026" }));
   });
 
   it("sends bounded onboarding state to the AI assistant and renders the returned briefing", async () => {

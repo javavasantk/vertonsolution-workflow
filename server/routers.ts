@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { generateAiBriefing } from "./aiService";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
@@ -40,6 +41,26 @@ const aiAssistantInputSchema = z.object({
   context: z.string().trim().min(12).max(1600),
 });
 
+const demoLoginSchema = z.object({
+  email: z.string().trim().email().max(320),
+  password: z.string().min(12).max(128),
+});
+
+const demoResetSchema = z.object({
+  email: z.string().trim().email().max(320),
+});
+
+const demoNewPasswordSchema = z.object({
+  token: z.string().min(24).max(128),
+  password: z.string().min(12).max(128),
+});
+
+function publicUser(user: any) {
+  if (!user) return null;
+  const { passwordHash, resetTokenHash, resetTokenExpiresAt, ...safeUser } = user;
+  return safeUser;
+}
+
 function mayUseAiTask(role: string, task: z.infer<typeof aiAssistantInputSchema>["task"]) {
   if (task === "recruiter_summary") return ["admin", "recruiter"].includes(role);
   if (task === "access_review") return role === "admin";
@@ -50,7 +71,36 @@ export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => publicUser(opts.ctx.user)),
+    demoAccounts: publicProcedure.query(async () => {
+      const accounts = await db.listDemoAccounts();
+      return {
+        accounts,
+        sharedPassword: db.demoCredentialDetails.password,
+        label: "Public demo credentials only — never use for production access.",
+      };
+    }),
+    demoLogin: publicProcedure.input(demoLoginSchema).mutation(async ({ ctx, input }) => {
+      const user = await db.authenticateDemoCredentials(input.email, input.password);
+      if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Demo email or password is incorrect." });
+      const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "Verton demo user", expiresInMs: 8 * 60 * 60 * 1000 });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 8 * 60 * 60 * 1000 });
+      return publicUser(user);
+    }),
+    requestDemoPasswordReset: publicProcedure.input(demoResetSchema).mutation(async ({ input }) => {
+      const token = await db.requestDemoPasswordReset(input.email);
+      return {
+        success: true,
+        resetToken: token ?? null,
+        expiresInMinutes: token ? db.demoCredentialDetails.resetTtlMinutes : null,
+        message: token ? "A one-time demonstration reset code is ready." : "If this is a demo account, a reset instruction is available.",
+      };
+    }),
+    resetDemoPassword: publicProcedure.input(demoNewPasswordSchema).mutation(async ({ input }) => {
+      const updated = await db.resetDemoPassword(input.token, input.password);
+      if (!updated) throw new TRPCError({ code: "BAD_REQUEST", message: "This demonstration reset code is invalid or has expired." });
+      return { success: true } as const;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -61,10 +111,11 @@ export const appRouter = router({
   }),
 
   access: router({
-    listUsers: adminProcedure.query(() => db.listWorkforceUsers()),
+    listUsers: adminProcedure.query(({ ctx }) => ctx.user.isDemo ? db.listDemoAccounts() : db.listWorkforceUsers()),
     assignRole: adminProcedure
       .input(z.object({ userId: z.number().int().positive(), role: workforceRoleSchema }))
       .mutation(async ({ ctx, input }) => {
+        if (ctx.user.isDemo) throw new TRPCError({ code: "FORBIDDEN", message: "Demonstration accounts cannot change workspace roles." });
         if (input.userId === ctx.user.id && input.role !== "admin") {
           throw new Error("Administrators cannot remove their own administrator access");
         }
@@ -72,7 +123,7 @@ export const appRouter = router({
         return { success: true } as const;
       }),
     permissionGroups: adminProcedure.query(() => workforcePermissionGroups),
-    roleChangeHistory: adminProcedure.query(() => db.listAccessRoleChanges()),
+    roleChangeHistory: adminProcedure.query(({ ctx }) => ctx.user.isDemo ? [] : db.listAccessRoleChanges()),
   }),
 
   profile: router({
@@ -86,7 +137,7 @@ export const appRouter = router({
   }),
 
   recruiting: router({
-    newHireProgress: recruiterProcedure.query(() => db.listRecruiterNewHireProgress()),
+    newHireProgress: recruiterProcedure.query(({ ctx }) => ctx.user.isDemo ? [] : db.listRecruiterNewHireProgress()),
   }),
 
   ai: router({

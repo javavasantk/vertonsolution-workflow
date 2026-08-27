@@ -457,6 +457,22 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(resumeTestState.candidateUpdateMutate).toHaveBeenCalledWith(expect.objectContaining({ candidateId: 41, candidateName: "Alex Morgan Updated", skills: ["TypeScript", "React"] }));
   });
 
+  it("keeps candidate row inputs controlled and cancels without submitting a curation mutation", async () => {
+    const user = userEvent.setup();
+    resumeTestState.candidates = [{ id: 42, candidateName: "Jordan Parker", email: "jordan@example.com", location: "Austin, TX", yearsExperience: "5 years", skills: ["Python"], reviewState: "pending_human_review" }];
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+
+    await user.click(screen.getByRole("button", { name: "Edit Jordan Parker" }));
+    const locationInput = screen.getByLabelText("Edit candidate location") as HTMLInputElement;
+    expect(locationInput.value).toBe("Austin, TX");
+    await user.clear(locationInput);
+    await user.type(locationInput, "Denver, CO");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Edit candidate location")).toBeNull();
+    expect(resumeTestState.candidateUpdateMutate).not.toHaveBeenCalled();
+  });
+
   it("shows onboarding drafting only in its active workflow context and renders the returned briefing", async () => {
     const user = userEvent.setup();
     aiTestState.response = { briefing: "Summary\nHuman follow-up\nBoundary", task: "onboarding_guidance", model: "test-model" };

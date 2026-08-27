@@ -45,6 +45,13 @@ describe("recruiting.parseResume", () => {
     expect(updateCandidateProfileSpy).toHaveBeenCalledWith(1, 91, expect.objectContaining({ skills: ["TypeScript", "React"] }));
   });
 
+  it("rejects invalid candidate curation fields before the database mutation", async () => {
+    const caller = appRouter.createCaller(createContext("recruiter"));
+    await expect(caller.recruiting.updateCandidate({ candidateId: 1, candidateName: "A", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript"] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.recruiting.updateCandidate({ candidateId: 1, candidateName: "Alex Morgan", location: "Austin, TX", yearsExperience: "6 years", skills: Array.from({ length: 21 }, (_, index) => `Skill ${index}`) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(updateCandidateProfileSpy).not.toHaveBeenCalled();
+  });
+
   it("allows administrators and rejects consultants", async () => {
     parseRecruiterResumeSpy.mockResolvedValue({ profile: { candidateName: "Alex Morgan" }, model: "test", unavailable: false });
     await expect(appRouter.createCaller(createContext("admin")).recruiting.parseResume({ resumeText })).resolves.toMatchObject({ model: "test" });

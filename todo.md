@@ -194,3 +194,6 @@
 - [x] Prompt 9: Verify client-side CSV and concise PDF exports include only approved parsed candidate contact, location, experience, skills, education, summary, and human-review fields.
 - [x] Prompt 9: Sanitize candidate-based export filenames and exclude raw resumes, private storage keys, hidden role data, readiness detail, and finance fields.
 - [x] Prompt 9: Add and run deterministic tests for CSV rows, PDF text content, filename sanitization, and privacy exclusions.
+- [x] Prompt 10: Verify only recruiters and administrators can edit candidate name, location, years of experience, and a bounded recruiter-visible skill array.
+- [x] Prompt 10: Enforce server-side validation, controlled Edit/Save/Cancel state, successful candidate-query refresh, and human-curation activity logging.
+- [x] Prompt 10: Add and run role-denial, validation, mutation, activity, and browser-style inline-edit interaction tests.

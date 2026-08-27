@@ -191,3 +191,6 @@
 - [x] Prompt 8: Verify recruiter/admin Candidate Finder searches candidate name, location, and skills, with extracted-skill and experience-bucket filters.
 - [x] Prompt 8: Limit candidate results to recruiter-visible profile fields and approved review states while excluding raw resumes, storage keys, readiness detail, and finance data.
 - [x] Prompt 8: Add and run tests for protected access, filter behavior, review-state vocabulary, sensitive-field exclusion, result count, review guidance, and the empty state.
+- [x] Prompt 9: Verify client-side CSV and concise PDF exports include only approved parsed candidate contact, location, experience, skills, education, summary, and human-review fields.
+- [x] Prompt 9: Sanitize candidate-based export filenames and exclude raw resumes, private storage keys, hidden role data, readiness detail, and finance fields.
+- [x] Prompt 9: Add and run deterministic tests for CSV rows, PDF text content, filename sanitization, and privacy exclusions.

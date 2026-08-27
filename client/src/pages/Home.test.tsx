@@ -94,7 +94,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, formatCandidateReviewState, getAllowedNavigation, getRecruiterHandoffIndicator, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
+import Home, { buildCandidateExportFilename, buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, formatCandidateReviewState, getAllowedNavigation, getRecruiterHandoffIndicator, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
 
 function setAuthenticatedRole(role: string, name = "Avery Morgan") {
   authState.user = {
@@ -157,13 +157,22 @@ afterEach(() => {
 
 describe("Workforce Hub role access", () => {
   it("builds structured CSV and PDF export content from extracted candidate details", () => {
-    const profile = { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"], education: ["B.S. Computer Science"], professionalSummary: "Full-stack engineer", recruiterNotes: ["Confirm availability"] };
+    const profile = { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"], education: ["B.S. Computer Science"], professionalSummary: "Full-stack engineer", recruiterNotes: ["Confirm availability"], rawResumeText: "private source resume", fileKey: "private/object-key", workAuthorizationStatus: "restricted", commercialRate: 200 } as any;
     const csv = buildCandidateResumeCsv(profile);
     const pdf = buildCandidateResumePdfText(profile);
     expect(csv).toContain('"Candidate name","Alex Morgan"');
     expect(csv).toContain('"Skills","TypeScript; React"');
     expect(pdf).toContain("Candidate: Alex Morgan");
     expect(pdf).toContain("Human review notes: Confirm availability");
+    expect(`${csv}\n${pdf}`).not.toContain("private source resume");
+    expect(`${csv}\n${pdf}`).not.toContain("private/object-key");
+    expect(`${csv}\n${pdf}`).not.toContain("restricted");
+    expect(`${csv}\n${pdf}`).not.toContain("200");
+  });
+
+  it("creates deterministic sanitized candidate-based export filenames", () => {
+    expect(buildCandidateExportFilename("Alex Morgan / ../../Finance", "csv")).toBe("alex-morgan-finance-resume-parse.csv");
+    expect(buildCandidateExportFilename("", "pdf")).toBe("candidate-resume-parse.pdf");
   });
   it("maps stored account roles to their intended workspace role", () => {
     expect(getRoleKeyFromStoredRole("admin")).toBe("Administrator");

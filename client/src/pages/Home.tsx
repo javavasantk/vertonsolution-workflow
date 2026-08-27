@@ -59,6 +59,16 @@ type ExportableCandidate = {
   recruiterNotes?: string[];
 };
 
+export function buildCandidateExportFilename(candidateName: string | null | undefined, extension: "csv" | "pdf") {
+  const sanitizedBase = (candidateName ?? "candidate")
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    .slice(0, 80);
+  return `${sanitizedBase || "candidate"}-resume-parse.${extension}`;
+}
+
 export function buildCandidateResumeCsv(profile: ExportableCandidate) {
   const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   return [
@@ -707,13 +717,13 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     const downloadCsv = () => {
       if (!extracted) return;
       const blob = new Blob([buildCandidateResumeCsv(extracted)], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `${(extracted.candidateName || "candidate").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-resume-parse.csv`; link.click(); URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = buildCandidateExportFilename(extracted.candidateName, "csv"); link.click(); URL.revokeObjectURL(url);
     };
     const downloadPdf = () => {
       if (!extracted) return;
       const doc = new jsPDF({ unit: "pt", format: "a4" });
       const content = buildCandidateResumePdfText(extracted);
-      doc.setFontSize(16); doc.text("Verton Workforce Hub — Resume Parse", 42, 48); doc.setFontSize(10); doc.text(doc.splitTextToSize(content, 510), 42, 76); doc.save(`${(extracted.candidateName || "candidate").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-resume-parse.pdf`);
+      doc.setFontSize(16); doc.text("Verton Workforce Hub — Resume Parse", 42, 48); doc.setFontSize(10); doc.text(doc.splitTextToSize(content, 510), 42, 76); doc.save(buildCandidateExportFilename(extracted.candidateName, "pdf"));
     };
     const copyProfile = async () => {
       if (!extracted) return;

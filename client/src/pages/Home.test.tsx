@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -56,6 +56,11 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     isLoading: false,
     error: null as Error | null,
   },
+  newHireTestState: {
+    records: [] as any[],
+    isLoading: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -91,7 +96,7 @@ vi.mock("@/lib/trpc", () => ({
       updateProject: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { portalTestState.projectUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
     },
     recruiting: {
-      newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
+      newHireProgress: { useQuery: () => ({ data: newHireTestState.records, isLoading: newHireTestState.isLoading, error: newHireTestState.error, refetch: vi.fn() }) },
       listCandidates: { useQuery: () => ({ data: resumeTestState.candidates, isLoading: false, refetch: vi.fn() }) },
       updateCandidate: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { resumeTestState.candidateUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
@@ -169,6 +174,9 @@ afterEach(() => {
   readinessTestState.records = [];
   readinessTestState.isLoading = false;
   readinessTestState.error = null;
+  newHireTestState.records = [];
+  newHireTestState.isLoading = false;
+  newHireTestState.error = null;
   window.history.pushState({}, "", "/");
 });
 
@@ -321,6 +329,37 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText(/Representative reference panels below/)).toBeTruthy();
   });
 
+  it("renders New-hire Progress from only protected onboarding and assignment signals", () => {
+    newHireTestState.records = [{ id: 8, onboardingStage: "manager_confirmation", progressPercent: 80, managerConfirmed: false, projectName: "Client Project", assignmentState: "pending", updatedAt: new Date("2026-08-27") }];
+    setAuthenticatedRole("admin", "Avery Admin");
+    renderRoute("/workspace/recruiting");
+
+    expect(screen.getByText("Administrator & recruiter workspace")).toBeTruthy();
+    expect(screen.getByText("Record #8")).toBeTruthy();
+    expect(screen.getByText("Client Project")).toBeTruthy();
+    expect(screen.queryByText("Readiness status")).toBeNull();
+    expect(screen.queryByText("Candidate materials")).toBeNull();
+  });
+
+  it("renders loading, unavailable, and empty states for protected New-hire Progress without demo fallback", () => {
+    newHireTestState.isLoading = true;
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+    expect(screen.getByText("Loading protected onboarding and assignment signals…")).toBeTruthy();
+
+    cleanup();
+    newHireTestState.isLoading = false;
+    newHireTestState.error = new Error("Unavailable");
+    renderRoute("/workspace/recruiting");
+    expect(screen.getByText("Protected onboarding signals are unavailable.")).toBeTruthy();
+    expect(screen.getByText(/No representative records are substituted/)).toBeTruthy();
+
+    cleanup();
+    newHireTestState.error = null;
+    renderRoute("/workspace/recruiting");
+    expect(screen.getByText("No protected onboarding records are available.")).toBeTruthy();
+  });
+
   it("renders loading and unavailable states without substituting representative data for live Readiness records", async () => {
     const user = userEvent.setup();
     readinessTestState.isLoading = true;
@@ -379,15 +418,16 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("35.2%")).toBeTruthy();
   });
 
-  it("updates a consultant onboarding checklist after completing a task", async () => {
+  it("shows the consultant onboarding checklist as a noninteractive representative reference", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("consultant", "Riley Consultant");
     renderRoute("/workspace");
 
     await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]);
-    expect(screen.getByText("2 of 5 completed")).toBeTruthy();
-    await user.click(screen.getByText("Complete requested documents"));
-    expect(screen.getByText("3 of 5 completed")).toBeTruthy();
+    expect(screen.getByText("Representative onboarding interface")).toBeTruthy();
+    expect(screen.getByText(/not persisted onboarding tasks/)).toBeTruthy();
+    expect(screen.getByText(/Reminder delivery is not enabled/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Send reminder" })).toBeNull();
     expect(countCompletedOnboardingTasks([{ done: true }, { done: false }, { done: true }])).toBe(2);
   });
 
@@ -619,7 +659,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.queryByRole("button", { name: /Draft .*follow-up|Draft access review|Draft recruiter handoff/ })).toBeNull();
     await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]!);
     expect(screen.getByRole("button", { name: /Draft onboarding follow-up/ })).toBeTruthy();
-    expect(screen.getByText(/designated human owner/i)).toBeTruthy();
+    expect(screen.getAllByText(/designated human owner/i).length).toBeGreaterThan(0);
   });
 
   it("shows the floating assistant fallback when its service returns an error", async () => {

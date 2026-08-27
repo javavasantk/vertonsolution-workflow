@@ -57,14 +57,19 @@ describe("access router", () => {
     await expect(caller.recruiting.newHireProgress()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("allows recruiter launchboard access only to safe onboarding and assignment workflow fields", async () => {
-    const safeRows = [{ userId: 8, name: "New Hire", email: "hire@vertonsolutions.com", role: "consultant", onboardingStage: "manager_confirmation", progressPercent: 80, managerConfirmed: false, projectName: "Client Project", assignmentState: "pending", updatedAt: new Date() }];
+  it("allows recruiter and Administrator launchboard access only to safe onboarding and assignment workflow fields", async () => {
+    const safeRows = [{ id: 8, onboardingStage: "manager_confirmation", progressPercent: 80, managerConfirmed: false, projectName: "Client Project", assignmentState: "pending", updatedAt: new Date() }];
     const progress = vi.spyOn(db, "listRecruiterNewHireProgress").mockResolvedValue(safeRows as never);
     const caller = appRouter.createCaller(createContext("recruiter", 4));
 
     const result = await caller.recruiting.newHireProgress();
     expect(result).toEqual(safeRows);
+    await expect(appRouter.createCaller(createContext("admin", 1)).recruiting.newHireProgress()).resolves.toEqual(safeRows);
     expect(result[0]).not.toHaveProperty("readinessStatus");
+    expect(result[0]).not.toHaveProperty("name");
+    expect(result[0]).not.toHaveProperty("email");
+    expect(result[0]).not.toHaveProperty("candidateProfile");
+    expect(result[0]).not.toHaveProperty("compensation");
     progress.mockRestore();
   });
 

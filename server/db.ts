@@ -239,10 +239,7 @@ export async function submitEmployeeProfileUpdate(userId: number, input: { emplo
 }
 
 export const recruiterLaunchboardSelection = {
-  userId: users.id,
-  name: users.name,
-  email: users.email,
-  role: users.role,
+  id: onboardingAssignments.id,
   onboardingStage: onboardingAssignments.onboardingStage,
   progressPercent: onboardingAssignments.progressPercent,
   managerConfirmed: onboardingAssignments.managerConfirmed,
@@ -257,9 +254,7 @@ export async function listRecruiterNewHireProgress() {
 
   return db
     .select(recruiterLaunchboardSelection)
-    .from(users)
-    .leftJoin(onboardingAssignments, eq(onboardingAssignments.userId, users.id))
-    .where(inArray(users.role, ["user", "consultant"]))
+    .from(onboardingAssignments)
     .orderBy(desc(onboardingAssignments.updatedAt));
 }
 

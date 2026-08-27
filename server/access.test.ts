@@ -34,6 +34,15 @@ describe("access router", () => {
     await expect(caller.access.assignRole({ userId: 1, role: "consultant" })).rejects.toThrow("cannot remove their own administrator access");
   });
 
+  it("sends target, next role, and acting administrator to the auditable role-change helper", async () => {
+    const assignRole = vi.spyOn(db, "assignWorkforceRole").mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(createContext("admin", 12));
+
+    await expect(caller.access.assignRole({ userId: 34, role: "recruiter" })).resolves.toEqual({ success: true });
+    expect(assignRole).toHaveBeenCalledWith(34, "recruiter", 12);
+    assignRole.mockRestore();
+  });
+
   it("serves permission groups only to administrator accounts", async () => {
     const employeeCaller = appRouter.createCaller(createContext("user"));
     const adminCaller = appRouter.createCaller(createContext("admin"));

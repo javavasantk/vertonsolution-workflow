@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -42,6 +42,10 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     error: null as Error | null,
     response: { profile: { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Full-stack engineer with cloud delivery experience.", yearsExperience: "6 years", skills: ["TypeScript", "React", "AWS"], recentRoles: [{ title: "Software Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm project availability with the candidate."], confidence: "high" }, model: "test-model", unavailable: false } as any,
   },
+  adminTestState: {
+    users: [] as any[],
+    roleChangeMutate: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -62,8 +66,8 @@ vi.mock("@/lib/trpc", () => ({
       resetDemoPassword: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetMutate(input); options?.onSuccess?.(); }, isPending: false, error: null }) },
     },
     access: {
-      listUsers: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
-      assignRole: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      listUsers: { useQuery: () => ({ data: adminTestState.users, isLoading: false, refetch: vi.fn() }) },
+      assignRole: { useMutation: (options?: { onSuccess?: (result: { success: true }, input: { userId: number; role: string }) => void }) => ({ mutate: (input: { userId: number; role: string }) => { adminTestState.roleChangeMutate(input); options?.onSuccess?.({ success: true }, input); }, isPending: false }) },
       permissionGroups: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
       roleChangeHistory: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
     },
@@ -146,6 +150,8 @@ afterEach(() => {
   resumeTestState.candidates = [{ id: 31, candidateName: "Lena Garcia", email: "lena@example.com", location: "Denver, CO", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending" }, { id: 32, candidateName: "Owen Miller", email: "owen@example.com", location: "Chicago, IL", yearsExperience: "8 years", skills: ["Java", "Spring"], reviewState: "reviewed" }];
   resumeTestState.isPending = false;
   resumeTestState.error = null;
+  adminTestState.users = [];
+  adminTestState.roleChangeMutate.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -229,6 +235,20 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getAllByText("Onboarding").length).toBeGreaterThan(0);
     expect(screen.queryByText("Readiness")).toBeNull();
     expect(screen.queryByText("Controls")).toBeNull();
+  });
+
+  it("lets an administrator search users, select an approved role, and see a save confirmation", async () => {
+    const user = userEvent.setup();
+    adminTestState.users = [{ id: 42, name: "Jordan Lee", email: "jordan@vertonsolutions.com", role: "consultant", lastSignedIn: new Date("2026-08-26") }];
+    setAuthenticatedRole("admin", "Avery Admin");
+    renderRoute("/workspace/admin");
+
+    await user.type(screen.getByLabelText("Search user directory"), "Jordan");
+    await user.selectOptions(screen.getByLabelText("Role for Jordan Lee"), "account_manager");
+
+    expect(adminTestState.roleChangeMutate).toHaveBeenCalledWith({ userId: 42, role: "account_manager" });
+    expect(screen.getByText("Jordan Lee now has the Account Manager role.")).toBeTruthy();
+    expect(screen.getByText("Role-change audit")).toBeTruthy();
   });
 
   it("renders protected database-backed demo summary records in the authenticated overview", () => {

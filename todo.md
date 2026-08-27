@@ -176,3 +176,6 @@
 - [x] Prompt 2: Verify demo-only salted password, reset-token, expiry, and session storage while preserving production OAuth identities.
 - [x] Prompt 2: Ensure demo auth responses never expose passwords, password hashes, or reset-token digests, and unknown reset requests remain generic.
 - [x] Prompt 2: Add and run tests for valid/invalid credentials, one-time 15-minute reset expiry, password replacement, and role-scoped session resolution.
+- [x] Prompt 3: Verify administrator-only workforce-user listing, permission groups, role assignment, and immutable role-change history.
+- [x] Prompt 3: Enforce self-demotion prevention, audit actor/target/prior/next/timestamp capture, and public-demo isolation from production administrative records.
+- [x] Prompt 3: Validate administrator access, role-management UI search/selector/confirmation/audit states, and audit creation with server tests.

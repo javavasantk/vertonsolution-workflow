@@ -7,6 +7,7 @@ const { dbMock, createSessionTokenSpy } = vi.hoisted(() => ({
     requestDemoPasswordReset: vi.fn(),
     resetDemoPassword: vi.fn(),
     assignWorkforceRole: vi.fn(),
+    listWorkforceUsers: vi.fn(),
     listRecruiterNewHireProgress: vi.fn(),
     demoCredentialDetails: { resetTtlMinutes: 15 },
   },
@@ -138,5 +139,13 @@ describe("demo credential authentication", () => {
     await expect(recruiterCaller.recruiting.newHireProgress()).resolves.toEqual([{ userId: 2, onboardingStage: "manager_confirmation", progressPercent: 82 }]);
     expect(dbMock.assignWorkforceRole).not.toHaveBeenCalled();
     expect(dbMock.listRecruiterNewHireProgress).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a demonstration administrator scoped to demonstration accounts rather than production administration records", async () => {
+    dbMock.listDemoAccounts.mockResolvedValue([{ id: 2, name: "Avery Morgan", email: "administrator@demo.vertonsolutions.com", role: "admin" }]);
+    const demoAdminCaller = appRouter.createCaller(createDemoContext("admin"));
+
+    await expect(demoAdminCaller.access.listUsers()).resolves.toEqual([{ id: 2, name: "Avery Morgan", email: "administrator@demo.vertonsolutions.com", role: "admin" }]);
+    expect(dbMock.listWorkforceUsers).not.toHaveBeenCalled();
   });
 });

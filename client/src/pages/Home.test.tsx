@@ -279,6 +279,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText(/MySQL-compatible TiDB via Drizzle ORM/)).toBeTruthy();
     expect(screen.getByText("Demo assignment extension review")).toBeTruthy();
     expect(screen.getByText("Database-backed operational activity.")).toBeTruthy();
+    expect(screen.getAllByText(/Internal demonstration data/).length).toBeGreaterThan(0);
   });
 
   it("renders seeded staffing demand, assignments, and timesheets in their protected operational views", async () => {

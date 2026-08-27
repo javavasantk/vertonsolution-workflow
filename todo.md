@@ -197,3 +197,6 @@
 - [x] Prompt 10: Verify only recruiters and administrators can edit candidate name, location, years of experience, and a bounded recruiter-visible skill array.
 - [x] Prompt 10: Enforce server-side validation, controlled Edit/Save/Cancel state, successful candidate-query refresh, and human-curation activity logging.
 - [x] Prompt 10: Add and run role-denial, validation, mutation, activity, and browser-style inline-edit interaction tests.
+- [x] Prompt 11: Verify protected database-backed clients, projects, staffing demands, assignments, timesheets, and operational activities feed lifecycle screens and overview summaries.
+- [x] Prompt 11: Verify internal demonstration records are idempotently seeded with stable keys, visibly labeled as internal demonstrations, and never include customer reviews, ratings, or testimonials.
+- [x] Prompt 11: Add and run tests for seed idempotency, protected summary records, lifecycle metrics and queues, and prohibited-content exclusion.

@@ -185,3 +185,6 @@
 - [x] Prompt 6: Verify recruiter/admin-only plain-text parsing accepts only 80–12,000 characters and sends bounded content to the managed server-side AI service.
 - [x] Prompt 6: Persist successful structured extraction as a recruiter-visible candidate profile in pending_human_review state without automated employment, eligibility, compensation, or work-authorization decisions.
 - [x] Prompt 6: Return a non-persisting human-review fallback for provider unavailability and validate structured service, router, and client rendering contracts.
+- [x] Prompt 7: Verify recruiter/admin-only PDF/DOCX uploads are limited to 5 MB and use short-lived recruiter-bound sessions plus cookie-authenticated server upload validation.
+- [x] Prompt 7: Keep original resume bytes in private object storage only, persist approved upload metadata and candidate relations, and close sessions after success or safe AI fallback.
+- [x] Prompt 7: Add and run tests for invalid types, size limit, expired or foreign sessions, role denial, storage linkage, candidate persistence, and fallback completion.

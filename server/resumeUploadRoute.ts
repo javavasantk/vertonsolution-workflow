@@ -15,7 +15,13 @@ export function registerResumeUploadRoute(app: Express) {
       const session = await getActiveResumeUploadSession(ctx.user.id, req.params.sessionId);
       if (!session) return res.status(400).json({ error: "This upload session is invalid, expired, or already completed." });
       const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-      validateResumeMetadata({ fileName: session.originalFileName, mimeType: session.mimeType, fileSize: body.length });
+      const requestMimeType = req.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+      if (requestMimeType !== session.mimeType) return res.status(400).json({ error: "The uploaded file type does not match the approved upload request." });
+      try {
+        validateResumeMetadata({ fileName: session.originalFileName, mimeType: session.mimeType, fileSize: body.length });
+      } catch (error) {
+        return res.status(400).json({ error: error instanceof Error ? error.message : "The uploaded resume is invalid." });
+      }
       if (body.length !== session.fileSize) return res.status(400).json({ error: "The uploaded file size does not match the approved upload request." });
       await storagePutAtKey(session.fileKey, body, session.mimeType);
       return res.status(204).end();

@@ -206,3 +206,6 @@
 - [x] Prompt 13: Verify protected timesheet entries expose week ending, hours, status, notes, and assignment association using only draft, submitted, approved, and exception states.
 - [x] Prompt 13: Enforce Finance-only commercial field visibility with masked values for other authorized roles, and keep the module limited to billing readiness.
 - [x] Prompt 13: Add and run tests for timesheet field projection, state vocabulary, Finance masking, and exclusion of payroll, payments, invoicing, and external accounting actions.
+- [x] Prompt 14: Verify recruiter_summary is recruiter/admin-only, access_review is administrator-only, and onboarding_guidance is restricted to authorized workflow users with 12–1,600 character context.
+- [x] Prompt 14: Show narrow AI briefing controls only in meaningful recruiter, administrative, and onboarding workflows; remove generic guidance controls from unrelated pages.
+- [x] Prompt 14: Add and run tests for task authorization, context bounds, contextual control placement, unrelated-page exclusions, and designated-human-owner fallback behavior.

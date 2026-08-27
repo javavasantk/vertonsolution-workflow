@@ -531,8 +531,21 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]!);
     await user.click(screen.getByRole("button", { name: /Draft onboarding follow-up/ }));
     expect(aiTestState.mutate).toHaveBeenCalledWith(expect.objectContaining({ task: "onboarding_guidance", context: expect.stringContaining("Current employee onboarding signals") }));
+    expect(JSON.stringify(aiTestState.mutate.mock.calls[0]?.[0])).not.toContain("workAuthorizationStatus");
     expect(screen.getByText(/Summary/)).toBeTruthy();
     expect(screen.getByText(/Human follow-up/)).toBeTruthy();
+  });
+
+  it("keeps generic briefing actions out of unrelated pages and shows a designated-human-owner fallback", async () => {
+    const user = userEvent.setup();
+    aiTestState.error = new Error("provider unavailable");
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    expect(screen.queryByRole("button", { name: /Draft .*follow-up|Draft access review|Draft recruiter handoff/ })).toBeNull();
+    await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]!);
+    expect(screen.getByRole("button", { name: /Draft onboarding follow-up/ })).toBeTruthy();
+    expect(screen.getByText(/designated human owner/i)).toBeTruthy();
   });
 
   it("shows the floating assistant fallback when its service returns an error", async () => {

@@ -680,7 +680,6 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
       completedTasks,
       totalTasks: onboarding.length,
       onboardingStages: onboarding.map(task => ({ task: task.title, done: task.done })),
-      profileReviewState: currentProfile?.workAuthorizationStatus ?? "not_started",
     };
     const config = activePage === "New-hire progress"
       ? { task: "recruiter_summary" as const, title: "Draft recruiter handoff", detail: "Summarize onboarding and assignment signals into a human-owned follow-up brief.", context: `Current operational recruiter signals: ${JSON.stringify({ trackedHireCount: safeRecruiterContext.length, rows: safeRecruiterContext })}` }

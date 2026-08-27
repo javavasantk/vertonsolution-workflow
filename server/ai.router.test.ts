@@ -59,10 +59,20 @@ describe("ai.assist tRPC procedure", () => {
     await expect(caller.ai.assist({ task: "access_review", context: "Role audit records show no changes in the latest review period." })).resolves.toMatchObject({ task: "access_review" });
   });
 
+  it("rejects task-specific AI briefings before model invocation when the role is not authorized", async () => {
+    const recruiterCaller = appRouter.createCaller(createContext("recruiter"));
+    const consultantCaller = appRouter.createCaller(createContext("consultant"));
+
+    await expect(recruiterCaller.ai.assist({ task: "access_review", context: "Role audit records show no changes in the latest review period." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(consultantCaller.ai.assist({ task: "recruiter_summary", context: "Manager confirmation and assignment follow-up are pending." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(generateAiBriefingSpy).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid bounded context before calling the generation service", async () => {
     const caller = appRouter.createCaller(createContext("admin"));
 
     await expect(caller.ai.assist({ task: "access_review", context: "short" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.ai.assist({ task: "access_review", context: "x".repeat(1601) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(generateAiBriefingSpy).not.toHaveBeenCalled();
   });
 

@@ -145,7 +145,7 @@ describe("real browser demo authentication journey", () => {
         } else {
           await page.getByRole("button", { name: "Time & billing" }).first().click();
         }
-        await expect.poll(() => page.getByText("Database-backed timesheet entries").count()).toBe(1);
+        await expect.poll(() => page.getByText("Time & billing readiness").count()).toBe(1);
         await expect.poll(() => page.getByText("••••••").count()).toBeGreaterThan(0);
         await page.screenshot({ path: `/home/ubuntu/database-time-billing-${suffix}.png`, fullPage: true });
       }

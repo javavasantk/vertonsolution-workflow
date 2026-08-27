@@ -209,3 +209,6 @@
 - [x] Prompt 14: Verify recruiter_summary is recruiter/admin-only, access_review is administrator-only, and onboarding_guidance is restricted to authorized workflow users with 12–1,600 character context.
 - [x] Prompt 14: Show narrow AI briefing controls only in meaningful recruiter, administrative, and onboarding workflows; remove generic guidance controls from unrelated pages.
 - [x] Prompt 14: Add and run tests for task authorization, context bounds, contextual control placement, unrelated-page exclusions, and designated-human-owner fallback behavior.
+- [x] Prompt 15: Verify the bottom-right collapsible assistant renders only inside authenticated workspaces with suggested prompts, bounded input, loading state, and safe unavailable state.
+- [x] Prompt 15: Restrict assistant requests to role, active page (maximum 64 characters), prompt (4–600 characters), and bounded structured lookup context; retain the non-decision safety boundary.
+- [x] Prompt 15: Add and run desktop/mobile tests for placement, authentication gating, prompt bounds, loading, response errors, and safe decision-boundary wording.

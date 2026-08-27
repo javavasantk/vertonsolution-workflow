@@ -226,7 +226,18 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     expect(screen.getByText("Sign in to Workforce Hub.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /Use approved identity/ }));
-    expect(startLoginSpy).toHaveBeenCalledTimes(1);
+    expect(startLoginSpy).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: /Open AI assistant/ })).toBeNull();
+  });
+
+  it("positions the authenticated Workspace Assistant responsively at the bottom-right", () => {
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    const trigger = screen.getByRole("button", { name: /Open AI assistant/ });
+    expect(trigger.parentElement?.className).toContain("fixed bottom-4 right-4");
+    expect(trigger.parentElement?.className).toContain("sm:bottom-6");
+    expect(trigger.parentElement?.className).toContain("sm:right-6");
   });
 
   it("protects the workspace when no authenticated account is present", () => {
@@ -579,5 +590,20 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
     expect(screen.getByRole("button", { name: "What can I do on this page?" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("gates typed workspace assistant prompts to the required 4–600 character range", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    const input = screen.getByLabelText("Ask about this workspace…");
+    expect(input.getAttribute("maxlength")).toBe("600");
+    await user.type(input, "ask");
+    expect(screen.getByRole("button", { name: "Send assistant message" }).hasAttribute("disabled")).toBe(true);
+    await user.type(input, " now");
+    await user.click(screen.getByRole("button", { name: "Send assistant message" }));
+    expect(workspaceAssistantState.mutate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "ask now" }));
   });
 });

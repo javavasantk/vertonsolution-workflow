@@ -106,6 +106,7 @@ describe("ai.assist tRPC procedure", () => {
   it("rejects an oversized workspace assistant prompt before calling the model", async () => {
     const caller = appRouter.createCaller(createContext("consultant"));
     await expect(caller.ai.workspaceAssistant({ page: "Overview", prompt: "x".repeat(601) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.ai.workspaceAssistant({ page: "x".repeat(65), prompt: "What can I do here?" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(generateWorkspaceAssistantReplySpy).not.toHaveBeenCalled();
   });
 });

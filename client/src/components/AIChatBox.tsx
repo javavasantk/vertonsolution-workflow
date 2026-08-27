@@ -57,6 +57,10 @@ export type AIChatBoxProps = {
    * Click to send directly
    */
   suggestedPrompts?: string[];
+  /** Minimum trimmed character length accepted from the chat input. */
+  minInputLength?: number;
+  /** Maximum character length accepted from the chat input. */
+  maxInputLength?: number;
 };
 
 /**
@@ -119,6 +123,8 @@ export function AIChatBox({
   height = "600px",
   emptyStateMessage = "Start a conversation with AI",
   suggestedPrompts,
+  minInputLength = 1,
+  maxInputLength,
 }: AIChatBoxProps) {
   const [input, setInput] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -168,7 +174,7 @@ export function AIChatBox({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = input.trim();
-    if (!trimmedInput || isLoading) return;
+    if (!trimmedInput || trimmedInput.length < minInputLength || (maxInputLength !== undefined && trimmedInput.length > maxInputLength) || isLoading) return;
 
     onSendMessage(trimmedInput);
     setInput("");
@@ -179,6 +185,9 @@ export function AIChatBox({
     // Keep focus on input
     textareaRef.current?.focus();
   };
+
+  const trimmedInput = input.trim();
+  const isInputValid = trimmedInput.length >= minInputLength && (maxInputLength === undefined || trimmedInput.length <= maxInputLength);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -314,13 +323,16 @@ export function AIChatBox({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          aria-label={placeholder}
+          maxLength={maxInputLength}
           className="flex-1 max-h-32 resize-none min-h-9"
           rows={1}
         />
         <Button
           type="submit"
           size="icon"
-          disabled={!input.trim() || isLoading}
+          aria-label="Send assistant message"
+          disabled={!isInputValid || isLoading}
           className="shrink-0 h-[38px] w-[38px]"
         >
           {isLoading ? (

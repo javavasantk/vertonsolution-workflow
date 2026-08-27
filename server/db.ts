@@ -270,6 +270,7 @@ function serializeCandidateProfile(input: CandidateProfileInput) {
     educationJson: JSON.stringify(input.education ?? []),
     recruiterNotesJson: JSON.stringify(input.recruiterNotes ?? []),
     confidence: input.confidence ?? "low",
+    reviewState: "pending_human_review" as const,
   };
 }
 

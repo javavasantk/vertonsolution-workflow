@@ -30,6 +30,14 @@ describe("recruiting.parseResume", () => {
     expect(createCandidateProfileSpy).toHaveBeenCalledWith(91, expect.objectContaining({ candidateName: "Alex Morgan", skills: ["TypeScript"] }));
   });
 
+  it("returns a safe non-persisting result when managed extraction is unavailable", async () => {
+    parseRecruiterResumeSpy.mockResolvedValue({ profile: { candidateName: "", confidence: "low", recruiterNotes: ["Continue with human review."], skills: [] }, model: "unavailable", unavailable: true });
+    const caller = appRouter.createCaller(createContext("recruiter"));
+
+    await expect(caller.recruiting.parseResume({ resumeText })).resolves.toMatchObject({ unavailable: true, candidate: null, profile: { confidence: "low" } });
+    expect(createCandidateProfileSpy).not.toHaveBeenCalled();
+  });
+
   it("allows recruiters to persist reviewed inline candidate updates", async () => {
     updateCandidateProfileSpy.mockResolvedValue({ id: 1, candidateName: "Alex Morgan", skills: ["TypeScript", "React"] });
     const input = { candidateId: 1, candidateName: "Alex Morgan", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"] };
@@ -46,6 +54,12 @@ describe("recruiting.parseResume", () => {
   it("rejects too-short resume text before parsing", async () => {
     const caller = appRouter.createCaller(createContext("recruiter"));
     await expect(caller.recruiting.parseResume({ resumeText: "too short" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(parseRecruiterResumeSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects resume text above the 12,000-character privacy bound before parsing", async () => {
+    const caller = appRouter.createCaller(createContext("recruiter"));
+    await expect(caller.recruiting.parseResume({ resumeText: "x".repeat(12_001) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(parseRecruiterResumeSpy).not.toHaveBeenCalled();
   });
 });

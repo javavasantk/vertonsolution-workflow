@@ -182,3 +182,6 @@
 - [x] Prompt 5: Verify recruiter-only launchboard access to protected onboarding stage, progress, manager handoff, project, and assignment-state signals.
 - [x] Prompt 5: Restrict launchboard records to approved onboarding and assignment vocabulary, exclude restricted readiness details, and present human-owned exceptions without staffing automation.
 - [x] Prompt 5: Add and run tests for recruiter authorization, workflow-state values, restricted-detail exclusion, and human-readable handoff indicators.
+- [x] Prompt 6: Verify recruiter/admin-only plain-text parsing accepts only 80–12,000 characters and sends bounded content to the managed server-side AI service.
+- [x] Prompt 6: Persist successful structured extraction as a recruiter-visible candidate profile in pending_human_review state without automated employment, eligibility, compensation, or work-authorization decisions.
+- [x] Prompt 6: Return a non-persisting human-review fallback for provider unavailability and validate structured service, router, and client rendering contracts.

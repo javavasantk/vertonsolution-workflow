@@ -800,6 +800,15 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     workspaceAssistantMutation.mutate({ page: activePage, prompt: cleanPrompt });
   };
 
+  const TimesheetDetailTable = () => {
+    const entries = portalSummary?.timesheets ?? [];
+    const assignments = portalSummary?.assignments ?? [];
+    const projects = portalSummary?.projects ?? [];
+    const assignmentById = new Map(assignments.map(assignment => [assignment.id, assignment]));
+    const projectById = new Map(projects.map(project => [project.id, project]));
+    return <section className="mt-5 overflow-hidden rounded-2xl border border-[#dce7f3] bg-white"><div className="flex flex-col gap-2 border-b border-[#e8eef5] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-extrabold">Timesheet detail</p><p className="mt-1 text-xs text-[#7185a0]">Protected entries with assignment association and notes for billing readiness.</p></div><Pill tone="slate">No payroll actions</Pill></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#f8fbff] text-[10px] uppercase tracking-[.1em] text-[#7890aa]"><tr><th className="px-5 py-3 font-bold">Week ending</th><th className="px-3 py-3 font-bold">Hours</th><th className="px-3 py-3 font-bold">Status</th><th className="px-3 py-3 font-bold">Assignment</th><th className="px-3 py-3 font-bold">Notes</th></tr></thead><tbody>{entries.map(entry => { const assignment = entry.assignmentId ? assignmentById.get(entry.assignmentId) : undefined; const project = assignment ? projectById.get(assignment.projectId) : undefined; return <tr key={entry.id} className="border-t border-[#edf2f7] text-xs"><td className="px-5 py-3 font-semibold text-[#466381]">{new Date(entry.weekEnding).toLocaleDateString()}</td><td className="px-3 py-3 font-extrabold text-[#294969]">{entry.hours}</td><td className="px-3 py-3"><Pill tone={entry.status === "approved" ? "green" : entry.status === "exception" ? "amber" : "blue"}>{entry.status}</Pill></td><td className="px-3 py-3 text-[#466381]">{project?.name || "Assignment pending"}{assignment ? ` · ${assignment.assignmentState.replaceAll("_", " ")}` : ""}</td><td className="px-3 py-3 text-[#7185a0]">{entry.note || "No note"}</td></tr>; })}</tbody></table></div><p className="border-t border-[#e8eef5] bg-[#f8fbff] px-5 py-3 text-[10px] leading-4 text-[#6a819d]">This is a billing-readiness view only. It does not execute payments, calculate payroll, create invoices, or connect to external accounting systems.</p></section>;
+  };
+
   const PageContent = () => {
     const permittedPage = resolveWorkspacePage(activeRole, activePage);
     if (permittedPage !== activePage) return <Overview />;
@@ -807,7 +816,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
       : activePage === "Readiness" ? <><Readiness /><ReadinessChecklist /></>
       : activePage === "Onboarding" ? <><OnboardingContext /><Onboarding /></>
       : activePage === "Delivery" ? <><Delivery /><DatabaseDeliveryLifecycle />{InlineProjectTable()}</>
-      : activePage === "Time & billing" ? <><DatabaseTimeBilling /><FinanceScope /></>
+      : activePage === "Time & billing" ? <><DatabaseTimeBilling /><TimesheetDetailTable /><FinanceScope /></>
       : activePage === "Controls" ? <Controls />
       : activePage === "Admin center" ? <AdminCenter />
       : activePage === "My profile" ? <EmployeeProfile />

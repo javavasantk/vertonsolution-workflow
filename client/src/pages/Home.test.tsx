@@ -80,7 +80,7 @@ vi.mock("@/lib/trpc", () => ({
       requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     portal: {
-      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, status: "approved", hours: 40, weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
+      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, assignmentId: 1, status: "approved", hours: 40, note: "Internal demonstration time entry", weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
       updateProject: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { portalTestState.projectUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
     },
     recruiting: {
@@ -298,7 +298,11 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getAllByText("Northstar Commerce Cloud · Demo").length).toBeGreaterThan(0);
     await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]!);
     expect(screen.getByText("Timesheet #1")).toBeTruthy();
-    expect(screen.getByText("40")).toBeTruthy();
+    expect(screen.getAllByText("40").length).toBeGreaterThan(0);
+    expect(screen.getByText("Northstar Commerce Cloud · Demo · active")).toBeTruthy();
+    expect(screen.getByText("Internal demonstration time entry")).toBeTruthy();
+    expect(screen.getByText(/does not execute payments, calculate payroll, create invoices, or connect to external accounting systems/i)).toBeTruthy();
+    expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
   });
 
   it("reveals commercial values for an authenticated finance account", async () => {

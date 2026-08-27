@@ -203,3 +203,6 @@
 - [x] Prompt 12: Verify only administrators, account managers, delivery managers, and project managers can edit project name, delivery status, and project manager name.
 - [x] Prompt 12: Enforce planned, active, at_risk, and closing delivery-status values server-side; provide controlled Save/Cancel table editing and summary refresh after saves.
 - [x] Prompt 12: Add and run tests for authorized mutations, finance/consultant denial and read-only views, invalid statuses, edit interactions, and protected summary refresh.
+- [x] Prompt 13: Verify protected timesheet entries expose week ending, hours, status, notes, and assignment association using only draft, submitted, approved, and exception states.
+- [x] Prompt 13: Enforce Finance-only commercial field visibility with masked values for other authorized roles, and keep the module limited to billing readiness.
+- [x] Prompt 13: Add and run tests for timesheet field projection, state vocabulary, Finance masking, and exclusion of payroll, payments, invoicing, and external accounting actions.

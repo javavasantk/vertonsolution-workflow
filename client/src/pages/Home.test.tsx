@@ -94,7 +94,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, getAllowedNavigation, getRecruiterHandoffIndicator, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
+import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, formatCandidateReviewState, getAllowedNavigation, getRecruiterHandoffIndicator, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
 
 function setAuthenticatedRole(role: string, name = "Avery Morgan") {
   authState.user = {
@@ -194,6 +194,12 @@ describe("Workforce Hub role access", () => {
     expect(getRecruiterHandoffIndicator({ onboardingStage: "manager_confirmation", managerConfirmed: false, assignmentState: "pending" })).toBe("Manager confirmation needed");
     expect(getRecruiterHandoffIndicator({ onboardingStage: "ready_for_assignment", managerConfirmed: true, assignmentState: "unassigned" })).toBe("Assignment handoff needed");
     expect(getRecruiterHandoffIndicator({ onboardingStage: "assigned", managerConfirmed: true, assignmentState: "active" })).toBe("No handoff flagged");
+  });
+
+  it("uses only the approved candidate review-state labels", () => {
+    expect(formatCandidateReviewState("pending_human_review")).toBe("Human review pending");
+    expect(formatCandidateReviewState("reviewed")).toBe("Human reviewed");
+    expect(formatCandidateReviewState("archived")).toBe("Archived");
   });
 });
 
@@ -425,6 +431,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(within(finder).getByText("Owen Miller")).toBeTruthy();
     await user.selectOptions(screen.getByLabelText("Filter by experience"), "4-7");
     expect(within(finder).getByText(/No candidate profiles match these filters/)).toBeTruthy();
+    expect(within(finder).getByText(/Parsed information requires recruiter review before use/)).toBeTruthy();
   });
 
   it("edits a database-backed candidate row inline and submits validated recruiter changes", async () => {

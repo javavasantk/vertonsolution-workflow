@@ -188,3 +188,6 @@
 - [x] Prompt 7: Verify recruiter/admin-only PDF/DOCX uploads are limited to 5 MB and use short-lived recruiter-bound sessions plus cookie-authenticated server upload validation.
 - [x] Prompt 7: Keep original resume bytes in private object storage only, persist approved upload metadata and candidate relations, and close sessions after success or safe AI fallback.
 - [x] Prompt 7: Add and run tests for invalid types, size limit, expired or foreign sessions, role denial, storage linkage, candidate persistence, and fallback completion.
+- [x] Prompt 8: Verify recruiter/admin Candidate Finder searches candidate name, location, and skills, with extracted-skill and experience-bucket filters.
+- [x] Prompt 8: Limit candidate results to recruiter-visible profile fields and approved review states while excluding raw resumes, storage keys, readiness detail, and finance data.
+- [x] Prompt 8: Add and run tests for protected access, filter behavior, review-state vocabulary, sensitive-field exclusion, result count, review guidance, and the empty state.

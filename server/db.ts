@@ -280,11 +280,21 @@ function parseJson<T>(value: string, fallback: T): T {
 
 function presentCandidate(row: typeof candidateProfiles.$inferSelect) {
   return {
-    ...row,
+    id: row.id,
+    candidateName: row.candidateName,
+    email: row.email,
+    phone: row.phone,
+    location: row.location,
+    professionalSummary: row.professionalSummary,
+    yearsExperience: row.yearsExperience,
     skills: parseJson<string[]>(row.skillsJson, []),
     recentRoles: parseJson<Array<{ title: string; company: string; period: string }>>(row.recentRolesJson, []),
     education: parseJson<string[]>(row.educationJson, []),
     recruiterNotes: parseJson<string[]>(row.recruiterNotesJson, []),
+    confidence: row.confidence,
+    reviewState: row.reviewState,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 

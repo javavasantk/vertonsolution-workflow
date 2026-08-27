@@ -401,12 +401,13 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("Database Lead Engineer")).toBeTruthy();
     expect(screen.getAllByText("Northstar Commerce Cloud · Demo").length).toBeGreaterThan(0);
     await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]!);
-    expect(screen.getByText("Timesheet #1")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Time & billing readiness")).toBeTruthy());
     expect(screen.getAllByText("40").length).toBeGreaterThan(0);
-    expect(screen.getByText("Northstar Commerce Cloud · Demo · active")).toBeTruthy();
+    expect(screen.getByText("active · Northstar Commerce Cloud · Demo")).toBeTruthy();
     expect(screen.getByText("Internal demonstration time entry")).toBeTruthy();
-    expect(screen.getByText(/does not execute payments, calculate payroll, create invoices, or connect to external accounting systems/i)).toBeTruthy();
+    expect(screen.getByText(/No entry creation\/editing, approval, payroll, payment, invoice, expense, accounting, or scheduled processing action is available/i)).toBeTruthy();
     expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /approve|invoice|payroll|payment/i })).toBeNull();
   });
 
   it("reveals commercial values for an authenticated finance account", async () => {

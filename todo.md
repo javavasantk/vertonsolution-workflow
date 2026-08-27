@@ -249,5 +249,5 @@
 - [x] Create a dedicated Administrator/Recruiter-protected candidate-detail route using only current recruiter-visible candidate fields.
 - [x] Make the Talent Pipeline profile-detail experience fully responsive and accessible on mobile devices.
 - [x] Repair the protected resume upload retrieval failure and ensure a single non-conflicting client outcome message is shown.
-- [ ] Add clear protected resume upload-stage feedback, adjacent PDF/DOCX and 5 MB file guidance, and an inline retry action for failed uploads.
-- [ ] Diagnose and repair the persistent live private-storage handoff failure for protected DOCX resume uploads.
+- [x] Add clear protected resume upload-stage feedback, adjacent PDF/DOCX and 5 MB file guidance, and an inline retry action for failed uploads.
+- [x] Diagnose and repair the persistent live private-storage handoff failure for protected DOCX resume uploads.

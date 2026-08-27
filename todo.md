@@ -200,3 +200,6 @@
 - [x] Prompt 11: Verify protected database-backed clients, projects, staffing demands, assignments, timesheets, and operational activities feed lifecycle screens and overview summaries.
 - [x] Prompt 11: Verify internal demonstration records are idempotently seeded with stable keys, visibly labeled as internal demonstrations, and never include customer reviews, ratings, or testimonials.
 - [x] Prompt 11: Add and run tests for seed idempotency, protected summary records, lifecycle metrics and queues, and prohibited-content exclusion.
+- [x] Prompt 12: Verify only administrators, account managers, delivery managers, and project managers can edit project name, delivery status, and project manager name.
+- [x] Prompt 12: Enforce planned, active, at_risk, and closing delivery-status values server-side; provide controlled Save/Cancel table editing and summary refresh after saves.
+- [x] Prompt 12: Add and run tests for authorized mutations, finance/consultant denial and read-only views, invalid statuses, edit interactions, and protected summary refresh.

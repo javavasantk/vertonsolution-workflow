@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -46,6 +46,10 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     users: [] as any[],
     roleChangeMutate: vi.fn(),
   },
+  portalTestState: {
+    projectUpdateMutate: vi.fn(),
+    summaryRefetch: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -76,8 +80,8 @@ vi.mock("@/lib/trpc", () => ({
       requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     portal: {
-      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, status: "approved", hours: 40, weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: vi.fn() }) },
-      updateProject: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (_input: unknown) => options?.onSuccess?.(), isPending: false }) },
+      demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, status: "approved", hours: 40, weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
+      updateProject: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { portalTestState.projectUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
@@ -152,6 +156,8 @@ afterEach(() => {
   resumeTestState.error = null;
   adminTestState.users = [];
   adminTestState.roleChangeMutate.mockReset();
+  portalTestState.projectUpdateMutate.mockReset();
+  portalTestState.summaryRefetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -472,6 +478,43 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByLabelText("Edit candidate location")).toBeNull();
     expect(resumeTestState.candidateUpdateMutate).not.toHaveBeenCalled();
+  });
+
+  it("saves a delivery-authorized inline project edit and refreshes the protected summary", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("project_manager", "Casey Project Manager");
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Delivery" })[0]!);
+
+    await user.click(screen.getByRole("button", { name: "Edit Northstar Commerce Cloud · Demo" }));
+    await user.clear(screen.getByLabelText("Edit project name"));
+    await user.type(screen.getByLabelText("Edit project name"), "Northstar Delivery Cloud · Demo");
+    await user.selectOptions(screen.getByLabelText("Edit project status"), "at_risk");
+    await user.clear(screen.getByLabelText("Edit project manager"));
+    await user.type(screen.getByLabelText("Edit project manager"), "Taylor Nguyen");
+    await user.click(screen.getByRole("button", { name: "Save project edit" }));
+
+    expect(portalTestState.projectUpdateMutate).toHaveBeenCalledWith({ projectId: 1, name: "Northstar Delivery Cloud · Demo", deliveryStatus: "at_risk", projectManagerName: "Taylor Nguyen" });
+    expect(portalTestState.summaryRefetch).toHaveBeenCalledOnce();
+    expect(screen.queryByLabelText("Edit project name")).toBeNull();
+  });
+
+  it("keeps a consultant project delivery view read-only", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Scoped consultant");
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Delivery" })[0]!);
+
+    expect(screen.queryByRole("button", { name: "Edit Northstar Commerce Cloud · Demo" })).toBeNull();
+    expect(screen.getByText("View only")).toBeTruthy();
+  });
+
+  it("keeps finance project updates out of the scoped navigation and view", () => {
+    setAuthenticatedRole("finance", "Scoped finance");
+    renderRoute("/workspace");
+
+    expect(screen.queryByRole("button", { name: "Delivery" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit Northstar Commerce Cloud · Demo" })).toBeNull();
   });
 
   it("shows onboarding drafting only in its active workflow context and renders the returned briefing", async () => {

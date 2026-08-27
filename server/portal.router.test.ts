@@ -13,7 +13,7 @@ vi.mock("./db", () => ({
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-function createContext(role: "consultant" | "delivery_manager" = "consultant"): TrpcContext {
+function createContext(role: "admin" | "account_manager" | "consultant" | "delivery_manager" | "finance" | "project_manager" = "consultant"): TrpcContext {
   return {
     user: {
       id: 12,
@@ -52,11 +52,25 @@ describe("portal.demoSummary", () => {
     expect(getDemoPortalSummarySpy).toHaveBeenCalledOnce();
   });
 
-  it("allows delivery owners to update projects and rejects roles without delivery authority", async () => {
+  it("allows every delivery-authorized role to update projects and rejects read-only roles", async () => {
     updateClientProjectSpy.mockResolvedValue({ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "at_risk", projectManagerName: "Casey Rivera" });
     const input = { projectId: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "at_risk" as const, projectManagerName: "Casey Rivera" };
     await expect(appRouter.createCaller(createContext("consultant")).portal.updateProject(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(appRouter.createCaller(createContext("delivery_manager")).portal.updateProject(input)).resolves.toMatchObject({ deliveryStatus: "at_risk" });
-    expect(updateClientProjectSpy).toHaveBeenCalledWith(1, 12, input);
+    await expect(appRouter.createCaller(createContext("finance")).portal.updateProject(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    for (const role of ["admin", "account_manager", "delivery_manager", "project_manager"] as const) {
+      await expect(appRouter.createCaller(createContext(role)).portal.updateProject(input)).resolves.toMatchObject({ deliveryStatus: "at_risk" });
+    }
+    expect(updateClientProjectSpy).toHaveBeenCalledTimes(4);
+    expect(updateClientProjectSpy).toHaveBeenLastCalledWith(1, 12, input);
+  });
+
+  it("rejects delivery statuses outside the approved project workflow", async () => {
+    await expect(appRouter.createCaller(createContext("project_manager")).portal.updateProject({
+      projectId: 1,
+      name: "Northstar Commerce Cloud · Demo",
+      deliveryStatus: "blocked" as never,
+      projectManagerName: "Casey Rivera",
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(updateClientProjectSpy).not.toHaveBeenCalled();
   });
 });

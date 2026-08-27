@@ -181,6 +181,15 @@ export const appRouter = router({
       }),
   }),
 
+  consultant: router({
+    myWork: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant My Work dashboard.' });
+      }
+      return db.getConsultantMyWork(ctx.user.id);
+    }),
+  }),
+
   portal: router({
     demoSummary: protectedProcedure.query(({ ctx }) => db.getDemoPortalSummary(ctx.user.role as db.PortalSummaryRole, ctx.user.id)),
     updateProject: protectedProcedure.input(projectInlineUpdateSchema).mutation(async ({ ctx, input }) => {

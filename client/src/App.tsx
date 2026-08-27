@@ -15,6 +15,7 @@ function Router() {
       <Route path={"/workspace/admin"} component={Home} />
       <Route path={"/workspace/profile"} component={Home} />
       <Route path={"/workspace/recruiting"} component={Home} />
+      <Route path={"/workspace/my-work"} component={Home} />
       <Route path={"/workspace/talent/:id"} component={Home} />
       <Route path={"/workspace/:rest*"} component={Home} />
       <Route path={"/404"} component={NotFound} />

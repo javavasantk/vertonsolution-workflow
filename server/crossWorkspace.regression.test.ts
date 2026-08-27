@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  user: ["Overview", "My work", "Onboarding", "Delivery", "Time & billing", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;

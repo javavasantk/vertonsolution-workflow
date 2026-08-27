@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -75,6 +75,12 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     mutation: vi.fn(),
     mutationError: false,
   },
+  consultantMyWorkTestState: {
+    data: { profile: { profileUpdateState: "details_requested", updatedAt: new Date("2026-08-26") }, onboarding: { onboardingStage: "manager_confirmation", progressPercent: 82, assignmentState: "active", updatedAt: new Date("2026-08-26") }, assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: null, endDate: null, updatedAt: new Date("2026-08-26") }, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } } as any,
+    isLoading: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -105,6 +111,9 @@ vi.mock("@/lib/trpc", () => ({
       readinessRecords: { useQuery: () => ({ data: readinessTestState.records, isLoading: readinessTestState.isLoading, error: readinessTestState.error, refetch: vi.fn() }) },
       requestReview: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { profileTestState.mutation(input); if (profileTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false }),
     },
+    },
+    consultant: {
+      myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
     },
     portal: {
       demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, assignmentId: 1, status: "approved", hours: 40, note: "Internal demonstration time entry", weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
@@ -205,6 +214,10 @@ afterEach(() => {
   profileTestState.error = null;
   profileTestState.mutation.mockReset();
   profileTestState.mutationError = false;
+  consultantMyWorkTestState.data = { profile: { profileUpdateState: "details_requested", updatedAt: new Date("2026-08-26") }, onboarding: { onboardingStage: "manager_confirmation", progressPercent: 82, assignmentState: "active", updatedAt: new Date("2026-08-26") }, assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: null, endDate: null, updatedAt: new Date("2026-08-26") }, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } };
+  consultantMyWorkTestState.isLoading = false;
+  consultantMyWorkTestState.error = null;
+  consultantMyWorkTestState.refetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -235,9 +248,43 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
+  });
+
+  it("renders the consultant-only My Work dashboard from safe own-record signals", () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/my-work");
+
+    expect(screen.getByRole("heading", { name: "My work" })).toBeTruthy();
+    expect(screen.getByText("Own-record view")).toBeTruthy();
+    expect(screen.getByText("Northstar Commerce Cloud · Demo")).toBeTruthy();
+    expect(screen.getByText(/submitted · 40 hours/i)).toBeTruthy();
+    expect(screen.getByText(/does not expose colleague records, client documents, restricted readiness content/i)).toBeTruthy();
+    expect(screen.getByText(/Manager: Casey Rivera/)).toBeTruthy();
+    expect(screen.queryByText("Candidate Finder")).toBeNull();
+  });
+
+  it("keeps My Work loading, unavailable, empty, and no-assignment states distinct", () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantMyWorkTestState.isLoading = true;
+    const view = renderRoute("/workspace/my-work");
+    expect(screen.getByText("Loading your protected work summary…")).toBeTruthy();
+
+    consultantMyWorkTestState.isLoading = false;
+    consultantMyWorkTestState.error = new Error("Unavailable");
+    view.rerender(<Home />);
+    expect(screen.getByText("Your protected work summary is unavailable.")).toBeTruthy();
+
+    consultantMyWorkTestState.error = null;
+    consultantMyWorkTestState.data = { profile: null, onboarding: null, assignment: null, latestTimesheet: null };
+    view.rerender(<Home />);
+    expect(screen.getByText("No protected work records are available yet.")).toBeTruthy();
+
+    consultantMyWorkTestState.data = { profile: { profileUpdateState: "details_requested", updatedAt: new Date() }, onboarding: null, assignment: null, latestTimesheet: null };
+    view.rerender(<Home />);
+    expect(screen.getByText("No current assignment.")).toBeTruthy();
   });
 
   it("limits finance visibility to the commercial access role", () => {

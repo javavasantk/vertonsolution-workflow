@@ -421,6 +421,57 @@ export async function getWorkspaceAssistantLookup(role: string, prompt: string) 
 
 export type PortalSummaryRole = "admin" | "recruiter" | "hr_compliance" | "account_manager" | "delivery_manager" | "project_manager" | "finance" | "consultant" | "user";
 
+/** Narrow own-record projection for the Consultant My Work dashboard. */
+export async function getConsultantMyWork(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  const [profileRows, onboardingRows, assignmentRows, timesheetRows] = await Promise.all([
+    db.select({
+      profileUpdateState: employeeProfiles.workAuthorizationStatus,
+      updatedAt: employeeProfiles.updatedAt,
+    }).from(employeeProfiles).where(eq(employeeProfiles.userId, userId)).limit(1),
+    db.select({
+      onboardingStage: onboardingAssignments.onboardingStage,
+      progressPercent: onboardingAssignments.progressPercent,
+      assignmentState: onboardingAssignments.assignmentState,
+      updatedAt: onboardingAssignments.updatedAt,
+    }).from(onboardingAssignments).where(eq(onboardingAssignments.userId, userId)).limit(1),
+    db.select({
+      id: consultantAssignments.id,
+      projectName: clientProjects.name,
+      clientName: clientAccounts.name,
+      managerName: consultantAssignments.managerName,
+      allocationPercent: consultantAssignments.allocationPercent,
+      assignmentState: consultantAssignments.assignmentState,
+      startDate: consultantAssignments.startDate,
+      endDate: consultantAssignments.endDate,
+      updatedAt: consultantAssignments.updatedAt,
+    }).from(consultantAssignments)
+      .innerJoin(clientProjects, eq(consultantAssignments.projectId, clientProjects.id))
+      .innerJoin(clientAccounts, eq(consultantAssignments.clientId, clientAccounts.id))
+      .where(eq(consultantAssignments.userId, userId))
+      .orderBy(desc(consultantAssignments.updatedAt)),
+    db.select({
+      assignmentId: timesheetEntries.assignmentId,
+      weekEnding: timesheetEntries.weekEnding,
+      hours: timesheetEntries.hours,
+      status: timesheetEntries.status,
+      updatedAt: timesheetEntries.updatedAt,
+    }).from(timesheetEntries).where(eq(timesheetEntries.userId, userId)).orderBy(desc(timesheetEntries.updatedAt)),
+  ]);
+
+  const assignment = assignmentRows.find(row => row.assignmentState === "active") ?? assignmentRows[0] ?? null;
+  const assignmentIds = new Set(assignmentRows.map(row => row.id));
+  const latestTimesheet = timesheetRows.find(row => !row.assignmentId || assignmentIds.has(row.assignmentId)) ?? null;
+  return {
+    profile: profileRows[0] ?? null,
+    onboarding: onboardingRows[0] ?? null,
+    assignment,
+    latestTimesheet,
+  };
+}
+
 export async function getDemoPortalSummary(role: PortalSummaryRole, userId: number) {
   const db = await getDb();
   if (!db) return { clients: [], projects: [], demands: [], assignments: [], timesheets: [], activities: [] };

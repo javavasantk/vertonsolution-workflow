@@ -3,7 +3,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import * as db from "./db";
 
-function createContext(role: "user" | "admin" | "recruiter" | "hr_compliance", userId = 1): TrpcContext {
+function createContext(role: "user" | "admin" | "recruiter" | "hr_compliance" | "consultant", userId = 1): TrpcContext {
   return {
     user: {
       id: userId,
@@ -112,6 +112,26 @@ describe("access router", () => {
     expect(updateProfile).toHaveBeenCalledWith(17, input);
     getProfile.mockRestore();
     updateProfile.mockRestore();
+  });
+
+  it("serves Consultant My Work only from the session user and excludes restricted fields", async () => {
+    const safeWork = {
+      profile: { profileUpdateState: "details_requested", updatedAt: new Date() },
+      onboarding: { onboardingStage: "manager_confirmation", progressPercent: 82, assignmentState: "active", updatedAt: new Date() },
+      assignment: { id: 4, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: null, endDate: null, updatedAt: new Date() },
+      latestTimesheet: { assignmentId: 4, weekEnding: new Date(), hours: 40, status: "submitted", updatedAt: new Date() },
+    };
+    const summary = vi.spyOn(db, "getConsultantMyWork").mockResolvedValue(safeWork as never);
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.myWork()).resolves.toEqual(safeWork);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.myWork()).resolves.toEqual(safeWork);
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.myWork()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(summary).toHaveBeenCalledWith(17);
+    expect(safeWork).not.toHaveProperty("readinessDetails");
+    expect(safeWork).not.toHaveProperty("candidateProfile");
+    expect(safeWork).not.toHaveProperty("commercialRate");
+    expect(safeWork).not.toHaveProperty("clientDocument");
+    summary.mockRestore();
   });
 
   it("allows only Administrator and HR & Compliance to read the minimized readiness projection", async () => {

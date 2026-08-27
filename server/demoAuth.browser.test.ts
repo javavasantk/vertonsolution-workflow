@@ -23,6 +23,12 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await expect.poll(() => page.getByText("Consultant workspace").count()).toBe(1);
   await expect.poll(() => page.getByText("Readiness", { exact: true }).count()).toBe(0);
   await page.screenshot({ path: `/home/ubuntu/auth-journey-workspace-${suffix}.png`, fullPage: true });
+
+  await page.goto(`${baseUrl}/workspace/my-work`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.getByRole("heading", { name: "My work" }).count()).toBe(1);
+  await expect.poll(() => page.getByText("Own-record view").count()).toBe(1);
+  await expect.poll(() => page.getByText(/does not expose colleague records, client documents, restricted readiness content/i).count()).toBe(1);
+  await page.screenshot({ path: `/home/ubuntu/consultant-my-work-${suffix}.png`, fullPage: true });
 }
 
 function signedUploadResumeFixture() {

@@ -173,3 +173,6 @@
 - [x] Prompt 1: Verify the public protected-access login excludes role directories, credentials, and workspace content before authentication.
 - [x] Prompt 1: Enforce managed cookie-backed sessions, server-side role/API authorization, and safe unauthorized deep-link recovery for the approved role set.
 - [x] Prompt 1: Add and run unit tests for unauthenticated rejection, role-scoped navigation, sign-out, and deep-link recovery.
+- [x] Prompt 2: Verify demo-only salted password, reset-token, expiry, and session storage while preserving production OAuth identities.
+- [x] Prompt 2: Ensure demo auth responses never expose passwords, password hashes, or reset-token digests, and unknown reset requests remain generic.
+- [x] Prompt 2: Add and run tests for valid/invalid credentials, one-time 15-minute reset expiry, password replacement, and role-scoped session resolution.

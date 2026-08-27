@@ -467,6 +467,6 @@ export async function resetDemoPassword(token: string, password: string) {
   return true;
 }
 
-export const demoCredentialDetails = { password: DEMO_PASSWORD, resetTtlMinutes: RESET_TOKEN_TTL_MS / 60 };
+export const demoCredentialDetails = { resetTtlMinutes: RESET_TOKEN_TTL_MS / 60 };
 
 // TODO: add feature queries here as your schema grows.

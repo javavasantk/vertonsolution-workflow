@@ -8,7 +8,7 @@ const { dbMock, createSessionTokenSpy } = vi.hoisted(() => ({
     resetDemoPassword: vi.fn(),
     assignWorkforceRole: vi.fn(),
     listRecruiterNewHireProgress: vi.fn(),
-    demoCredentialDetails: { password: "VertonDemo!2026", resetTtlMinutes: 15 },
+    demoCredentialDetails: { resetTtlMinutes: 15 },
   },
   createSessionTokenSpy: vi.fn(),
 }));
@@ -87,8 +87,11 @@ describe("demo credential authentication", () => {
 
     expect(result).toMatchObject({ openId: "demo_recruiter", role: "recruiter", isDemo: true });
     expect(result).not.toHaveProperty("passwordHash");
+    expect(result).not.toHaveProperty("resetTokenHash");
+    expect(result).not.toHaveProperty("resetTokenExpiresAt");
     expect(cookies).toHaveLength(1);
     expect(cookies[0]?.value).toBe("signed-demo-session");
+    expect(cookies[0]?.options).toMatchObject({ maxAge: 8 * 60 * 60 * 1000, httpOnly: true });
   });
 
   it("rejects invalid demonstration credentials", async () => {
@@ -103,6 +106,20 @@ describe("demo credential authentication", () => {
     const { ctx } = createPublicContext();
 
     await expect(appRouter.createCaller(ctx).auth.requestDemoPasswordReset({ email: "recruiter@demo.vertonsolutions.com" })).resolves.toMatchObject({ success: true, resetToken: "reset-token-12345678901234567890", expiresInMinutes: 15 });
+  });
+
+  it("returns a generic success response for an unknown address without a reset token", async () => {
+    dbMock.requestDemoPasswordReset.mockResolvedValue(undefined);
+    const { ctx } = createPublicContext();
+
+    const response = await appRouter.createCaller(ctx).auth.requestDemoPasswordReset({ email: "unknown@example.com" });
+    expect(response).toEqual({
+      success: true,
+      resetToken: null,
+      expiresInMinutes: null,
+      message: "If this is a demo account, a reset instruction is available.",
+    });
+    expect(response).not.toHaveProperty("resetTokenHash");
   });
 
   it("rejects an expired or invalid reset code", async () => {

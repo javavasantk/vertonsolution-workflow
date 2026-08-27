@@ -10,6 +10,7 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:fastapi-reference": "PYTHONPATH=fastapi_reference python3 -m unittest discover -s fastapi_reference/tests -p 'test_*.py' -v",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

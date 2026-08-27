@@ -218,3 +218,6 @@
 - [x] Prompt 17: Verify normalized Drizzle tables cover users, employee workflow, onboarding, access audits, candidate profiles, private resume metadata, clients, projects, demands, assignments, timesheets, and activities.
 - [x] Prompt 17: Verify a one-off idempotent internal demonstration seed uses stable keys, creates absent records only, and excludes reviews, testimonials, real candidate documents, and confidential client data.
 - [x] Prompt 17: Add or confirm an in-app TiDB/Drizzle provenance note and run schema-contract, seed-idempotency, and prohibited-data tests.
+- [x] Prompt 18: Verify the FastAPI service remains a non-live future migration artifact with typed JWT-protected workforce, access, profile, onboarding, recruiter-progress, and AI contracts.
+- [x] Prompt 18: Preserve the managed Node/tRPC application and authentication runtime as active, without starting an always-on Python service or claiming FastAPI deployment.
+- [x] Prompt 18: Run FastAPI contract tests alongside the active application validation and record the reference-only runtime boundary.

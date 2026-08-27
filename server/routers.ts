@@ -190,6 +190,12 @@ export const appRouter = router({
       }
       return db.getConsultantMyWork(ctx.user.id);
     }),
+    myEngagement: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant My Engagement page.' });
+      }
+      return db.getConsultantMyEngagement(ctx.user.id);
+    }),
   }),
 
   onboarding: router({

@@ -510,6 +510,46 @@ export async function getConsultantMyWork(userId: number) {
   };
 }
 
+/** Narrow own-record projection for the Consultant My Engagement page. */
+export async function getConsultantMyEngagement(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+
+  const [assignmentRows, timesheetRows] = await Promise.all([
+    db.select({
+      id: consultantAssignments.id,
+      projectName: clientProjects.name,
+      clientName: clientAccounts.name,
+      managerName: consultantAssignments.managerName,
+      allocationPercent: consultantAssignments.allocationPercent,
+      assignmentState: consultantAssignments.assignmentState,
+      startDate: consultantAssignments.startDate,
+      endDate: consultantAssignments.endDate,
+      updatedAt: consultantAssignments.updatedAt,
+    }).from(consultantAssignments)
+      .leftJoin(clientProjects, eq(consultantAssignments.projectId, clientProjects.id))
+      .leftJoin(clientAccounts, eq(consultantAssignments.clientId, clientAccounts.id))
+      .where(eq(consultantAssignments.userId, userId))
+      .orderBy(desc(consultantAssignments.updatedAt)),
+    db.select({
+      assignmentId: timesheetEntries.assignmentId,
+      weekEnding: timesheetEntries.weekEnding,
+      hours: timesheetEntries.hours,
+      status: timesheetEntries.status,
+      updatedAt: timesheetEntries.updatedAt,
+    }).from(timesheetEntries)
+      .where(eq(timesheetEntries.userId, userId))
+      .orderBy(desc(timesheetEntries.updatedAt)),
+  ]);
+
+  const activeAssignment = assignmentRows.find(row => row.assignmentState === "active") ?? null;
+  const latestAssignment = activeAssignment ?? assignmentRows[0] ?? null;
+  const latestTimesheet = latestAssignment
+    ? timesheetRows.find(row => row.assignmentId === latestAssignment.id) ?? null
+    : null;
+  return { assignment: latestAssignment, hasActiveAssignment: Boolean(activeAssignment), latestTimesheet };
+}
+
 export async function getDemoPortalSummary(role: PortalSummaryRole, userId: number) {
   const db = await getDb();
   if (!db) return { clients: [], projects: [], demands: [], assignments: [], timesheets: [], activities: [] };

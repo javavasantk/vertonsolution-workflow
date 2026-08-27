@@ -253,3 +253,4 @@
 - [x] Diagnose and repair the persistent live private-storage handoff failure for protected DOCX resume uploads.
 - [x] Implement a protected Consultant My Work dashboard using current session-owned profile, onboarding, assignment, and permitted timesheet signals with explicit data-source and live query states.
 - [x] Replace the representative Consultant onboarding checklist with normalized protected personal tasks, own-task acknowledgement, factual activity capture, and responsive live states.
+- [x] Add a protected Consultant My Engagement page using only current session-owned assignment and permitted time-entry relationship data with neutral follow-up and live query states.

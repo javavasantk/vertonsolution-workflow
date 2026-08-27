@@ -134,6 +134,26 @@ describe("access router", () => {
     summary.mockRestore();
   });
 
+  it("serves Consultant My Engagement only from the session user and excludes restricted fields", async () => {
+    const safeEngagement = {
+      assignment: { id: 4, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: null, endDate: null, updatedAt: new Date() },
+      hasActiveAssignment: true,
+      latestTimesheet: { assignmentId: 4, weekEnding: new Date(), hours: 40, status: "submitted", updatedAt: new Date() },
+    };
+    const engagement = vi.spyOn(db, "getConsultantMyEngagement").mockResolvedValue(safeEngagement as never);
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.myEngagement()).resolves.toEqual(safeEngagement);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.myEngagement()).resolves.toEqual(safeEngagement);
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.myEngagement()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(engagement).toHaveBeenCalledWith(17);
+    expect(safeEngagement.assignment).not.toHaveProperty("userId");
+    expect(safeEngagement.assignment).not.toHaveProperty("commercialRate");
+    expect(safeEngagement.assignment).not.toHaveProperty("clientDocument");
+    expect(safeEngagement).not.toHaveProperty("readinessDetails");
+    expect(safeEngagement).not.toHaveProperty("candidateProfile");
+    engagement.mockRestore();
+  });
+
   it("serves and acknowledges only the session consultant's safe personal onboarding tasks", async () => {
     const safeTasks = [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review your current profile before requesting human review.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date() }];
     const tasks = vi.spyOn(db, "listConsultantOnboardingTasks").mockResolvedValue(safeTasks as never);

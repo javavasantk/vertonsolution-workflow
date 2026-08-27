@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantTaskTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -81,6 +81,11 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     error: null as Error | null,
     refetch: vi.fn(),
   },
+  consultantEngagementTestState: {
+    data: { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } } as any,
+    isLoading: false,
+    error: null as Error | null,
+  },
   consultantTaskTestState: {
     tasks: [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review current personal workflow fields.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date("2026-08-26") }] as any[],
     isLoading: false,
@@ -122,6 +127,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     consultant: {
       myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
+      myEngagement: { useQuery: () => ({ data: consultantEngagementTestState.data, isLoading: consultantEngagementTestState.isLoading, error: consultantEngagementTestState.error, refetch: vi.fn() }) },
     },
     onboarding: {
       myTasks: { useQuery: () => ({ data: consultantTaskTestState.tasks, isLoading: consultantTaskTestState.isLoading, error: consultantTaskTestState.error, refetch: consultantTaskTestState.refetch }) },
@@ -230,6 +236,9 @@ afterEach(() => {
   consultantMyWorkTestState.isLoading = false;
   consultantMyWorkTestState.error = null;
   consultantMyWorkTestState.refetch.mockReset();
+  consultantEngagementTestState.data = { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } };
+  consultantEngagementTestState.isLoading = false;
+  consultantEngagementTestState.error = null;
   consultantTaskTestState.tasks = [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review current personal workflow fields.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date("2026-08-26") }];
   consultantTaskTestState.isLoading = false;
   consultantTaskTestState.error = null;
@@ -266,7 +275,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My engagement", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });
@@ -670,6 +679,35 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     renderRoute("/workspace");
     await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]);
     expect(screen.getByText("No assigned onboarding tasks yet.")).toBeTruthy();
+  });
+
+  it("renders protected Consultant My Engagement data and separates live states", async () => {
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace/my-engagement");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Current assignment" })).toBeTruthy());
+    expect(screen.getByText("Northstar Commerce Cloud · Demo")).toBeTruthy();
+    expect(screen.getByText("Northstar Retail · Demo")).toBeTruthy();
+    expect(screen.getByText("Casey Rivera")).toBeTruthy();
+    expect(screen.getByText(/No time entry, approval, invoice, payroll, payment, or commercial action is available/i)).toBeTruthy();
+    expect(screen.queryByText(/commercial rate|candidate profile|readiness details/i)).toBeNull();
+    cleanup();
+
+    consultantEngagementTestState.isLoading = true;
+    renderRoute("/workspace/my-engagement");
+    expect(screen.getByText("Loading your protected engagement…")).toBeTruthy();
+    cleanup();
+
+    consultantEngagementTestState.isLoading = false;
+    consultantEngagementTestState.error = new Error("Unavailable");
+    renderRoute("/workspace/my-engagement");
+    expect(screen.getByText("Your engagement details are unavailable.")).toBeTruthy();
+    cleanup();
+
+    consultantEngagementTestState.error = null;
+    consultantEngagementTestState.data = { assignment: { assignmentState: "extension_due" }, hasActiveAssignment: false, latestTimesheet: null };
+    renderRoute("/workspace/my-engagement");
+    expect(screen.getByText("No active assignment")).toBeTruthy();
+    expect(screen.getByText(/extension handoff requires human follow-up/i)).toBeTruthy();
   });
 
   it("signs out an authenticated user and returns them to the login screen", async () => {

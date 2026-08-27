@@ -582,6 +582,18 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Alex Morgan — Austin, TX"))).length).toBeGreaterThan(0);
   });
 
+  it("renders bounded project-status database matches inside the authenticated assistant", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.response = { reply: "Northstar is active.", model: "test-model", unavailable: false, lookupKind: "project", records: [{ id: 7, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }] } as any;
+    setAuthenticatedRole("delivery_manager", "Taylor Delivery");
+    renderRoute("/workspace/delivery");
+
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    await user.click(screen.getByRole("button", { name: "Show project status" }));
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Database matches (project)"))).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Northstar Commerce Cloud · Demo — active; Casey Rivera"))).length).toBeGreaterThan(0);
+  });
+
   it("disables floating assistant prompts while a response is being prepared", async () => {
     const user = userEvent.setup();
     workspaceAssistantState.isPending = true;

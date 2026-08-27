@@ -20,12 +20,13 @@ describe("ai.workspaceAssistant database lookups", () => {
   beforeEach(() => { lookupSpy.mockReset(); assistantSpy.mockReset(); });
 
   it("returns recruiter-visible candidate matches through a bounded lookup", async () => {
-    lookupSpy.mockResolvedValue({ kind: "candidate", context: "Candidate: Alex Morgan; skills: TypeScript, React.", records: [{ id: 1, candidateName: "Alex Morgan", skills: ["TypeScript", "React"] }] });
+    lookupSpy.mockResolvedValue({ kind: "candidate", context: "Candidate: Alex Morgan; location: Austin, TX; experience: 6 years; skills: TypeScript, React; review: pending_human_review.", records: [{ id: 1, candidateName: "Alex Morgan", location: "Austin, TX", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending_human_review" }] });
     assistantSpy.mockResolvedValue({ reply: "Alex Morgan is a recruiter-visible match.", model: "test", unavailable: false });
 
     await expect(appRouter.createCaller(createContext("recruiter")).ai.workspaceAssistant({ page: "New-hire progress", prompt: "Find candidate profiles with TypeScript skills" })).resolves.toMatchObject({ lookupKind: "candidate", records: [{ candidateName: "Alex Morgan" }] });
     expect(lookupSpy).toHaveBeenCalledWith("recruiter", "Find candidate profiles with TypeScript skills");
     expect(assistantSpy).toHaveBeenCalledWith(expect.objectContaining({ databaseContext: expect.stringContaining("Alex Morgan") }));
+    expect(JSON.stringify(assistantSpy.mock.calls[0]?.[0]?.databaseContext)).not.toMatch(/resume|upload|readiness|workAuthorization|email|phone/i);
   });
 
   it("returns database-backed project status records through a bounded lookup", async () => {

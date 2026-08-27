@@ -298,6 +298,26 @@ function presentCandidate(row: typeof candidateProfiles.$inferSelect) {
   };
 }
 
+function presentAssistantCandidate(row: typeof candidateProfiles.$inferSelect) {
+  return {
+    id: row.id,
+    candidateName: row.candidateName,
+    location: row.location,
+    yearsExperience: row.yearsExperience,
+    skills: parseJson<string[]>(row.skillsJson, []),
+    reviewState: row.reviewState,
+  };
+}
+
+function presentAssistantProjectStatus(row: typeof clientProjects.$inferSelect) {
+  return {
+    id: row.id,
+    name: row.name,
+    deliveryStatus: row.deliveryStatus,
+    projectManagerName: row.projectManagerName,
+  };
+}
+
 export async function createCandidateProfile(createdByUserId: number, input: CandidateProfileInput, upload?: { fileKey: string; originalFileName: string; mimeType: string; fileSize: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
@@ -358,7 +378,7 @@ export async function getWorkspaceAssistantLookup(role: string, prompt: string) 
       const searchable = `${row.candidateName} ${row.location ?? ""} ${row.skillsJson}`.toLowerCase();
       const terms = normalized.split(/[^a-z0-9+#.]+/).filter(term => term.length >= 3 && !["candidate", "profile", "resume", "show", "find", "with", "skill", "skills", "experience"].includes(term));
       return terms.length === 0 || terms.some(term => searchable.includes(term));
-    }).slice(0, 5).map(presentCandidate);
+    }).slice(0, 5).map(presentAssistantCandidate);
     const context = rows.length ? rows.map(row => `Candidate: ${row.candidateName}; location: ${row.location ?? "not stated"}; experience: ${row.yearsExperience ?? "not stated"}; skills: ${row.skills.join(", ") || "not stated"}; review: ${row.reviewState}.`).join("\n") : "No matching recruiter-visible candidate profiles were found.";
     return { kind: "candidate" as const, records: rows, context };
   }
@@ -366,7 +386,7 @@ export async function getWorkspaceAssistantLookup(role: string, prompt: string) 
     const rows = (await db.select().from(clientProjects).orderBy(desc(clientProjects.updatedAt)).limit(12)).filter(row => {
       const terms = normalized.split(/[^a-z0-9+#.]+/).filter(term => term.length >= 3 && !["project", "delivery", "status", "client", "assignment", "show", "find", "with"].includes(term));
       return terms.length === 0 || terms.some(term => `${row.name} ${row.deliveryStatus} ${row.projectManagerName ?? ""}`.toLowerCase().includes(term));
-    }).slice(0, 5);
+    }).slice(0, 5).map(presentAssistantProjectStatus);
     const context = rows.length ? rows.map(row => `Project: ${row.name}; delivery status: ${row.deliveryStatus}; project manager: ${row.projectManagerName ?? "not assigned"}.`).join("\n") : "No matching project-status records were found.";
     return { kind: "project" as const, records: rows, context };
   }

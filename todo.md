@@ -212,3 +212,6 @@
 - [x] Prompt 15: Verify the bottom-right collapsible assistant renders only inside authenticated workspaces with suggested prompts, bounded input, loading state, and safe unavailable state.
 - [x] Prompt 15: Restrict assistant requests to role, active page (maximum 64 characters), prompt (4–600 characters), and bounded structured lookup context; retain the non-decision safety boundary.
 - [x] Prompt 15: Add and run desktop/mobile tests for placement, authentication gating, prompt bounds, loading, response errors, and safe decision-boundary wording.
+- [x] Prompt 16: Verify deterministic candidate-profile and project-status lookup detection from bounded assistant prompts, with structured lookup kind and short record list rendered in the chat.
+- [x] Prompt 16: Restrict lookup queries and AI context to role-permitted candidate metadata and project status, excluding readiness, raw resumes, upload keys, user-role administration, and unauthorized Finance fields.
+- [x] Prompt 16: Add and run tests for candidate/project matches, unsupported roles, prompt limits, safe lookup context, and browser-style Database matches rendering.

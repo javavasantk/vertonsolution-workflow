@@ -789,7 +789,9 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const assistantPrompts = activeRole === "Recruiter"
     ? ["Find candidate profiles with Java skills", "What is the status of the Northstar project?"]
     : activeRole === "Administrator"
-      ? ["What can I review on this page?", "How are role changes controlled?"]
+      ? ["What can I review on this page?", "What is the status of the Northstar project?"]
+      : ["Account Manager", "Delivery Manager", "Project Manager"].includes(activeRole)
+        ? ["Show project status", "What can I do on this page?"]
       : ["What can I do on this page?", "Who owns the next human review?"];
 
   const sendAssistantMessage = (prompt: string) => {

@@ -94,7 +94,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, getAllowedNavigation, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
+import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, getAllowedNavigation, getRecruiterHandoffIndicator, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
 
 function setAuthenticatedRole(role: string, name = "Avery Morgan") {
   authState.user = {
@@ -188,6 +188,12 @@ describe("Workforce Hub role access", () => {
     expect(resolveWorkspacePage("HR & Compliance", "Readiness")).toBe("Readiness");
     expect(resolveWorkspacePath("Consultant", "/workspace/admin")).toBe("/workspace");
     expect(resolveWorkspacePath("Administrator", "/workspace/admin")).toBe("/workspace/admin");
+  });
+
+  it("labels recruiter handoffs from approved onboarding and assignment workflow values without making a staffing decision", () => {
+    expect(getRecruiterHandoffIndicator({ onboardingStage: "manager_confirmation", managerConfirmed: false, assignmentState: "pending" })).toBe("Manager confirmation needed");
+    expect(getRecruiterHandoffIndicator({ onboardingStage: "ready_for_assignment", managerConfirmed: true, assignmentState: "unassigned" })).toBe("Assignment handoff needed");
+    expect(getRecruiterHandoffIndicator({ onboardingStage: "assigned", managerConfirmed: true, assignmentState: "active" })).toBe("No handoff flagged");
   });
 });
 

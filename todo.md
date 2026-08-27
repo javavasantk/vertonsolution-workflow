@@ -179,3 +179,6 @@
 - [x] Prompt 3: Verify administrator-only workforce-user listing, permission groups, role assignment, and immutable role-change history.
 - [x] Prompt 3: Enforce self-demotion prevention, audit actor/target/prior/next/timestamp capture, and public-demo isolation from production administrative records.
 - [x] Prompt 3: Validate administrator access, role-management UI search/selector/confirmation/audit states, and audit creation with server tests.
+- [x] Prompt 5: Verify recruiter-only launchboard access to protected onboarding stage, progress, manager handoff, project, and assignment-state signals.
+- [x] Prompt 5: Restrict launchboard records to approved onboarding and assignment vocabulary, exclude restricted readiness details, and present human-owned exceptions without staffing automation.
+- [x] Prompt 5: Add and run tests for recruiter authorization, workflow-state values, restricted-detail exclusion, and human-readable handoff indicators.

@@ -218,27 +218,27 @@ export async function submitEmployeeProfileUpdate(userId: number, input: { emplo
   });
 }
 
+export const recruiterLaunchboardSelection = {
+  userId: users.id,
+  name: users.name,
+  email: users.email,
+  role: users.role,
+  onboardingStage: onboardingAssignments.onboardingStage,
+  progressPercent: onboardingAssignments.progressPercent,
+  managerConfirmed: onboardingAssignments.managerConfirmed,
+  projectName: onboardingAssignments.projectName,
+  assignmentState: onboardingAssignments.assignmentState,
+  updatedAt: onboardingAssignments.updatedAt,
+};
+
 export async function listRecruiterNewHireProgress() {
   const db = await getDb();
   if (!db) return [];
 
   return db
-    .select({
-      userId: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      onboardingStage: onboardingAssignments.onboardingStage,
-      progressPercent: onboardingAssignments.progressPercent,
-      managerConfirmed: onboardingAssignments.managerConfirmed,
-      projectName: onboardingAssignments.projectName,
-      assignmentState: onboardingAssignments.assignmentState,
-      updatedAt: onboardingAssignments.updatedAt,
-      readinessStatus: employeeProfiles.workAuthorizationStatus,
-    })
+    .select(recruiterLaunchboardSelection)
     .from(users)
     .leftJoin(onboardingAssignments, eq(onboardingAssignments.userId, users.id))
-    .leftJoin(employeeProfiles, eq(employeeProfiles.userId, users.id))
     .where(inArray(users.role, ["user", "consultant"]))
     .orderBy(desc(onboardingAssignments.updatedAt));
 }

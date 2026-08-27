@@ -3,7 +3,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import * as db from "./db";
 
-function createContext(role: "user" | "admin", userId = 1): TrpcContext {
+function createContext(role: "user" | "admin" | "recruiter", userId = 1): TrpcContext {
   return {
     user: {
       id: userId,
@@ -55,6 +55,17 @@ describe("access router", () => {
     const caller = appRouter.createCaller(createContext("user"));
 
     await expect(caller.recruiting.newHireProgress()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows recruiter launchboard access only to safe onboarding and assignment workflow fields", async () => {
+    const safeRows = [{ userId: 8, name: "New Hire", email: "hire@vertonsolutions.com", role: "consultant", onboardingStage: "manager_confirmation", progressPercent: 80, managerConfirmed: false, projectName: "Client Project", assignmentState: "pending", updatedAt: new Date() }];
+    const progress = vi.spyOn(db, "listRecruiterNewHireProgress").mockResolvedValue(safeRows as never);
+    const caller = appRouter.createCaller(createContext("recruiter", 4));
+
+    const result = await caller.recruiting.newHireProgress();
+    expect(result).toEqual(safeRows);
+    expect(result[0]).not.toHaveProperty("readinessStatus");
+    progress.mockRestore();
   });
 
   it("denies role-restricted AI tasks before reaching the model provider", async () => {

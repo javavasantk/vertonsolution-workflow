@@ -138,3 +138,33 @@
   .text-balance { text-wrap: balance; }
 }
 
+/* The protected sign-in surface reuses the portal's navy, blue, and soft-sky palette.
+   :has(.verton-grid) scopes these overrides to the login/recovery composition only. */
+body:has(.verton-grid) { background: #f7fbff; }
+body:has(.verton-grid) [class~="bg-[#09090e]"] { background: #f7fbff !important; color: #294969 !important; }
+body:has(.verton-grid) [class~="bg-[#0e0c14]"] { background: #09264b !important; }
+body:has(.verton-grid) [class~="border-[#322d3e]"] { border-color: rgb(169 196 226 / 0.45) !important; }
+body:has(.verton-grid) [class~="bg-[#18141f]/80"] { background: rgb(13 54 96 / 0.78) !important; }
+body:has(.verton-grid) [class~="text-[#c7a4ff]"] { color: #83c7ef !important; }
+body:has(.verton-grid) [class~="text-[#d8cfdf]/75"],
+body:has(.verton-grid) [class~="text-[#c9bfd1]/70"] { color: rgb(219 240 255 / 0.78) !important; }
+
+body:has(.verton-grid) [class~="bg-[#15121b]"] { background: #ffffff !important; }
+body:has(.verton-grid) [class~="bg-[#241b31]"] { background: #eaf3ff !important; color: #0b57d0 !important; }
+body:has(.verton-grid) [class~="text-[#b9afc5]"] { color: #7185a0 !important; }
+body:has(.verton-grid) [class~="text-[#d8cfdf]"] { color: #466381 !important; }
+body:has(.verton-grid) [class~="text-[#938a9d]"] { color: #7185a0 !important; }
+
+body:has(.verton-grid) [class~="border-[#393143]"] { border-color: #d8e4f0 !important; }
+body:has(.verton-grid) [class~="bg-[#1b1723]"] { background: #f8fbff !important; }
+body:has(.verton-grid) [class~="text-[#e6d8ff]"] { color: #315678 !important; }
+body:has(.verton-grid) [class~="bg-[#0f0d14]"] { background: #f8fbff !important; }
+body:has(.verton-grid) [class~="text-[#f2edf7]"] { color: #365575 !important; }
+body:has(.verton-grid) [class~="placeholder:text-[#756d80]"]::placeholder { color: #7890aa !important; }
+body:has(.verton-grid) [class~="focus:border-[#ad86e8]"]:focus { border-color: #0b57d0 !important; }
+body:has(.verton-grid) [class~="focus:ring-[#5b3e7c]/30"]:focus { --tw-ring-color: rgb(11 87 208 / 0.16) !important; }
+
+body:has(.verton-grid) [class~="bg-[#b78df1]"] { background: #0b57d0 !important; color: #ffffff !important; box-shadow: 0 8px 22px rgb(11 87 208 / 0.2) !important; }
+body:has(.verton-grid) [class~="hover:bg-[#c4a1f5]"]:hover { background: #094db9 !important; }
+body:has(.verton-grid) [class~="text-[#16111e]"] { color: #ffffff !important; }
+body:has(.verton-grid) [class~="hover:border-[#8d70b8]"]:hover { border-color: #86b8e6 !important; }

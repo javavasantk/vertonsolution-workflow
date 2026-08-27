@@ -166,7 +166,7 @@ export const appRouter = router({
   }),
 
   portal: router({
-    demoSummary: protectedProcedure.query(() => db.getDemoPortalSummary()),
+    demoSummary: protectedProcedure.query(({ ctx }) => db.getDemoPortalSummary(ctx.user.role as db.PortalSummaryRole, ctx.user.id)),
     updateProject: protectedProcedure.input(projectInlineUpdateSchema).mutation(async ({ ctx, input }) => {
       if (!["admin", "account_manager", "delivery_manager", "project_manager"].includes(ctx.user.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Your assigned role cannot edit project records." });

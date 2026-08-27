@@ -235,3 +235,4 @@
 - [x] Compile all prior user-provided Workforce Hub implementation prompts into a single organized reference with current-status boundaries.
 - [x] Implement Readiness R1 and R2: server-first safe profile projection, role/ownership enforcement, and clear live-versus-representative query states.
 - [x] Implement Onboarding O1 and O2: protected launchboard signals with safe fields and query states, plus clearly labeled representative checklist and reminder UI.
+- [x] Implement Delivery D1 and D2: role-safe protected summary projections and query states, plus confirmed role-limited project curation with access-matrix coverage.

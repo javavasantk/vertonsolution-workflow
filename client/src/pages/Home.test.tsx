@@ -50,6 +50,7 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
   portalTestState: {
     projectUpdateMutate: vi.fn(),
     summaryRefetch: vi.fn(),
+    projectUpdateError: false,
   },
   readinessTestState: {
     records: [] as any[],
@@ -93,7 +94,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     portal: {
       demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, assignmentId: 1, status: "approved", hours: 40, note: "Internal demonstration time entry", weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
-      updateProject: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { portalTestState.projectUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
+      updateProject: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { portalTestState.projectUpdateMutate(input); if (portalTestState.projectUpdateError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false }) },
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: newHireTestState.records, isLoading: newHireTestState.isLoading, error: newHireTestState.error, refetch: vi.fn() }) },
@@ -171,6 +172,7 @@ afterEach(() => {
   adminTestState.roleChangeMutate.mockReset();
   portalTestState.projectUpdateMutate.mockReset();
   portalTestState.summaryRefetch.mockReset();
+  portalTestState.projectUpdateError = false;
   readinessTestState.records = [];
   readinessTestState.isLoading = false;
   readinessTestState.error = null;
@@ -610,11 +612,27 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.selectOptions(screen.getByLabelText("Edit project status"), "at_risk");
     await user.clear(screen.getByLabelText("Edit project manager"));
     await user.type(screen.getByLabelText("Edit project manager"), "Taylor Nguyen");
-    await user.click(screen.getByRole("button", { name: "Save project edit" }));
+    await user.click(screen.getByRole("button", { name: "Review project edit" }));
+    expect(portalTestState.projectUpdateMutate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm project edit" }));
 
     expect(portalTestState.projectUpdateMutate).toHaveBeenCalledWith({ projectId: 1, name: "Northstar Delivery Cloud · Demo", deliveryStatus: "at_risk", projectManagerName: "Taylor Nguyen" });
     expect(portalTestState.summaryRefetch).toHaveBeenCalledOnce();
     expect(screen.queryByLabelText("Edit project name")).toBeNull();
+  });
+
+  it("shows a clear error after a confirmed project curation save fails", async () => {
+    const user = userEvent.setup();
+    portalTestState.projectUpdateError = true;
+    setAuthenticatedRole("delivery_manager", "Taylor Delivery Manager");
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Delivery" })[0]!);
+    await user.click(screen.getByRole("button", { name: "Edit Northstar Commerce Cloud · Demo" }));
+    await user.click(screen.getByRole("button", { name: "Review project edit" }));
+    await user.click(screen.getByRole("button", { name: "Confirm project edit" }));
+
+    expect(screen.getByText("The project update could not be saved. Review your authorized role and try again.")).toBeTruthy();
+    expect(portalTestState.summaryRefetch).not.toHaveBeenCalled();
   });
 
   it("keeps a consultant project delivery view read-only", async () => {

@@ -408,7 +408,9 @@ export async function getWorkspaceAssistantLookup(role: string, prompt: string) 
   return { kind: "none" as const, records: [], context: "No database lookup applies to this question. Provide workflow guidance only." };
 }
 
-export async function getDemoPortalSummary() {
+export type PortalSummaryRole = "admin" | "recruiter" | "hr_compliance" | "account_manager" | "delivery_manager" | "project_manager" | "finance" | "consultant" | "user";
+
+export async function getDemoPortalSummary(role: PortalSummaryRole, userId: number) {
   const db = await getDb();
   if (!db) return { clients: [], projects: [], demands: [], assignments: [], timesheets: [], activities: [] };
   const [clients, projects, demands, assignments, timesheets, activities] = await Promise.all([
@@ -419,14 +421,23 @@ export async function getDemoPortalSummary() {
     db.select().from(timesheetEntries).orderBy(desc(timesheetEntries.updatedAt)),
     db.select().from(operationalActivities).orderBy(desc(operationalActivities.occurredAt)),
   ]);
-  return {
-    clients,
-    projects: projects.map(project => ({ ...project, technologyStack: parseJson<string[]>(project.technologyStackJson, []) })),
-    demands: demands.map(demand => ({ ...demand, skills: parseJson<string[]>(demand.skillsJson, []) })),
-    assignments,
-    timesheets,
-    activities,
-  };
+  const clientRows = clients.map(client => ({ id: client.id, name: client.name, industry: client.industry, location: client.location, status: client.status }));
+  const projectRows = projects.map(project => ({ id: project.id, clientId: project.clientId, name: project.name, deliveryStatus: project.deliveryStatus, projectManagerName: project.projectManagerName }));
+  const demandRows = demands.map(demand => ({ id: demand.id, clientId: demand.clientId, title: demand.title, priority: demand.priority, openings: demand.openings, status: demand.status, skills: parseJson<string[]>(demand.skillsJson, []) }));
+  const assignmentRows = assignments.map(assignment => ({ id: assignment.id, userId: assignment.userId, clientId: assignment.clientId, projectId: assignment.projectId, managerName: assignment.managerName, allocationPercent: assignment.allocationPercent, assignmentState: assignment.assignmentState, startDate: assignment.startDate, endDate: assignment.endDate, billable: assignment.billable }));
+  const timeRows = timesheets.map(entry => ({ id: entry.id, assignmentId: entry.assignmentId, weekEnding: entry.weekEnding, hours: entry.hours, status: entry.status, note: entry.note }));
+  const activityRows = activities.map(activity => ({ id: activity.id, entityType: activity.entityType, title: activity.title, detail: activity.detail, activityState: activity.activityState, occurredAt: activity.occurredAt }));
+  const deliveryRoles = ["admin", "account_manager", "delivery_manager", "project_manager"];
+  if (deliveryRoles.includes(role)) return { clients: clientRows, projects: projectRows, demands: demandRows, assignments: assignmentRows, timesheets: timeRows, activities: activityRows };
+  if (role === "consultant" || role === "user") {
+    const scopedAssignments = assignmentRows.filter(assignment => assignment.userId === userId);
+    const projectIds = new Set(scopedAssignments.map(assignment => assignment.projectId));
+    const clientIds = new Set(scopedAssignments.map(assignment => assignment.clientId));
+    const assignmentIds = new Set(scopedAssignments.map(assignment => assignment.id));
+    return { clients: clientRows.filter(client => clientIds.has(client.id)), projects: projectRows.filter(project => projectIds.has(project.id)), demands: [], assignments: scopedAssignments, timesheets: timeRows.filter(entry => entry.assignmentId && assignmentIds.has(entry.assignmentId)), activities: [] };
+  }
+  if (role === "finance") return { clients: [], projects: projectRows, demands: [], assignments: assignmentRows, timesheets: timeRows, activities: [] };
+  return { clients: [], projects: [], demands: [], assignments: [], timesheets: [], activities: [] };
 }
 
 export async function createResumeUploadSession(userId: number, input: { originalFileName: string; mimeType: string; fileSize: number }) {

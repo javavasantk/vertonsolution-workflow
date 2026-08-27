@@ -49,7 +49,7 @@ describe("portal.demoSummary", () => {
       clients: [{ name: "Northstar Retail · Demo" }],
       activities: [{ title: "Demo assignment extension review" }],
     });
-    expect(getDemoPortalSummarySpy).toHaveBeenCalledOnce();
+    expect(getDemoPortalSummarySpy).toHaveBeenCalledWith("consultant", 12);
   });
 
   it("allows every delivery-authorized role to update projects and rejects read-only roles", async () => {

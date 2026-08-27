@@ -231,3 +231,4 @@
 - [x] Align the protected login page color theme with the existing Workforce Hub portal while preserving secure authentication behavior and accessibility.
 - [x] Add a portal-style loading animation to the protected login button while credentials are submitting.
 - [x] Identify verified remaining existing-capability gaps in the authenticated Overview and Talent Pipeline pages and deliver implementation prompts without expanding scope.
+- [x] Consolidate remaining verified existing-capability implementation prompts for all users across Readiness, Onboarding, Delivery, Time & Billing, Controls, Admin Center, My Profile, and New-Hire Progress.

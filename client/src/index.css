@@ -168,3 +168,9 @@ body:has(.verton-grid) [class~="bg-[#b78df1]"] { background: #0b57d0 !important;
 body:has(.verton-grid) [class~="hover:bg-[#c4a1f5]"]:hover { background: #094db9 !important; }
 body:has(.verton-grid) [class~="text-[#16111e]"] { color: #ffffff !important; }
 body:has(.verton-grid) [class~="hover:border-[#8d70b8]"]:hover { border-color: #86b8e6 !important; }
+
+/* The credential-login lockup is dark on desktop but moves onto a light canvas on mobile. */
+@media (max-width: 1023px) {
+  body:has(.verton-grid) .lg\:hidden .brand-logo-dark .brand-logo-title { color: #12345a !important; }
+  body:has(.verton-grid) .lg\:hidden .brand-logo-dark .brand-logo-subtitle { color: #5a7190 !important; }
+}

@@ -536,6 +536,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     setUnauthenticated();
     renderRoute("/login");
 
+    expect(screen.getAllByAltText("Verton Solution Inc. company logo").length).toBeGreaterThan(0);
     expect(screen.queryByText("Recruiter")).toBeNull();
     await user.type(screen.getByLabelText("Email address"), "recruiter@demo.vertonsolutions.com");
     await user.type(screen.getByLabelText("Password"), "VertonDemo!2026");

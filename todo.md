@@ -168,3 +168,8 @@
 - [x] Defer Railway-region alignment until external TiDB production validation resumes; do not route current production traffic to the Railway preview.
 - [x] Preserve the Manus deployment as the authenticated production portal and retain Railway only as a FastAPI health-checked migration preview, per the user-selected no-cutover posture.
 - [x] Defer external TiDB activation, data bootstrap, and custom-domain migration until a secure Railway-to-database connectivity path is funded and configured.
+- [x] Retire the external Railway/TiDB cutover path at the owner’s direction and preserve Manus-managed database, authentication, storage, AI, and production routing as the active platform.
+- [x] Apply the next user-provided existing-capability implementation prompt using only managed Manus services and established Workforce Hub safeguards.
+- [x] Prompt 1: Verify the public protected-access login excludes role directories, credentials, and workspace content before authentication.
+- [x] Prompt 1: Enforce managed cookie-backed sessions, server-side role/API authorization, and safe unauthorized deep-link recovery for the approved role set.
+- [x] Prompt 1: Add and run unit tests for unauthenticated rejection, role-scoped navigation, sign-out, and deep-link recovery.

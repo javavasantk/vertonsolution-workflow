@@ -116,6 +116,12 @@ export function getRoleKeyFromStoredRole(role?: string | null): RoleKey {
   return roleMap[role ?? "consultant"] ?? "Consultant";
 }
 
+export const workspacePagesByPath: Record<string, string> = {
+  "/workspace/admin": "Admin center",
+  "/workspace/profile": "My profile",
+  "/workspace/recruiting": "New-hire progress",
+};
+
 const allRoles = roles.map(role => role.name);
 export const navItems: NavItem[] = [
   { label: "Overview", icon: Grid2X2, roles: allRoles },
@@ -153,6 +159,11 @@ export function getAllowedNavigation(role: RoleKey) {
 
 export function resolveWorkspacePage(role: RoleKey, requestedPage: string) {
   return getAllowedNavigation(role).some(item => item.label === requestedPage) ? requestedPage : "Overview";
+}
+
+export function resolveWorkspacePath(role: RoleKey, requestedPath: string) {
+  const requestedPage = workspacePagesByPath[requestedPath] ?? "Overview";
+  return resolveWorkspacePage(role, requestedPage) === requestedPage ? requestedPath : "/workspace";
 }
 
 export function countCompletedOnboardingTasks(tasks: Array<{ done: boolean }>) {
@@ -409,7 +420,7 @@ function CredentialLogin({ openWorkspace }: { openWorkspace: () => void }) {
   return <div className="min-h-screen bg-[#09090e] text-[#f5f1e7]"><div className="grid min-h-screen lg:grid-cols-[.95fr_1.05fr]"><section className="relative hidden overflow-hidden bg-[#0e0c14] px-10 py-12 text-[#f7f3e9] lg:flex lg:flex-col lg:justify-between"><div className="verton-grid absolute inset-0 opacity-35" /><div className="relative"><Logo dark /><p className="mt-20 font-mono-ui text-[10px] font-bold uppercase tracking-[.18em] text-[#c7a4ff]">Secure workforce operations</p><h1 className="mt-4 max-w-xl font-serif text-6xl font-semibold tracking-[-.065em]">One secure entry point for your assigned work.</h1><p className="mt-6 max-w-lg text-sm leading-7 text-[#d8cfdf]/75">Workforce Hub protects sensitive operations with account-based access and role-scoped workspaces.</p></div><div className="relative rounded-2xl border border-[#322d3e] bg-[#18141f]/80 p-4"><ShieldCheck className="text-[#c7a4ff]" size={18} /><p className="mt-3 text-xs font-bold">Controlled access</p><p className="mt-1 text-[10px] leading-4 text-[#c9bfd1]/70">Your workspace and available actions are determined after sign-in.</p></div></section><section className="flex items-center justify-center px-5 py-10 sm:px-8"><div className="w-full max-w-md"><div className="lg:hidden"><Logo dark /></div><div className="mt-10 rounded-[26px] border border-[#322d3e] bg-[#15121b] p-6 shadow-[0_28px_80px_rgba(0,0,0,.42)] sm:mt-0 sm:p-8"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#241b31] text-[#c7a4ff]">{mode === "login" ? <LockKeyhole size={19} /> : <Mail size={19} />}</div><p className="mt-6 font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#c7a4ff]">Protected member access</p><h2 className="mt-2 text-3xl font-extrabold tracking-[-.055em]">{heading}</h2><p className="mt-3 text-sm leading-6 text-[#b9afc5]">{description}</p>{mode === "login" && <><button onClick={() => startLogin()} className="mt-5 rounded-xl border border-[#393143] bg-[#1b1723] px-3.5 py-2.5 text-xs font-bold text-[#e6d8ff] shadow-sm transition hover:border-[#8d70b8]">Use approved identity <ArrowRight className="ml-1 inline" size={14} /></button><form onSubmit={event => { event.preventDefault(); loginMutation.mutate({ email, password }); }} className="mt-5 space-y-3"><label className="block text-xs font-bold text-[#d8cfdf]">Email address<input aria-label="Email address" value={email} onChange={event => setEmail(event.target.value)} type="email" required autoComplete="email" className="mt-1.5 w-full rounded-xl border border-[#393143] bg-[#0f0d14] px-3 py-2.5 text-xs font-semibold text-[#f2edf7] outline-none placeholder:text-[#756d80] focus:border-[#ad86e8] focus:ring-4 focus:ring-[#5b3e7c]/30" /></label><label className="block text-xs font-bold text-[#d8cfdf]">Password<input aria-label="Password" value={password} onChange={event => setPassword(event.target.value)} type="password" required autoComplete="current-password" className="mt-1.5 w-full rounded-xl border border-[#393143] bg-[#0f0d14] px-3 py-2.5 text-xs font-semibold text-[#f2edf7] outline-none placeholder:text-[#756d80] focus:border-[#ad86e8] focus:ring-4 focus:ring-[#5b3e7c]/30" /></label><button disabled={loginMutation.isPending} className="w-full rounded-xl bg-[#b78df1] px-4 py-3 text-xs font-bold text-[#16111e] shadow-[0_8px_22px_rgba(183,141,241,.20)] hover:bg-[#c4a1f5] disabled:opacity-35">{loginMutation.isPending ? "Signing in…" : "Enter Workforce Hub"} <ArrowRight className="ml-1 inline" size={14} /></button><button type="button" onClick={() => { setMessage(""); setMode("forgot"); }} className="w-full text-center text-xs font-bold text-[#c7a4ff]">Forgot password?</button></form></>}{mode === "forgot" && <form onSubmit={event => { event.preventDefault(); requestResetMutation.mutate({ email }); }} className="mt-5 space-y-3"><label className="block text-xs font-bold text-[#d8cfdf]">Email address<input aria-label="Reset email" value={email} onChange={event => setEmail(event.target.value)} type="email" required autoComplete="email" className="mt-1.5 w-full rounded-xl border border-[#393143] bg-[#0f0d14] px-3 py-2.5 text-xs font-semibold text-[#f2edf7] outline-none placeholder:text-[#756d80] focus:border-[#ad86e8] focus:ring-4 focus:ring-[#5b3e7c]/30" /></label><button disabled={requestResetMutation.isPending} className="w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-xs font-bold text-white disabled:opacity-35">{requestResetMutation.isPending ? "Preparing code…" : "Generate reset code"}</button><button type="button" onClick={() => setMode("login")} className="w-full text-center text-xs font-bold text-[#0b57d0]">Return to sign in</button></form>}{mode === "reset" && <form onSubmit={event => { event.preventDefault(); if (newPassword !== confirmPassword) { setMessage("Passwords do not match."); return; } resetMutation.mutate({ token: resetToken, password: newPassword }); }} className="mt-5 space-y-3"><label className="block text-xs font-bold text-[#d8cfdf]">Reset code<input aria-label="Reset code" value={resetToken} onChange={event => setResetToken(event.target.value)} required className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none" /></label><label className="block text-xs font-bold text-[#d8cfdf]">New password<input aria-label="New password" value={newPassword} onChange={event => setNewPassword(event.target.value)} type="password" minLength={12} required autoComplete="new-password" className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none" /></label><label className="block text-xs font-bold text-[#d8cfdf]">Confirm password<input aria-label="Confirm password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} type="password" minLength={12} required autoComplete="new-password" className="mt-1.5 w-full rounded-xl border border-[#d8e4f0] bg-[#f8fbff] px-3 py-2.5 text-xs font-semibold text-[#365575] outline-none" /></label><button disabled={resetMutation.isPending} className="w-full rounded-xl bg-[#0b57d0] px-4 py-3 text-xs font-bold text-white disabled:opacity-35">{resetMutation.isPending ? "Resetting…" : "Save new password"}</button></form>}{(loginMutation.error || requestResetMutation.error || resetMutation.error) && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">{loginMutation.error?.message || requestResetMutation.error?.message || resetMutation.error?.message}</p>}{message && <p className="mt-4 rounded-xl bg-[#effaf7] p-3 text-xs font-semibold text-[#267669]">{message}</p>}<p className="mt-6 text-center text-[10px] leading-4 text-[#938a9d]">If you need access, contact your Workforce Hub administrator.</p></div></div></section></div></div>;
 }
 
-function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspace: () => void; requestedPage?: string }) {
+function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = "/workspace" }: { exitWorkspace: () => void; requestedPage?: string; requestedPath?: string }) {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const previewMode = false;
   const activeRole = getRoleKeyFromStoredRole(user?.role);
@@ -501,6 +512,18 @@ function Workspace({ exitWorkspace, requestedPage = "Overview" }: { exitWorkspac
   useEffect(() => {
     setActivePage(resolveWorkspacePage(activeRole, requestedPage));
   }, [activeRole, requestedPage]);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated && requestedPath !== "/login") {
+      setLocation("/login");
+      return;
+    }
+
+    if (isAuthenticated) {
+      const allowedPath = resolveWorkspacePath(activeRole, requestedPath);
+      if (allowedPath !== requestedPath) setLocation(allowedPath);
+    }
+  }, [activeRole, isAuthenticated, loading, requestedPath, setLocation]);
 
   useEffect(() => {
     setOnboarding(onboardingPersona.tasks.map(task => ({ ...task })));
@@ -756,12 +779,7 @@ export default function Home() {
   const [location, setLocation] = useLocation();
   const inLogin = location === "/login" || location === "/";
   const inWorkspace = location.startsWith("/workspace");
-  const requestedWorkspacePages: Record<string, string> = {
-    "/workspace/admin": "Admin center",
-    "/workspace/profile": "My profile",
-    "/workspace/recruiting": "New-hire progress",
-  };
-  if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} requestedPage={requestedWorkspacePages[location] ?? "Overview"} />;
+  if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} requestedPage={workspacePagesByPath[location] ?? "Overview"} requestedPath={location} />;
   if (inLogin) return <CredentialLogin openWorkspace={() => setLocation("/workspace")} />;
   return <CredentialLogin openWorkspace={() => setLocation("/workspace")} />;
 }

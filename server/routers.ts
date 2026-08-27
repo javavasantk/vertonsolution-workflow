@@ -103,14 +103,6 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => publicUser(opts.ctx.user)),
-    demoAccounts: publicProcedure.query(async () => {
-      const accounts = await db.listDemoAccounts();
-      return {
-        accounts,
-        sharedPassword: db.demoCredentialDetails.password,
-        label: "Public demo credentials only — never use for production access.",
-      };
-    }),
     demoLogin: publicProcedure.input(demoLoginSchema).mutation(async ({ ctx, input }) => {
       const user = await db.authenticateDemoCredentials(input.email, input.password);
       if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Demo email or password is incorrect." });

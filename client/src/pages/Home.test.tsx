@@ -90,7 +90,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, getAllowedNavigation, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage } from "./Home";
+import Home, { buildCandidateResumeCsv, buildCandidateResumePdfText, countCompletedOnboardingTasks, getAllowedNavigation, getRoleKeyFromStoredRole, isFinanceRole, resolveWorkspacePage, resolveWorkspacePath } from "./Home";
 
 function setAuthenticatedRole(role: string, name = "Avery Morgan") {
   authState.user = {
@@ -119,7 +119,7 @@ function setUnauthenticated() {
   authState.logout = vi.fn();
 }
 
-function renderRoute(path: "/" | "/login" | "/workspace" | "/workspace/recruiting") {
+function renderRoute(path: string) {
   window.history.pushState({}, "", path);
   return render(<Home />);
 }
@@ -180,6 +180,8 @@ describe("Workforce Hub role access", () => {
   it("falls back to the overview when an account role requests an unauthorized workspace", () => {
     expect(resolveWorkspacePage("Consultant", "Readiness")).toBe("Overview");
     expect(resolveWorkspacePage("HR & Compliance", "Readiness")).toBe("Readiness");
+    expect(resolveWorkspacePath("Consultant", "/workspace/admin")).toBe("/workspace");
+    expect(resolveWorkspacePath("Administrator", "/workspace/admin")).toBe("/workspace/admin");
   });
 });
 
@@ -200,6 +202,24 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
     expect(screen.getByText("Sign in to Workforce Hub.")).toBeTruthy();
     expect(screen.queryByText("Good morning, Verton.")).toBeNull();
+  });
+
+  it("returns an unauthenticated workspace deep link to the secure login route", async () => {
+    setUnauthenticated();
+    renderRoute("/workspace/admin");
+
+    expect(screen.getByText("Sign in to Workforce Hub.")).toBeTruthy();
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
+    expect(screen.queryByText("Administrator workspace")).toBeNull();
+  });
+
+  it("returns an authenticated user from an unauthorized workspace deep link to their allowed overview", async () => {
+    setAuthenticatedRole("consultant", "Jamie Consultant");
+    renderRoute("/workspace/admin");
+
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace"));
+    expect(screen.getByText("Good morning, Verton.")).toBeTruthy();
+    expect(screen.queryByText("Administrator workspace")).toBeNull();
   });
 
   it("renders only consultant-authorized navigation for a consultant account", () => {

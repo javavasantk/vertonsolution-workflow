@@ -73,11 +73,9 @@ describe("demo credential authentication", () => {
     createSessionTokenSpy.mockReset();
   });
 
-  it("returns the role directory and the public demonstration password", async () => {
-    dbMock.listDemoAccounts.mockResolvedValue([{ id: 2, name: "Riley Brooks", email: "recruiter@demo.vertonsolutions.com", role: "recruiter" }]);
-    const { ctx } = createPublicContext();
-
-    await expect(appRouter.createCaller(ctx).auth.demoAccounts()).resolves.toMatchObject({ sharedPassword: "VertonDemo!2026", accounts: [{ role: "recruiter" }] });
+  it("does not expose a public role directory or shared demonstration password procedure", () => {
+    const procedures = appRouter._def.procedures as Record<string, unknown>;
+    expect(procedures).not.toHaveProperty("auth.demoAccounts");
   });
 
   it("accepts valid demo credentials, writes a short demo session, and omits password metadata", async () => {

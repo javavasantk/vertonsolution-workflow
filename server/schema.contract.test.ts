@@ -8,6 +8,8 @@ describe("Workforce Hub normalized data foundation", () => {
       "users",
       "employee_profiles",
       "onboarding_assignments",
+      "consultant_onboarding_tasks",
+      "consultant_onboarding_task_activities",
       "access_role_changes",
       "candidate_profiles",
       "resume_uploads",

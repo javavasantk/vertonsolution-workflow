@@ -94,6 +94,13 @@ try {
   ];
   for (const row of onboarding) await db.execute("INSERT INTO onboarding_assignments (userId, onboardingStage, progressPercent, managerConfirmed, projectName, assignmentState) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE onboardingStage = VALUES(onboardingStage), progressPercent = VALUES(progressPercent), managerConfirmed = VALUES(managerConfirmed), projectName = VALUES(projectName), assignmentState = VALUES(assignmentState)", row);
 
+  const consultantTasks = [
+    ["demo-consultant-task-profile", consultantId, "Review your workforce profile", "profile", "Review the employment-type and status note fields in your personal profile before submitting a human-review request when needed.", "consultant", daysFromNow(4), "pending"],
+    ["demo-consultant-task-orientation", consultantId, "Attend delivery orientation", "orientation", "Review the engagement orientation information with the designated human owner for your assigned delivery context.", "manager", daysFromNow(7), "pending"],
+    ["demo-consultant-task-access", consultantId, "Confirm equipment access handoff", "equipment_access", "Acknowledge that you received the human-owned equipment access handoff details. This does not provision access.", "it", daysFromNow(10), "pending"],
+  ];
+  for (const task of consultantTasks) await db.execute("INSERT INTO consultant_onboarding_tasks (demoKey, userId, title, taskType, description, ownerGroup, dueDate, consultantCompletionState) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE demoKey = VALUES(demoKey)", task);
+
   const timeEntries = [
     ["demo-timesheet-consultant", consultantId, consultantAssignment.id, daysFromNow(-3), 40, "submitted", "Demonstration weekly delivery record."],
     ["demo-timesheet-finance", financeId, financeAssignment.id, daysFromNow(-3), 36, "exception", "Demonstration exception awaiting manager confirmation."],

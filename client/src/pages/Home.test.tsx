@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantTaskTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -81,6 +81,14 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     error: null as Error | null,
     refetch: vi.fn(),
   },
+  consultantTaskTestState: {
+    tasks: [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review current personal workflow fields.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date("2026-08-26") }] as any[],
+    isLoading: false,
+    error: null as Error | null,
+    mutate: vi.fn(),
+    mutationError: null as Error | null,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -114,6 +122,10 @@ vi.mock("@/lib/trpc", () => ({
     },
     consultant: {
       myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
+    },
+    onboarding: {
+      myTasks: { useQuery: () => ({ data: consultantTaskTestState.tasks, isLoading: consultantTaskTestState.isLoading, error: consultantTaskTestState.error, refetch: consultantTaskTestState.refetch }) },
+      acknowledgeTask: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { consultantTaskTestState.mutate(input); options?.onSuccess?.(); }, isPending: false, error: consultantTaskTestState.mutationError }) },
     },
     portal: {
       demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, assignmentId: 1, status: "approved", hours: 40, note: "Internal demonstration time entry", weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
@@ -218,6 +230,12 @@ afterEach(() => {
   consultantMyWorkTestState.isLoading = false;
   consultantMyWorkTestState.error = null;
   consultantMyWorkTestState.refetch.mockReset();
+  consultantTaskTestState.tasks = [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review current personal workflow fields.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date("2026-08-26") }];
+  consultantTaskTestState.isLoading = false;
+  consultantTaskTestState.error = null;
+  consultantTaskTestState.mutate.mockReset();
+  consultantTaskTestState.mutationError = null;
+  consultantTaskTestState.refetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -615,17 +633,43 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.queryByRole("button", { name: /export audit|approve/i })).toBeNull();
   });
 
-  it("shows the consultant onboarding checklist as a noninteractive representative reference", async () => {
+  it("renders and acknowledges protected consultant personal tasks without showing the representative checklist", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("consultant", "Riley Consultant");
     renderRoute("/workspace");
 
     await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]);
-    expect(screen.getByText("Representative onboarding interface")).toBeTruthy();
-    expect(screen.getByText(/not persisted onboarding tasks/)).toBeTruthy();
-    expect(screen.getByText(/Reminder delivery is not enabled/)).toBeTruthy();
+    expect(screen.getByText("Protected personal tasks")).toBeTruthy();
+    expect(screen.getByText("Review your workforce profile")).toBeTruthy();
+    expect(screen.getByText(/acknowledgement records that you have seen a task/i)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Acknowledge task" }));
+    expect(consultantTaskTestState.mutate).toHaveBeenCalledWith({ taskId: 41 });
+    expect(consultantTaskTestState.refetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Representative onboarding interface")).toBeNull();
     expect(screen.queryByRole("button", { name: "Send reminder" })).toBeNull();
-    expect(countCompletedOnboardingTasks([{ done: true }, { done: false }, { done: true }])).toBe(2);
+  });
+
+  it("separates loading, unavailable, and successful-empty states for consultant personal tasks", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    consultantTaskTestState.isLoading = true;
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]);
+    expect(screen.getByText("Loading your assigned onboarding tasks…")).toBeTruthy();
+    cleanup();
+
+    consultantTaskTestState.isLoading = false;
+    consultantTaskTestState.error = new Error("Unavailable");
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]);
+    expect(screen.getByText("Your personal onboarding tasks are unavailable.")).toBeTruthy();
+    cleanup();
+
+    consultantTaskTestState.error = null;
+    consultantTaskTestState.tasks = [];
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Onboarding" })[0]);
+    expect(screen.getByText("No assigned onboarding tasks yet.")).toBeTruthy();
   });
 
   it("signs out an authenticated user and returns them to the login screen", async () => {

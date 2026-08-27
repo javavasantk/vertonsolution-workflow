@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, consultantOnboardingTaskActivities, consultantOnboardingTasks, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -260,6 +260,44 @@ export async function listRecruiterNewHireProgress() {
     .from(onboardingAssignments)
     .innerJoin(users, eq(onboardingAssignments.userId, users.id))
     .orderBy(desc(onboardingAssignments.updatedAt));
+}
+
+function presentConsultantOnboardingTask(row: typeof consultantOnboardingTasks.$inferSelect) {
+  return {
+    id: row.id,
+    title: row.title,
+    taskType: row.taskType,
+    description: row.description,
+    ownerGroup: row.ownerGroup,
+    dueDate: row.dueDate,
+    consultantCompletionState: row.consultantCompletionState,
+    acknowledgedAt: row.acknowledgedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/** Own-record task projection. It intentionally omits cross-user task data and any readiness, document, or assignment-decision fields. */
+export async function listConsultantOnboardingTasks(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(consultantOnboardingTasks).where(eq(consultantOnboardingTasks.userId, userId)).orderBy(desc(consultantOnboardingTasks.updatedAt));
+  return rows.map(presentConsultantOnboardingTask);
+}
+
+/** A consultant can acknowledge only a task assigned to their own session account. Repeated acknowledgement is deliberately idempotent. */
+export async function acknowledgeConsultantOnboardingTask(userId: number, taskId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(consultantOnboardingTasks).where(eq(consultantOnboardingTasks.id, taskId)).limit(1);
+  const task = rows[0];
+  if (!task || task.userId !== userId) throw new Error("Assigned onboarding task was not found");
+  if (task.consultantCompletionState === "acknowledged") return presentConsultantOnboardingTask(task);
+
+  const acknowledgedAt = new Date();
+  await db.update(consultantOnboardingTasks).set({ consultantCompletionState: "acknowledged", acknowledgedAt }).where(eq(consultantOnboardingTasks.id, task.id));
+  await db.insert(consultantOnboardingTaskActivities).values({ taskId: task.id, userId, activityType: "acknowledged", occurredAt: acknowledgedAt });
+  const updatedRows = await db.select().from(consultantOnboardingTasks).where(eq(consultantOnboardingTasks.id, task.id)).limit(1);
+  return presentConsultantOnboardingTask(updatedRows[0] ?? task);
 }
 
 type CandidateProfileInput = {

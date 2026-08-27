@@ -82,6 +82,32 @@ export const onboardingAssignments = mysqlTable("onboarding_assignments", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Personal onboarding tasks are assigned to one consultant account. Acknowledgement is not an approval or assignment decision. */
+export const consultantOnboardingTasks = mysqlTable("consultant_onboarding_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Stable key used only for idempotent internal demonstration records. */
+  demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
+  userId: int("userId").notNull().references(() => users.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  taskType: mysqlEnum("taskType", ["profile", "policy", "equipment_access", "orientation"]).notNull(),
+  description: varchar("description", { length: 500 }).notNull(),
+  ownerGroup: mysqlEnum("ownerGroup", ["consultant", "hr", "it", "manager"]).notNull(),
+  dueDate: timestamp("dueDate"),
+  consultantCompletionState: mysqlEnum("consultantCompletionState", ["pending", "acknowledged"]).default("pending").notNull(),
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Append-only application activity for a consultant acknowledging an assigned personal onboarding task. */
+export const consultantOnboardingTaskActivities = mysqlTable("consultant_onboarding_task_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: int("taskId").notNull().references(() => consultantOnboardingTasks.id),
+  userId: int("userId").notNull().references(() => users.id),
+  activityType: mysqlEnum("activityType", ["acknowledged"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 /** Immutable operational history for role changes made through administrator controls. */
 export const accessRoleChanges = mysqlTable("access_role_changes", {
   id: int("id").autoincrement().primaryKey(),
@@ -222,6 +248,8 @@ export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
 export type InsertEmployeeProfile = typeof employeeProfiles.$inferInsert;
 export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
 export type InsertOnboardingAssignment = typeof onboardingAssignments.$inferInsert;
+export type ConsultantOnboardingTask = typeof consultantOnboardingTasks.$inferSelect;
+export type ConsultantOnboardingTaskActivity = typeof consultantOnboardingTaskActivities.$inferSelect;
 export type AccessRoleChange = typeof accessRoleChanges.$inferSelect;
 export type CandidateProfile = typeof candidateProfiles.$inferSelect;
 export type ResumeUpload = typeof resumeUploads.$inferSelect;

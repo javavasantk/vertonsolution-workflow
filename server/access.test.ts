@@ -134,6 +134,26 @@ describe("access router", () => {
     summary.mockRestore();
   });
 
+  it("serves and acknowledges only the session consultant's safe personal onboarding tasks", async () => {
+    const safeTasks = [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review your current profile before requesting human review.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date() }];
+    const tasks = vi.spyOn(db, "listConsultantOnboardingTasks").mockResolvedValue(safeTasks as never);
+    const acknowledge = vi.spyOn(db, "acknowledgeConsultantOnboardingTask").mockResolvedValue({ ...safeTasks[0], consultantCompletionState: "acknowledged", acknowledgedAt: new Date() } as never);
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).onboarding.myTasks()).resolves.toEqual(safeTasks);
+    await expect(appRouter.createCaller(createContext("user", 18)).onboarding.myTasks()).resolves.toEqual(safeTasks);
+    await expect(appRouter.createCaller(createContext("admin", 1)).onboarding.myTasks()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(appRouter.createCaller(createContext("consultant", 17)).onboarding.acknowledgeTask({ taskId: 41 })).resolves.toMatchObject({ consultantCompletionState: "acknowledged" });
+    await expect(appRouter.createCaller(createContext("admin", 1)).onboarding.acknowledgeTask({ taskId: 41 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(tasks).toHaveBeenCalledWith(17);
+    expect(acknowledge).toHaveBeenCalledWith(17, 41);
+    expect(safeTasks[0]).not.toHaveProperty("userId");
+    expect(safeTasks[0]).not.toHaveProperty("documentKey");
+    expect(safeTasks[0]).not.toHaveProperty("readinessDetails");
+    expect(safeTasks[0]).not.toHaveProperty("compensation");
+    tasks.mockRestore();
+    acknowledge.mockRestore();
+  });
+
   it("allows only Administrator and HR & Compliance to read the minimized readiness projection", async () => {
     const safeRows = [{ userId: 17, name: "Readiness User", workAuthorizationStatus: "human_review", employmentType: "H-1B", statusNote: "Awaiting designated reviewer follow-up.", expiryDate: null, updatedAt: new Date() }];
     const readiness = vi.spyOn(db, "listReadinessProfiles").mockResolvedValue(safeRows as never);

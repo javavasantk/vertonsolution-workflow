@@ -80,6 +80,8 @@ const projectInlineUpdateSchema = z.object({
   projectManagerName: z.string().trim().max(255),
 });
 
+const personalOnboardingTaskSchema = z.object({ taskId: z.number().int().positive() });
+
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
   mimeType: z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]),
@@ -187,6 +189,25 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant My Work dashboard.' });
       }
       return db.getConsultantMyWork(ctx.user.id);
+    }),
+  }),
+
+  onboarding: router({
+    myTasks: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access personal onboarding tasks.' });
+      }
+      return db.listConsultantOnboardingTasks(ctx.user.id);
+    }),
+    acknowledgeTask: protectedProcedure.input(personalOnboardingTaskSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot acknowledge personal onboarding tasks.' });
+      }
+      try {
+        return await db.acknowledgeConsultantOnboardingTask(ctx.user.id, input.taskId);
+      } catch (error) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: error instanceof Error ? error.message : 'Assigned onboarding task was not found.' });
+      }
     }),
   }),
 

@@ -29,6 +29,13 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await expect.poll(() => page.getByText("Own-record view").count()).toBe(1);
   await expect.poll(() => page.getByText(/does not expose colleague records, client documents, restricted readiness content/i).count()).toBe(1);
   await page.screenshot({ path: `/home/ubuntu/consultant-my-work-${suffix}.png`, fullPage: true });
+
+  await page.goto(`${baseUrl}/workspace/onboarding`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.getByRole("heading", { name: "Your assigned tasks" }).count()).toBe(1);
+  await expect.poll(() => page.getByText("Protected personal tasks").count()).toBe(1);
+  await expect.poll(() => page.getByText(/acknowledgement records that you have seen a task/i).count()).toBe(1);
+  await expect.poll(() => page.getByRole("button", { name: "Send reminder" }).count()).toBe(0);
+  await page.screenshot({ path: `/home/ubuntu/consultant-onboarding-tasks-${suffix}.png`, fullPage: true });
 }
 
 function signedUploadResumeFixture() {

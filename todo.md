@@ -252,3 +252,4 @@
 - [x] Add clear protected resume upload-stage feedback, adjacent PDF/DOCX and 5 MB file guidance, and an inline retry action for failed uploads.
 - [x] Diagnose and repair the persistent live private-storage handoff failure for protected DOCX resume uploads.
 - [x] Implement a protected Consultant My Work dashboard using current session-owned profile, onboarding, assignment, and permitted timesheet signals with explicit data-source and live query states.
+- [x] Replace the representative Consultant onboarding checklist with normalized protected personal tasks, own-task acknowledgement, factual activity capture, and responsive live states.

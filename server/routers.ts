@@ -28,6 +28,20 @@ const employeeProfileUpdateSchema = z.object({
   statusNote: z.string().trim().min(8).max(500),
 });
 
+async function retrieveUploadedResumeBytes(fileKey: string) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const signedUrl = await storageGetSignedUrl(fileKey);
+      const response = await fetch(signedUrl);
+      if (response.ok) return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      console.warn(`[Resume upload] Private retrieval attempt ${attempt + 1} failed`, error);
+    }
+    if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new TRPCError({ code: "BAD_REQUEST", message: "The resume upload could not be retrieved. Upload the file again." });
+}
+
 const workforcePermissionGroups = [
   { role: "admin", label: "Administrator", permissions: ["Full workspace visibility", "User roles", "Permission review", "Audit controls"] },
   { role: "recruiter", label: "Recruiter", permissions: ["Talent pipeline", "New-hire tracking", "Assignment signals"] },
@@ -205,10 +219,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const session = await db.getActiveResumeUploadSession(ctx.user.id, input.sessionId);
         if (!session) throw new TRPCError({ code: "BAD_REQUEST", message: "This upload session is invalid, expired, or already completed." });
-        const signedUrl = await storageGetSignedUrl(session.fileKey);
-        const response = await fetch(signedUrl);
-        if (!response.ok) throw new TRPCError({ code: "BAD_REQUEST", message: "The resume upload could not be retrieved. Upload the file again." });
-        const bytes = Buffer.from(await response.arrayBuffer());
+        const bytes = await retrieveUploadedResumeBytes(session.fileKey);
         if (bytes.length !== session.fileSize) throw new TRPCError({ code: "BAD_REQUEST", message: "The uploaded file size does not match the approved upload request." });
         const extracted = await extractResumeTextFromBytes({ fileName: session.originalFileName, mimeType: session.mimeType, bytes });
         const parsed = await parseRecruiterResume(extracted.text);

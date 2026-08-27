@@ -46,6 +46,7 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     candidateDetail: { id: 31, candidateName: "Lena Garcia", email: "lena@example.com", phone: "555-0199", location: "Denver, CO", professionalSummary: "Test automation engineer.", yearsExperience: "6 years", skills: ["TypeScript", "React"], recentRoles: [{ title: "QA Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm experience."], confidence: "medium", reviewState: "pending_human_review" } as any,
     candidateDetailLoading: false,
     candidateDetailError: null as Error | null,
+    completeUploadError: null as Error | null,
     response: { profile: { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Full-stack engineer with cloud delivery experience.", yearsExperience: "6 years", skills: ["TypeScript", "React", "AWS"], recentRoles: [{ title: "Software Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm project availability with the candidate."], confidence: "high" }, model: "test-model", unavailable: false } as any,
   },
   adminTestState: {
@@ -116,7 +117,7 @@ vi.mock("@/lib/trpc", () => ({
       updateCandidate: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { resumeTestState.candidateUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
       prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadPath: "/api/recruiter/resume-upload/f4c4c2a6-17fb-4d62-b119-784831553898", expiresAt: new Date() }; }, isPending: false, error: null }) },
-      completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); const result = { ...resumeTestState.response, fileName: "alex-morgan.pdf" }; options?.onSuccess?.(result); return result; }, isPending: false, error: null }) },
+      completeResumeUpload: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.uploadMutate(input); if (!resumeTestState.completeUploadError) options?.onSuccess?.({ ...resumeTestState.response, fileName: "alex-morgan.pdf" }); }, mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); if (resumeTestState.completeUploadError) throw resumeTestState.completeUploadError; const result = { ...resumeTestState.response, fileName: "alex-morgan.pdf" }; options?.onSuccess?.(result); return result; }, isPending: false, error: resumeTestState.completeUploadError }) },
     },
     ai: {
       assist: { useMutation: (options?: { onSuccess?: (data: { briefing: string; task: string; model: string }) => void }) => ({ mutate: (input: unknown) => { aiTestState.mutate(input); if (aiTestState.response) options?.onSuccess?.(aiTestState.response); }, isPending: aiTestState.isPending, error: aiTestState.error }) },
@@ -187,6 +188,7 @@ afterEach(() => {
   resumeTestState.candidateDetail = { id: 31, candidateName: "Lena Garcia", email: "lena@example.com", phone: "555-0199", location: "Denver, CO", professionalSummary: "Test automation engineer.", yearsExperience: "6 years", skills: ["TypeScript", "React"], recentRoles: [{ title: "QA Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm experience."], confidence: "medium", reviewState: "pending_human_review" };
   resumeTestState.candidateDetailLoading = false;
   resumeTestState.candidateDetailError = null;
+  resumeTestState.completeUploadError = null;
   adminTestState.users = [];
   adminTestState.roleChangeMutate.mockReset();
   portalTestState.projectUpdateMutate.mockReset();
@@ -698,6 +700,23 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByRole("button", { name: /PDF/ })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: /CSV/ }));
     expect(createObjectUrl).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders one red protected-upload outcome when the stored file cannot be retrieved", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    resumeTestState.completeUploadError = new Error("The resume upload could not be retrieved. Upload the file again.");
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+    const file = new File(["%PDF example resume"], "alex-morgan.pdf", { type: "application/pdf" });
+    await user.upload(screen.getByLabelText("Resume file upload"), file);
+    await user.click(screen.getByRole("button", { name: /Upload & parse resume/ }));
+
+    const message = "The resume upload could not be retrieved. Upload the file again.";
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(message));
+    expect(screen.getAllByText(message)).toHaveLength(1);
+    expect(screen.getByRole("status").className).toContain("bg-rose-50");
     vi.unstubAllGlobals();
   });
 

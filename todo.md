@@ -248,3 +248,4 @@
 - [x] Add distinct protected Talent Pipeline loading and empty states for candidate data.
 - [x] Create a dedicated Administrator/Recruiter-protected candidate-detail route using only current recruiter-visible candidate fields.
 - [x] Make the Talent Pipeline profile-detail experience fully responsive and accessible on mobile devices.
+- [x] Repair the protected resume upload retrieval failure and ensure a single non-conflicting client outcome message is shown.

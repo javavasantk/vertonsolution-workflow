@@ -41,6 +41,17 @@ describe("recruiting signed resume upload", () => {
     expect(completeResumeUploadSessionSpy).toHaveBeenCalledWith(session.id);
   });
 
+  it("retries a short-lived private retrieval failure before parsing the uploaded bytes", async () => {
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new Uint8Array(24).buffer });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(appRouter.createCaller(context("recruiter")).recruiting.completeResumeUpload({ sessionId: session.id })).resolves.toMatchObject({ fileName: "alex-morgan.pdf", candidate: { id: 8 } });
+    expect(storageGetSignedUrlSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects non-recruiters and invalid upload metadata before a storage target is created", async () => {
     await expect(appRouter.createCaller(context("consultant")).recruiting.prepareResumeUpload(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(appRouter.createCaller(context("recruiter")).recruiting.prepareResumeUpload({ ...input, mimeType: "text/plain" as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });

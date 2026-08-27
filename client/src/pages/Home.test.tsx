@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -62,6 +62,13 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     isLoading: false,
     error: null as Error | null,
   },
+  profileTestState: {
+    record: undefined as any,
+    isLoading: false,
+    error: null as Error | null,
+    mutation: vi.fn(),
+    mutationError: false,
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -88,9 +95,10 @@ vi.mock("@/lib/trpc", () => ({
       roleChangeHistory: { useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }) },
     },
     profile: {
-      mine: { useQuery: () => ({ data: undefined, refetch: vi.fn() }) },
+      mine: { useQuery: () => ({ data: profileTestState.record, isLoading: profileTestState.isLoading, error: profileTestState.error, refetch: vi.fn() }) },
       readinessRecords: { useQuery: () => ({ data: readinessTestState.records, isLoading: readinessTestState.isLoading, error: readinessTestState.error, refetch: vi.fn() }) },
-      requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      requestReview: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { profileTestState.mutation(input); if (profileTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false }),
+    },
     },
     portal: {
       demoSummary: { useQuery: () => ({ data: { clients: [{ id: 1, name: "Northstar Retail · Demo", industry: "Retail", location: "Dallas, TX", status: "active" }], projects: [{ id: 1, name: "Northstar Commerce Cloud · Demo", deliveryStatus: "active", projectManagerName: "Casey Rivera" }], demands: [{ id: 1, status: "open", title: "Database Lead Engineer", priority: "high", clientId: 1, openings: 1 }], assignments: [{ id: 1, assignmentState: "active", projectId: 1, clientId: 1, allocationPercent: 100, managerName: "Casey Rivera" }], timesheets: [{ id: 1, assignmentId: 1, status: "approved", hours: 40, note: "Internal demonstration time entry", weekEnding: new Date("2026-08-23") }], activities: [{ id: 1, entityType: "assignment", title: "Demo assignment extension review", activityState: "attention" }] }, refetch: portalTestState.summaryRefetch }) },
@@ -179,6 +187,11 @@ afterEach(() => {
   newHireTestState.records = [];
   newHireTestState.isLoading = false;
   newHireTestState.error = null;
+  profileTestState.record = undefined;
+  profileTestState.isLoading = false;
+  profileTestState.error = null;
+  profileTestState.mutation.mockReset();
+  profileTestState.mutationError = false;
   window.history.pushState({}, "", "/");
 });
 
@@ -352,12 +365,13 @@ describe("Workforce Hub login and protected workflow behavior", () => {
   });
 
   it("renders New-hire Progress from only protected onboarding and assignment signals", () => {
-    newHireTestState.records = [{ id: 8, onboardingStage: "manager_confirmation", progressPercent: 80, managerConfirmed: false, projectName: "Client Project", assignmentState: "pending", updatedAt: new Date("2026-08-27") }];
+    newHireTestState.records = [{ id: 8, name: "Jordan Lee", email: "jordan@vertonsolutions.com", role: "consultant", onboardingStage: "manager_confirmation", progressPercent: 80, managerConfirmed: false, projectName: "Client Project", assignmentState: "pending", updatedAt: new Date("2026-08-27") }];
     setAuthenticatedRole("admin", "Avery Admin");
     renderRoute("/workspace/recruiting");
 
     expect(screen.getByText("Administrator & recruiter workspace")).toBeTruthy();
-    expect(screen.getByText("Record #8")).toBeTruthy();
+    expect(screen.getByText("Jordan Lee")).toBeTruthy();
+    expect(screen.getByText(/jordan@vertonsolutions.com.*Consultant/)).toBeTruthy();
     expect(screen.getByText("Client Project")).toBeTruthy();
     expect(screen.queryByText("Readiness status")).toBeNull();
     expect(screen.queryByText("Candidate materials")).toBeNull();
@@ -367,19 +381,59 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     newHireTestState.isLoading = true;
     setAuthenticatedRole("recruiter", "Riley Recruiter");
     renderRoute("/workspace/recruiting");
-    expect(screen.getByText("Loading protected onboarding and assignment signals…")).toBeTruthy();
+    expect(screen.getByText("Loading protected new-hire progress records…")).toBeTruthy();
 
     cleanup();
     newHireTestState.isLoading = false;
     newHireTestState.error = new Error("Unavailable");
     renderRoute("/workspace/recruiting");
-    expect(screen.getByText("Protected onboarding signals are unavailable.")).toBeTruthy();
-    expect(screen.getByText(/No representative records are substituted/)).toBeTruthy();
+    expect(screen.getByText("Protected new-hire progress records are unavailable.")).toBeTruthy();
+    expect(screen.getByText(/No local demonstration rows replace an unavailable response/)).toBeTruthy();
 
     cleanup();
     newHireTestState.error = null;
     renderRoute("/workspace/recruiting");
-    expect(screen.getByText("No protected onboarding records are available.")).toBeTruthy();
+    expect(screen.getByText("No protected new-hire progress records are available.")).toBeTruthy();
+  });
+
+  it("labels adjacent resume parsing and Candidate Finder as separate protected recruiting capabilities", () => {
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    renderRoute("/workspace/recruiting");
+
+    expect(screen.getByText(/Separate protected recruiting capabilities below/)).toBeTruthy();
+    expect(screen.getByText(/cannot create onboarding assignments or convert a candidate into a new hire/)).toBeTruthy();
+  });
+
+  it("renders My Profile loading, error, first-use, mutation-error, and success states without a target user", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("admin", "Avery Admin");
+    profileTestState.isLoading = true;
+    renderRoute("/workspace/profile");
+    expect(screen.getByText("Loading your protected profile record…")).toBeTruthy();
+
+    cleanup();
+    profileTestState.isLoading = false;
+    profileTestState.error = new Error("Unavailable");
+    renderRoute("/workspace/profile");
+    expect(screen.getByText("Your protected profile record is unavailable.")).toBeTruthy();
+
+    cleanup();
+    profileTestState.error = null;
+    renderRoute("/workspace/profile");
+    expect(screen.getByText("No profile record yet.")).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Work authorization category"), "H-1B");
+    await user.type(screen.getByLabelText("Status note"), "Please review my administrative profile update.");
+    expect((screen.getByLabelText("Work authorization category") as HTMLSelectElement).value).toBe("H-1B");
+    expect((screen.getByLabelText("Status note") as HTMLTextAreaElement).value).toBe("Please review my administrative profile update.");
+    expect((screen.getByRole("button", { name: /Submit update for human review/ }) as HTMLButtonElement).disabled).toBe(false);
+    profileTestState.mutationError = true;
+    await user.click(screen.getByRole("button", { name: /Submit update for human review/ }));
+    expect(profileTestState.mutation).toHaveBeenCalledWith({ employmentType: "H-1B", statusNote: "Please review my administrative profile update." });
+    expect(screen.getByText(/profile update could not be submitted/)).toBeTruthy();
+
+    profileTestState.mutationError = false;
+    await user.click(screen.getByRole("button", { name: /Submit update for human review/ }));
+    expect(screen.getByText(/Update submitted. An authorized reviewer/)).toBeTruthy();
   });
 
   it("renders loading and unavailable states without substituting representative data for live Readiness records", async () => {

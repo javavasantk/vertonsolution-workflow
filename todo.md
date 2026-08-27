@@ -239,3 +239,5 @@
 - [x] Implement Time & Billing TB1–TB3: read-only protected timesheet states, Finance-only representative commercial clarity, and approval-demo quarantine.
 - [x] Implement Controls C1 and C2: accurate representative/source-backed provenance, neutral audit language, and no interactive audit export.
 - [x] Implement Admin Center A1 and A2: confirmed single-role changes, self/demo safeguards, protected query states, and append-only application audit assurance.
+- [x] Implement My Profile P1: session-owned profile contract with first-use, loading, query-error, mutation-error, and success states.
+- [x] Implement New-Hire Progress N1 and N2: protected live launchboard state separation, neutral handoffs, and shared-route recruiting-capability provenance.

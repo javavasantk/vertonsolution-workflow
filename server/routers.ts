@@ -29,7 +29,8 @@ const employeeProfileUpdateSchema = z.object({
 });
 
 async function retrieveUploadedResumeBytes(fileKey: string) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const retryDelaysMs = [0, 300, 750, 1_500, 2_500];
+  for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
     try {
       const signedUrl = await storageGetSignedUrl(fileKey);
       const response = await fetch(signedUrl);
@@ -37,7 +38,8 @@ async function retrieveUploadedResumeBytes(fileKey: string) {
     } catch (error) {
       console.warn(`[Resume upload] Private retrieval attempt ${attempt + 1} failed`, error);
     }
-    if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 250));
+    const retryDelay = retryDelaysMs[attempt + 1];
+    if (retryDelay) await new Promise(resolve => setTimeout(resolve, retryDelay));
   }
   throw new TRPCError({ code: "BAD_REQUEST", message: "The resume upload could not be retrieved. Upload the file again." });
 }

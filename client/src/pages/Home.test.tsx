@@ -714,9 +714,16 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.click(screen.getByRole("button", { name: /Upload & parse resume/ }));
 
     const message = "The resume upload could not be retrieved. Upload the file again.";
-    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(message));
+    await waitFor(() => expect(screen.getAllByRole("status").some(status => status.textContent === message)).toBe(true));
     expect(screen.getAllByText(message)).toHaveLength(1);
-    expect(screen.getByRole("status").className).toContain("bg-rose-50");
+    expect(screen.getAllByRole("status").find(status => status.textContent === message)?.className).toContain("bg-rose-50");
+    expect(screen.getByText("Supported beside this chooser: PDF or DOCX only, up to 5 MB.")).toBeTruthy();
+    expect(screen.getByText(/Upload status: Upload not completed/)).toBeTruthy();
+
+    resumeTestState.completeUploadError = null;
+    await user.click(screen.getByRole("button", { name: "Retry resume upload" }));
+    await waitFor(() => expect(screen.getByText(/Complete — parsed details are ready for human review/)).toBeTruthy());
+    expect(resumeTestState.uploadMutate).toHaveBeenCalledTimes(4);
     vi.unstubAllGlobals();
   });
 

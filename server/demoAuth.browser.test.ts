@@ -52,7 +52,7 @@ describe("real browser demo authentication journey", () => {
     try {
       for (const [suffix, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]] as const) {
         const page = await browser.newPage({ viewport });
-        await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded" });
         await page.getByLabel("Email address").fill("recruiter@demo.vertonsolutions.com");
         await page.getByLabel("Password").fill("VertonDemo!2026");
         await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();

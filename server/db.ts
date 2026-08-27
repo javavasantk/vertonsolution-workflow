@@ -455,7 +455,11 @@ export async function createResumeUploadSession(userId: number, input: { origina
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   const id = randomUUID();
-  const fileKey = `recruiter-resumes/${userId}/${id}-${input.originalFileName}`;
+  const safeFileName = input.originalFileName
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "") || "resume";
+  const fileKey = `recruiter-resumes/${userId}/${id}-${safeFileName}`;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await db.insert(resumeUploadSessions).values({ id, userId, fileKey, ...input, expiresAt });
   return { id, fileKey, expiresAt };

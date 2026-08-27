@@ -486,6 +486,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeUploadMessage, setResumeUploadMessage] = useState("");
   const [resumeUploadMessageTone, setResumeUploadMessageTone] = useState<"success" | "error" | null>(null);
+  const [resumeUploadStage, setResumeUploadStage] = useState("Choose a supported file to begin.");
   const [candidateSearch, setCandidateSearch] = useState("");
   const [candidateSkillFilter, setCandidateSkillFilter] = useState("");
   const [candidateExperienceFilter, setCandidateExperienceFilter] = useState("all");
@@ -501,6 +502,47 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState<Message[]>([]);
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Resume file upload"]');
+    const uploadPanel = input?.parentElement;
+    if (!input || !uploadPanel) return;
+
+    const existing = uploadPanel.querySelector<HTMLElement>("[data-resume-upload-feedback]");
+    const feedback = existing ?? document.createElement("div");
+    if (!existing) {
+      feedback.dataset.resumeUploadFeedback = "true";
+      uploadPanel.appendChild(feedback);
+    }
+
+    const visibleStage = resumeUploadStage === "Choose a supported file to begin." && resumeFile
+      ? "Ready to upload securely."
+      : resumeUploadStage;
+    feedback.className = `mt-2 rounded-lg border px-3 py-2 text-[10px] leading-4 ${resumeUploadMessageTone === "error" ? "border-rose-100 bg-rose-50 text-rose-700" : "border-[#dce7f3] bg-white text-[#52708e]"}`;
+    feedback.replaceChildren();
+
+    const stage = document.createElement("p");
+    stage.setAttribute("role", "status");
+    stage.setAttribute("aria-live", "polite");
+    stage.className = "font-semibold";
+    stage.textContent = `Upload status: ${visibleStage}`;
+    feedback.appendChild(stage);
+
+    const guidance = document.createElement("p");
+    guidance.className = "mt-0.5";
+    guidance.textContent = "Supported beside this chooser: PDF or DOCX only, up to 5 MB.";
+    feedback.appendChild(guidance);
+
+    if (resumeUploadMessageTone === "error" && resumeFile) {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "mt-2 rounded-md border border-rose-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-700 transition hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-300";
+      retry.textContent = "Retry upload";
+      retry.setAttribute("aria-label", "Retry resume upload");
+      retry.addEventListener("click", () => uploadPanel.querySelector<HTMLButtonElement>("button")?.click(), { once: true });
+      feedback.appendChild(retry);
+    }
+  }, [resumeFile, resumeUploadMessageTone, resumeUploadStage]);
 
   const accessUsersQuery = trpc.access.listUsers.useQuery(undefined, { enabled: !previewMode && activeRole === "Administrator" });
   const permissionGroupsQuery = trpc.access.permissionGroups.useQuery(undefined, { enabled: !previewMode && activeRole === "Administrator" });
@@ -524,7 +566,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const resumeParserMutation = trpc.recruiting.parseResume.useMutation({ onSuccess: data => { setResumeProfile(data); setResumePrepared(false); candidatesQuery.refetch(); } });
   const candidateUpdateMutation = trpc.recruiting.updateCandidate.useMutation({ onSuccess: () => { setCandidateEditingId(null); candidatesQuery.refetch(); portalSummaryQuery.refetch(); } });
   const projectUpdateMutation = trpc.portal.updateProject.useMutation({ onSuccess: () => { setProjectEditingId(null); setProjectConfirmingId(null); setProjectUpdateNotice("Project update saved to the protected delivery record."); portalSummaryQuery.refetch(); }, onError: () => { setProjectConfirmingId(null); setProjectUpdateNotice("The project update could not be saved. Review your authorized role and try again."); } });
-  const completeResumeUploadMutation = trpc.recruiting.completeResumeUpload.useMutation({ onSuccess: data => { setResumeProfile(data); setResumePrepared(false); setResumeFile(null); setResumeUploadMessageTone("success"); setResumeUploadMessage(`Parsed ${data.fileName}. Review the extracted details before using them.`); candidatesQuery.refetch(); } });
+  const completeResumeUploadMutation = trpc.recruiting.completeResumeUpload.useMutation({ onSuccess: data => { setResumeProfile(data); setResumePrepared(false); setResumeFile(null); setResumeUploadStage("Complete — parsed details are ready for human review."); setResumeUploadMessageTone("success"); setResumeUploadMessage(`Parsed ${data.fileName}. Review the extracted details before using them.`); candidatesQuery.refetch(); } });
   const prepareResumeUploadMutation = trpc.recruiting.prepareResumeUpload.useMutation();
   const resumeUploadMutation = { isPending: prepareResumeUploadMutation.isPending || completeResumeUploadMutation.isPending, error: prepareResumeUploadMutation.error ?? completeResumeUploadMutation.error };
   const aiMutation = trpc.ai.assist.useMutation({ onSuccess: data => setAiBriefing(data.briefing) });
@@ -845,15 +887,19 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     };
     const uploadResume = async () => {
       if (!resumeFile || previewMode) return;
-      if (!["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(resumeFile.type) || resumeFile.size > 5 * 1024 * 1024) { setResumeUploadMessageTone("error"); setResumeUploadMessage("Choose a PDF or DOCX resume no larger than 5 MB."); return; }
+      if (!["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(resumeFile.type) || resumeFile.size > 5 * 1024 * 1024) { setResumeUploadStage("Upload not started — choose a supported PDF or DOCX up to 5 MB."); setResumeUploadMessageTone("error"); setResumeUploadMessage("Choose a PDF or DOCX resume no larger than 5 MB."); return; }
       setResumeUploadMessage("");
       setResumeUploadMessageTone(null);
+      setResumeUploadStage("Creating a secure upload session…");
       try {
         const prepared = await prepareResumeUploadMutation.mutateAsync({ fileName: resumeFile.name, mimeType: resumeFile.type as "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileSize: resumeFile.size });
+        setResumeUploadStage("Uploading the selected file to protected storage…");
         const uploadResponse = await fetch(prepared.uploadPath, { method: "PUT", headers: { "Content-Type": resumeFile.type }, body: resumeFile });
         if (!uploadResponse.ok) throw new Error("The resume file could not be uploaded. Try again.");
+        setResumeUploadStage("Retrieving and parsing recruiter-visible details…");
         await completeResumeUploadMutation.mutateAsync({ sessionId: prepared.sessionId });
       } catch (error) {
+        setResumeUploadStage("Upload not completed — review the file and retry.");
         setResumeUploadMessageTone("error");
         setResumeUploadMessage(error instanceof Error ? error.message : "The resume file could not be uploaded. Try again.");
       }

@@ -28,6 +28,7 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
   },
   demoAuthState: {
     loginMutate: vi.fn(),
+    loginPending: false,
     resetRequestMutate: vi.fn(),
     resetMutate: vi.fn(),
     accounts: [{ id: 2, name: "Riley Brooks", email: "recruiter@demo.vertonsolutions.com", role: "recruiter" }],
@@ -65,7 +66,7 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({ auth: { me: { invalidate: vi.fn(async () => undefined) } } }),
     auth: {
       demoAccounts: { useQuery: () => ({ data: { accounts: demoAuthState.accounts, sharedPassword: "VertonDemo!2026" } }) },
-      demoLogin: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.loginMutate(input); if (demoAuthState.loginAs) { authState.user = demoAuthState.loginAs; authState.isAuthenticated = true; } options?.onSuccess?.(); }, isPending: false, error: null }) },
+      demoLogin: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.loginMutate(input); if (demoAuthState.loginAs) { authState.user = demoAuthState.loginAs; authState.isAuthenticated = true; } options?.onSuccess?.(); }, isPending: demoAuthState.loginPending, error: null }) },
       requestDemoPasswordReset: { useMutation: (options?: { onSuccess?: (data: { message: string; resetToken: string | null }) => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetRequestMutate(input); options?.onSuccess?.({ message: "A one-time demonstration reset code is ready.", resetToken: "demo-reset-token-1234567890" }); }, isPending: false, error: null }) },
       resetDemoPassword: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { demoAuthState.resetMutate(input); options?.onSuccess?.(); }, isPending: false, error: null }) },
     },
@@ -145,6 +146,7 @@ afterEach(() => {
   workspaceAssistantState.error = null;
   workspaceAssistantState.response = { reply: "Use the assigned workflow controls and confirm the designated human owner before acting.", model: "test-model", unavailable: false };
   demoAuthState.loginMutate.mockReset();
+  demoAuthState.loginPending = false;
   demoAuthState.resetRequestMutate.mockReset();
   demoAuthState.resetMutate.mockReset();
   demoAuthState.loginAs = null;
@@ -360,6 +362,17 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.type(screen.getByLabelText("Password"), "VertonDemo!2026");
     await user.click(screen.getByRole("button", { name: /Enter Workforce Hub/ }));
     expect(demoAuthState.loginMutate).toHaveBeenCalledWith({ email: "recruiter@demo.vertonsolutions.com", password: "VertonDemo!2026" });
+  });
+
+  it("renders a disabled, portal-style busy state while credential authentication is pending", () => {
+    demoAuthState.loginPending = true;
+    setUnauthenticated();
+    renderRoute("/login");
+
+    const button = screen.getByRole("button", { name: /Verifying credentials/ });
+    expect(button).toHaveProperty("disabled", true);
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.querySelector(".animate-spin")).toBeTruthy();
   });
 
   it("generates a demo reset code and submits a matching replacement password", async () => {

@@ -243,3 +243,4 @@
 - [x] Implement New-Hire Progress N1 and N2: protected live launchboard state separation, neutral handoffs, and shared-route recruiting-capability provenance.
 - [x] Implement a cross-workspace regression gate for route access, procedure denials, demo isolation, state separation, field privacy, Finance masking, and the existing write-action boundary.
 - [x] Apply a standard Verton Solution Inc. logo treatment across the protected login and authenticated workspace while preserving portal accessibility and layout.
+- [x] Replace the broken company-logo asset, add an official-mark favicon and compact mobile workspace header mark, standardize company wording, and add a dashboard-link hover treatment.

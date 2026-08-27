@@ -130,6 +130,11 @@ describe("real browser demo authentication journey", () => {
         await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
         await page.waitForURL(`${baseUrl}/workspace`);
         await expect.poll(() => page.getByText(/MySQL-compatible TiDB via Drizzle ORM/).count()).toBe(1);
+        if (viewport.width < 640) {
+          const mobileDashboardLogo = page.locator('header a[aria-label="Verton Solution Inc. Workforce Hub dashboard"]');
+          expect(await mobileDashboardLogo.count()).toBe(1);
+          expect(await mobileDashboardLogo.getAttribute("href")).toBe("/workspace");
+        }
         await page.screenshot({ path: `/home/ubuntu/database-overview-${suffix}.png`, fullPage: true });
         if (viewport.width < 640) {
           await page.getByRole("button", { name: "Open navigation" }).click();

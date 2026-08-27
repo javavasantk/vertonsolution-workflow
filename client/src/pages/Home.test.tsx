@@ -296,18 +296,38 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.queryByText("Controls")).toBeNull();
   });
 
-  it("lets an administrator search users, select an approved role, and see a save confirmation", async () => {
+  it("lets an administrator review and confirm one approved role change before saving", async () => {
     const user = userEvent.setup();
     adminTestState.users = [{ id: 42, name: "Jordan Lee", email: "jordan@vertonsolutions.com", role: "consultant", lastSignedIn: new Date("2026-08-26") }];
     setAuthenticatedRole("admin", "Avery Admin");
     renderRoute("/workspace/admin");
 
     await user.type(screen.getByLabelText("Search user directory"), "Jordan");
-    await user.selectOptions(screen.getByLabelText("Role for Jordan Lee"), "account_manager");
+    await user.selectOptions(screen.getByLabelText("Proposed role for Jordan Lee"), "consultant");
+    expect(adminTestState.roleChangeMutate).not.toHaveBeenCalled();
+    await user.selectOptions(screen.getByLabelText("Proposed role for Jordan Lee"), "account_manager");
+    expect(adminTestState.roleChangeMutate).not.toHaveBeenCalled();
+    const confirmation = screen.getByRole("region", { name: "Confirm role change" });
+    expect(confirmation).toBeTruthy();
+    expect(within(confirmation).getByText("Jordan Lee")).toBeTruthy();
+    expect(within(confirmation).getByText("Consultant")).toBeTruthy();
+    expect(within(confirmation).getByText("Account Manager")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Confirm role change" }));
 
     expect(adminTestState.roleChangeMutate).toHaveBeenCalledWith({ userId: 42, role: "account_manager" });
     expect(screen.getByText("Jordan Lee now has the Account Manager role.")).toBeTruthy();
-    expect(screen.getByText("Role-change audit")).toBeTruthy();
+    expect(screen.getByText("Role-change history")).toBeTruthy();
+  });
+
+  it("keeps Administrator demo sessions read-only in the role-change interface", () => {
+    adminTestState.users = [{ id: 42, name: "Jordan Lee", email: "jordan@vertonsolutions.com", role: "consultant", lastSignedIn: new Date("2026-08-26") }];
+    setAuthenticatedRole("admin", "Avery Admin");
+    authState.user.isDemo = true;
+    renderRoute("/workspace/admin");
+
+    expect(screen.getByText("Demo administration · read only")).toBeTruthy();
+    expect(screen.getByText(/Server denial remains authoritative/)).toBeTruthy();
+    expect((screen.getByLabelText("Proposed role for Jordan Lee") as HTMLSelectElement).disabled).toBe(true);
   });
 
   it("renders protected database-backed demo summary records in the authenticated overview", () => {

@@ -144,16 +144,27 @@
 - [x] Map all current database entities, authentication paths, role gates, file storage, AI services, and browser workflows to FastAPI endpoints and Python service layers.
 - [x] Implement a FastAPI backend with typed request validation, SQLAlchemy data access, compatible legacy demo-password verification, JWT sessions, RBAC, private storage, and AI integrations.
 - [x] Migrate the existing protected portal operations to FastAPI behind a transitional SuperJSON/tRPC transport, preserving current database records and server-enforced role boundaries.
-- [ ] Replace frontend tRPC integration with a typed FastAPI client layer and validate every authenticated workflow end to end.
-- [ ] Verify the custom-domain deployment and GitHub source after the FastAPI migration, then save a completed project checkpoint.
+- [x] Defer the typed FastAPI frontend-client replacement while Railway remains a migration preview; preserve the working FastAPI-compatible transport and protected Manus production portal.
+- [x] Verify the GitHub source and defer custom-domain cutover validation under the user-selected no-cutover posture; record a completed decision checkpoint.
 - [x] Compare current low-cost FastAPI-capable hosts for the implemented Workforce Hub API, TiDB/MySQL connectivity, private upload storage, AI API calls, and custom-domain migration.
 - [x] Document provider trade-offs, expected operational limitations, and the Railway selection before the FastAPI cutover path.
 - [x] Define the Railway deployment topology, required environment variables, database connectivity checks, custom-domain rollback plan, and zero-downtime cutover sequence.
 - [x] Build the FastAPI backend for existing Workforce Hub capabilities using Python, request validation, SQLAlchemy, JWT/session controls, object storage, and independently configured AI calls.
 - [x] Provide an end-to-end FastAPI-compatible API surface for the existing role-scoped frontend through a temporary SuperJSON/tRPC transport while retaining REST v1 routes for the deliberate client migration.
 - [x] Add Railway Docker configuration, health checks, a production Uvicorn start command, and GitHub/Railway deployment instructions.
-- [ ] Validate all API, frontend, file-upload, AI, role, and database flows against the FastAPI service before DNS cutover.
-- [ ] Connect Railway to the GitHub repository and migrate vertonsolutions.live only after the FastAPI deployment is validated.
+- [x] Defer full FastAPI workflow validation until secure database, storage, and AI credentials are available; verify the independent Railway FastAPI `/health` path now.
+- [x] Connect Railway to the GitHub repository and retain `vertonsolutions.live` on the current Manus deployment until a later validated cutover.
 - [x] Replace the Railway Node startup path and OAuth-dependent runtime with an independently deployable FastAPI service configuration in source control.
 - [x] Add Railway environment documentation for FastAPI database, JWT, storage, AI, CORS, and custom-domain settings without copying managed Manus OAuth variables.
-- [ ] Verify Railway uses the FastAPI start command and health endpoint before moving vertonsolutions.live DNS.
+- [x] Verify Railway uses the FastAPI Docker start command and returns a successful `/health` response; do not move `vertonsolutions.live` DNS.
+- [x] Refresh Railway's GitHub source and redeploy the current FastAPI revision instead of the stale Node/OAuth commit shown in the deployment logs.
+- [x] Enable Railway automatic deployment for the connected `main` branch so commit `5238beb` is pulled and built.
+- [x] Resolve Railway’s observed revision mismatch and confirm FastAPI Dockerfile selection in build logs.
+- [x] Remove Railway’s `pnpm run start` custom start-command override and ensure the service detects `Dockerfile.railway` instead of Railpack Node.
+- [x] Add only the real `RAILWAY_DOCKERFILE_PATH=Dockerfile.railway` service variable; do not save template placeholders as Railway secrets.
+- [x] Treat the TiDB password exposed in chat as compromised and exclude it from all application and source configuration; any later database activation requires a newly rotated credential entered only in Railway’s encrypted Variables UI.
+- [x] Defer the portable TiDB schema and controlled demo-data bootstrap until secure external database connectivity is funded and configured.
+- [x] Select the user-approved no-cutover posture because the Hobby workspace does not expose Static Outbound IPs; do not enable broad public TiDB access.
+- [x] Defer Railway-region alignment until external TiDB production validation resumes; do not route current production traffic to the Railway preview.
+- [x] Preserve the Manus deployment as the authenticated production portal and retain Railway only as a FastAPI health-checked migration preview, per the user-selected no-cutover posture.
+- [x] Defer external TiDB activation, data bootstrap, and custom-domain migration until a secure Railway-to-database connectivity path is funded and configured.

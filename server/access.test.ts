@@ -3,7 +3,7 @@ import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import * as db from "./db";
 
-function createContext(role: "user" | "admin" | "recruiter", userId = 1): TrpcContext {
+function createContext(role: "user" | "admin" | "recruiter" | "hr_compliance", userId = 1): TrpcContext {
   return {
     user: {
       id: userId,
@@ -93,5 +93,18 @@ describe("access router", () => {
     expect(updateProfile).toHaveBeenCalledWith(17, input);
     getProfile.mockRestore();
     updateProfile.mockRestore();
+  });
+
+  it("allows only Administrator and HR & Compliance to read the minimized readiness projection", async () => {
+    const safeRows = [{ userId: 17, name: "Readiness User", workAuthorizationStatus: "human_review", employmentType: "H-1B", statusNote: "Awaiting designated reviewer follow-up.", expiryDate: null, updatedAt: new Date() }];
+    const readiness = vi.spyOn(db, "listReadinessProfiles").mockResolvedValue(safeRows as never);
+
+    await expect(appRouter.createCaller(createContext("admin")).profile.readinessRecords()).resolves.toEqual(safeRows);
+    await expect(appRouter.createCaller(createContext("hr_compliance")).profile.readinessRecords()).resolves.toEqual(safeRows);
+    await expect(appRouter.createCaller(createContext("user")).profile.readinessRecords()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(safeRows[0]).not.toHaveProperty("documentKey");
+    expect(safeRows[0]).not.toHaveProperty("rawIdentityData");
+    expect(safeRows[0]).not.toHaveProperty("compensation");
+    readiness.mockRestore();
   });
 });

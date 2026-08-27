@@ -233,3 +233,4 @@
 - [x] Identify verified remaining existing-capability gaps in the authenticated Overview and Talent Pipeline pages and deliver implementation prompts without expanding scope.
 - [x] Consolidate remaining verified existing-capability implementation prompts for all users across Readiness, Onboarding, Delivery, Time & Billing, Controls, Admin Center, My Profile, and New-Hire Progress.
 - [x] Compile all prior user-provided Workforce Hub implementation prompts into a single organized reference with current-status boundaries.
+- [x] Implement Readiness R1 and R2: server-first safe profile projection, role/ownership enforcement, and clear live-versus-representative query states.

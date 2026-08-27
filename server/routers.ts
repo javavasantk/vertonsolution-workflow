@@ -151,6 +151,12 @@ export const appRouter = router({
 
   profile: router({
     mine: protectedProcedure.query(({ ctx }) => db.getEmployeeProfile(ctx.user.id)),
+    readinessRecords: protectedProcedure.query(({ ctx }) => {
+      if (!['admin', 'hr_compliance'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot review readiness workflow records.' });
+      }
+      return db.listReadinessProfiles();
+    }),
     requestReview: protectedProcedure
       .input(employeeProfileUpdateSchema)
       .mutation(async ({ ctx, input }) => {

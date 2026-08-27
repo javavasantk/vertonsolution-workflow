@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -51,6 +51,11 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     projectUpdateMutate: vi.fn(),
     summaryRefetch: vi.fn(),
   },
+  readinessTestState: {
+    records: [] as any[],
+    isLoading: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -78,6 +83,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     profile: {
       mine: { useQuery: () => ({ data: undefined, refetch: vi.fn() }) },
+      readinessRecords: { useQuery: () => ({ data: readinessTestState.records, isLoading: readinessTestState.isLoading, error: readinessTestState.error, refetch: vi.fn() }) },
       requestReview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     portal: {
@@ -160,6 +166,9 @@ afterEach(() => {
   adminTestState.roleChangeMutate.mockReset();
   portalTestState.projectUpdateMutate.mockReset();
   portalTestState.summaryRefetch.mockReset();
+  readinessTestState.records = [];
+  readinessTestState.isLoading = false;
+  readinessTestState.error = null;
   window.history.pushState({}, "", "/");
 });
 
@@ -300,6 +309,46 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("Demo assignment extension review")).toBeTruthy();
     expect(screen.getByText("Database-backed operational activity.")).toBeTruthy();
     expect(screen.getAllByText(/Internal demonstration data/).length).toBeGreaterThan(0);
+  });
+
+  it("shows an honest empty authorized-readiness state and labels static panels as representative", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("admin", "Avery Admin");
+    renderRoute("/workspace");
+
+    await user.click(screen.getAllByRole("button", { name: "Readiness" })[0]!);
+    expect(screen.getByText("No authorized readiness records are available.")).toBeTruthy();
+    expect(screen.getByText(/Representative reference panels below/)).toBeTruthy();
+  });
+
+  it("renders loading and unavailable states without substituting representative data for live Readiness records", async () => {
+    const user = userEvent.setup();
+    readinessTestState.isLoading = true;
+    setAuthenticatedRole("admin", "Avery Admin");
+    renderRoute("/workspace");
+
+    await user.click(screen.getAllByRole("button", { name: "Readiness" })[0]!);
+    expect(screen.getByText("Loading authorized readiness workflow records…")).toBeTruthy();
+
+    cleanup();
+    readinessTestState.isLoading = false;
+    readinessTestState.error = new Error("Unavailable");
+    renderRoute("/workspace");
+    await user.click(screen.getAllByRole("button", { name: "Readiness" })[0]!);
+    expect(screen.getByText("Authorized readiness records are unavailable.")).toBeTruthy();
+    expect(screen.getByText(/not a substitute for live records/)).toBeTruthy();
+  });
+
+  it("masks names in the live Readiness projection while retaining safe workflow fields", async () => {
+    const user = userEvent.setup();
+    readinessTestState.records = [{ userId: 18, name: "Taylor Nguyen", workAuthorizationStatus: "human_review", employmentType: "Employment category", statusNote: "Human review is required.", expiryDate: null, updatedAt: new Date("2026-08-27") }];
+    setAuthenticatedRole("hr_compliance", "Harper Compliance");
+    renderRoute("/workspace");
+
+    await user.click(screen.getAllByRole("button", { name: "Readiness" })[0]!);
+    expect(screen.getByText("T. Workforce user")).toBeTruthy();
+    expect(screen.queryByText("Taylor Nguyen")).toBeNull();
+    expect(screen.getAllByText("Human review").length).toBeGreaterThan(0);
   });
 
   it("renders seeded staffing demand, assignments, and timesheets in their protected operational views", async () => {

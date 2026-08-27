@@ -196,6 +196,26 @@ export async function getEmployeeProfile(userId: number) {
   return results[0];
 }
 
+/** Minimal readiness workflow projection for authorized Administrator and HR & Compliance review. */
+export async function listReadinessProfiles() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      userId: users.id,
+      name: users.name,
+      workAuthorizationStatus: employeeProfiles.workAuthorizationStatus,
+      employmentType: employeeProfiles.employmentType,
+      statusNote: employeeProfiles.statusNote,
+      expiryDate: employeeProfiles.expiryDate,
+      updatedAt: employeeProfiles.updatedAt,
+    })
+    .from(employeeProfiles)
+    .innerJoin(users, eq(employeeProfiles.userId, users.id))
+    .orderBy(desc(employeeProfiles.updatedAt));
+}
+
 export async function submitEmployeeProfileUpdate(userId: number, input: { employmentType: string; statusNote: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");

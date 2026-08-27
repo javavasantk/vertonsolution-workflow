@@ -40,9 +40,15 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await expect.poll(() => page.getByRole("heading", { name: "Your assigned tasks" }).count()).toBe(1);
   await expect.poll(() => page.getByText("Protected personal tasks").count()).toBe(1);
   await expect.poll(() => page.getByText(/acknowledgement records that you have seen a task/i).count()).toBe(1);
-  await expect.poll(() => page.getByRole("button", { name: "Send reminder" }).count()).toBe(0);
-  await page.screenshot({ path: `/home/ubuntu/consultant-onboarding-tasks-${suffix}.png`, fullPage: true });
-}
+    await expect.poll(() => page.getByRole("button", { name: "Send reminder" }).count()).toBe(0);
+    await page.screenshot({ path: `/home/ubuntu/consultant-onboarding-tasks-${suffix}.png`, fullPage: true });
+
+    await page.goto(`${baseUrl}/workspace/check-ins`, { waitUntil: "networkidle" });
+    await expect.poll(() => page.getByRole("heading", { name: "Consultant check-ins" }).count()).toBe(1);
+    await expect.poll(() => page.getByText("Human follow-up owner").count()).toBe(1);
+    await expect.poll(() => page.getByText(/does not automatically route, notify, or decide anything/i).count()).toBe(1);
+    await page.screenshot({ path: `/home/ubuntu/consultant-check-ins-${suffix}.png`, fullPage: true });
+  }
 
 function signedUploadResumeFixture() {
   const doc = new jsPDF({ unit: "pt", format: "a4" });

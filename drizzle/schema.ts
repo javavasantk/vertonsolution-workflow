@@ -108,6 +108,24 @@ export const consultantOnboardingTaskActivities = mysqlTable("consultant_onboard
   occurredAt: timestamp("occurredAt").defaultNow().notNull(),
 });
 
+/** Consultant-owned factual engagement updates. These records intentionally exclude performance, readiness, health, compensation, and client-credential data. */
+export const consultantCheckIns = mysqlTable("consultant_check_ins", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  category: mysqlEnum("category", ["engagement_update", "work_update", "support_note"]).notNull(),
+  factualNote: varchar("factualNote", { length: 500 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Append-only application activity for a consultant's factual check-in submission. */
+export const consultantCheckInActivities = mysqlTable("consultant_check_in_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  checkInId: int("checkInId").notNull().references(() => consultantCheckIns.id),
+  userId: int("userId").notNull().references(() => users.id),
+  activityType: mysqlEnum("activityType", ["submitted"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 /** Immutable operational history for role changes made through administrator controls. */
 export const accessRoleChanges = mysqlTable("access_role_changes", {
   id: int("id").autoincrement().primaryKey(),

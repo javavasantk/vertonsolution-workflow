@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, consultantOnboardingTaskActivities, consultantOnboardingTasks, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -298,6 +298,34 @@ export async function acknowledgeConsultantOnboardingTask(userId: number, taskId
   await db.insert(consultantOnboardingTaskActivities).values({ taskId: task.id, userId, activityType: "acknowledged", occurredAt: acknowledgedAt });
   const updatedRows = await db.select().from(consultantOnboardingTasks).where(eq(consultantOnboardingTasks.id, task.id)).limit(1);
   return presentConsultantOnboardingTask(updatedRows[0] ?? task);
+}
+
+function presentConsultantCheckIn(row: typeof consultantCheckIns.$inferSelect) {
+  return { id: row.id, category: row.category, factualNote: row.factualNote, createdAt: row.createdAt };
+}
+
+/** Own-record factual check-ins plus the current assignment manager as the designated human follow-up owner. */
+export async function listConsultantCheckIns(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [checkIns, assignments] = await Promise.all([
+    db.select().from(consultantCheckIns).where(eq(consultantCheckIns.userId, userId)).orderBy(desc(consultantCheckIns.createdAt)),
+    db.select({ managerName: consultantAssignments.managerName }).from(consultantAssignments).where(eq(consultantAssignments.userId, userId)).orderBy(desc(consultantAssignments.updatedAt)).limit(1),
+  ]);
+  return { designatedHumanOwner: assignments[0]?.managerName || "Designated engagement owner", checkIns: checkIns.map(presentConsultantCheckIn) };
+}
+
+/** A consultant can submit only their own bounded factual check-in. The record and activity are append-only. */
+export async function createConsultantCheckIn(userId: number, input: { category: "engagement_update" | "work_update" | "support_note"; factualNote: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const createdAt = new Date();
+  await db.insert(consultantCheckIns).values({ userId, category: input.category, factualNote: input.factualNote, createdAt });
+  const createdRows = await db.select().from(consultantCheckIns).where(eq(consultantCheckIns.userId, userId)).orderBy(desc(consultantCheckIns.id)).limit(1);
+  const checkIn = createdRows[0];
+  if (!checkIn) throw new Error("Check-in could not be recorded");
+  await db.insert(consultantCheckInActivities).values({ checkInId: checkIn.id, userId, activityType: "submitted", occurredAt: createdAt });
+  return presentConsultantCheckIn(checkIn);
 }
 
 type CandidateProfileInput = {

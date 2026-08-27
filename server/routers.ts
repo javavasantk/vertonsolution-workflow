@@ -81,6 +81,10 @@ const projectInlineUpdateSchema = z.object({
 });
 
 const personalOnboardingTaskSchema = z.object({ taskId: z.number().int().positive() });
+const consultantCheckInSchema = z.object({
+  category: z.enum(["engagement_update", "work_update", "support_note"]),
+  factualNote: z.string().trim().min(10).max(500),
+});
 
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
@@ -195,6 +199,18 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant My Engagement page.' });
       }
       return db.getConsultantMyEngagement(ctx.user.id);
+    }),
+    checkIns: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant Check-ins.' });
+      }
+      return db.listConsultantCheckIns(ctx.user.id);
+    }),
+    submitCheckIn: protectedProcedure.input(consultantCheckInSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot submit a Consultant Check-in.' });
+      }
+      return db.createConsultantCheckIn(ctx.user.id, input);
     }),
   }),
 

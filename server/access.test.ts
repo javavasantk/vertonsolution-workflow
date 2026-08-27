@@ -174,6 +174,30 @@ describe("access router", () => {
     acknowledge.mockRestore();
   });
 
+  it("serves and records only the session consultant's bounded factual check-ins", async () => {
+    const safeCheckIns = {
+      designatedHumanOwner: "Casey Rivera",
+      checkIns: [{ id: 52, category: "work_update", factualNote: "Completed the documented project walkthrough with the delivery contact.", createdAt: new Date() }],
+    };
+    const listCheckIns = vi.spyOn(db, "listConsultantCheckIns").mockResolvedValue(safeCheckIns as never);
+    const createCheckIn = vi.spyOn(db, "createConsultantCheckIn").mockResolvedValue(safeCheckIns.checkIns[0] as never);
+    const consultantCaller = appRouter.createCaller(createContext("consultant", 17));
+
+    await expect(consultantCaller.consultant.checkIns()).resolves.toEqual(safeCheckIns);
+    await expect(consultantCaller.consultant.submitCheckIn({ category: "work_update", factualNote: "Completed the documented project walkthrough with the delivery contact." })).resolves.toEqual(safeCheckIns.checkIns[0]);
+    await expect(consultantCaller.consultant.submitCheckIn({ category: "work_update", factualNote: "Too short" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.checkIns()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.submitCheckIn({ category: "support_note", factualNote: "A factual administrator test note of sufficient length." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(listCheckIns).toHaveBeenCalledWith(17);
+    expect(createCheckIn).toHaveBeenCalledWith(17, { category: "work_update", factualNote: "Completed the documented project walkthrough with the delivery contact." });
+    expect(safeCheckIns.checkIns[0]).not.toHaveProperty("performanceRating");
+    expect(safeCheckIns.checkIns[0]).not.toHaveProperty("workAuthorizationStatus");
+    expect(safeCheckIns.checkIns[0]).not.toHaveProperty("compensation");
+    expect(safeCheckIns.checkIns[0]).not.toHaveProperty("clientCredential");
+    listCheckIns.mockRestore();
+    createCheckIn.mockRestore();
+  });
+
   it("allows only Administrator and HR & Compliance to read the minimized readiness projection", async () => {
     const safeRows = [{ userId: 17, name: "Readiness User", workAuthorizationStatus: "human_review", employmentType: "H-1B", statusNote: "Awaiting designated reviewer follow-up.", expiryDate: null, updatedAt: new Date() }];
     const readiness = vi.spyOn(db, "listReadinessProfiles").mockResolvedValue(safeRows as never);

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -94,6 +94,14 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     mutationError: null as Error | null,
     refetch: vi.fn(),
   },
+  consultantCheckInTestState: {
+    data: { designatedHumanOwner: "Casey Rivera", checkIns: [{ id: 61, category: "work_update", factualNote: "Completed the documented project walkthrough with the delivery contact.", createdAt: new Date("2026-08-26") }] } as any,
+    isLoading: false,
+    error: null as Error | null,
+    mutate: vi.fn(),
+    mutationError: null as Error | null,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -128,6 +136,8 @@ vi.mock("@/lib/trpc", () => ({
     consultant: {
       myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
       myEngagement: { useQuery: () => ({ data: consultantEngagementTestState.data, isLoading: consultantEngagementTestState.isLoading, error: consultantEngagementTestState.error, refetch: vi.fn() }) },
+      checkIns: { useQuery: () => ({ data: consultantCheckInTestState.data, isLoading: consultantCheckInTestState.isLoading, error: consultantCheckInTestState.error, refetch: consultantCheckInTestState.refetch }) },
+      submitCheckIn: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantCheckInTestState.mutate(input); if (consultantCheckInTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantCheckInTestState.mutationError }) },
     },
     onboarding: {
       myTasks: { useQuery: () => ({ data: consultantTaskTestState.tasks, isLoading: consultantTaskTestState.isLoading, error: consultantTaskTestState.error, refetch: consultantTaskTestState.refetch }) },
@@ -245,6 +255,12 @@ afterEach(() => {
   consultantTaskTestState.mutate.mockReset();
   consultantTaskTestState.mutationError = null;
   consultantTaskTestState.refetch.mockReset();
+  consultantCheckInTestState.data = { designatedHumanOwner: "Casey Rivera", checkIns: [{ id: 61, category: "work_update", factualNote: "Completed the documented project walkthrough with the delivery contact.", createdAt: new Date("2026-08-26") }] };
+  consultantCheckInTestState.isLoading = false;
+  consultantCheckInTestState.error = null;
+  consultantCheckInTestState.mutate.mockReset();
+  consultantCheckInTestState.mutationError = null;
+  consultantCheckInTestState.refetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -275,7 +291,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My engagement", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My engagement", "Check-ins", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });
@@ -312,6 +328,43 @@ describe("Workforce Hub role access", () => {
     consultantMyWorkTestState.data = { profile: { profileUpdateState: "details_requested", updatedAt: new Date() }, onboarding: null, assignment: null, latestTimesheet: null };
     view.rerender(<Home />);
     expect(screen.getByText("No current assignment.")).toBeTruthy();
+  });
+
+  it("renders Consultant Check-ins as a bounded own-record factual update workflow", async () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    const user = userEvent.setup();
+    renderRoute("/workspace/check-ins");
+
+    expect(screen.getByRole("heading", { name: "Consultant check-ins" })).toBeTruthy();
+    expect(screen.getByText("Casey Rivera")).toBeTruthy();
+    expect(screen.getByText(/Completed the documented project walkthrough/)).toBeTruthy();
+    const submit = screen.getByRole("button", { name: "Record factual check-in" });
+    expect(submit.getAttribute("disabled")).not.toBeNull();
+    await user.selectOptions(screen.getByLabelText("Check-in category"), "support_note");
+    await user.type(screen.getByLabelText("Factual check-in note"), "Requested clarification on the documented delivery meeting time.");
+    await user.click(screen.getByRole("button", { name: "Record factual check-in" }));
+
+    expect(consultantCheckInTestState.mutate).toHaveBeenCalledWith({ category: "support_note", factualNote: "Requested clarification on the documented delivery meeting time." });
+    expect(screen.getByText(/recorded for the designated human owner/i)).toBeTruthy();
+    expect(screen.getByText(/does not automatically route, notify, or decide anything/i)).toBeTruthy();
+  });
+
+  it("keeps Consultant Check-ins loading, unavailable, and successful-empty states distinct", () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantCheckInTestState.isLoading = true;
+    const view = renderRoute("/workspace/check-ins");
+    expect(screen.getByText("Loading your factual check-ins…")).toBeTruthy();
+
+    consultantCheckInTestState.isLoading = false;
+    consultantCheckInTestState.error = new Error("Unavailable");
+    view.rerender(<Home />);
+    expect(screen.getByText("Your factual check-ins are unavailable.")).toBeTruthy();
+
+    consultantCheckInTestState.error = null;
+    consultantCheckInTestState.data = { designatedHumanOwner: "Casey Rivera", checkIns: [] };
+    view.rerender(<Home />);
+    expect(screen.getByText("No factual check-ins yet.")).toBeTruthy();
+    expect(screen.getByText(/successful empty state has no representative substitute/i)).toBeTruthy();
   });
 
   it("limits finance visibility to the commercial access role", () => {

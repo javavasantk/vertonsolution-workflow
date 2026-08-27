@@ -244,3 +244,4 @@
 - [x] Implement a cross-workspace regression gate for route access, procedure denials, demo isolation, state separation, field privacy, Finance masking, and the existing write-action boundary.
 - [x] Apply a standard Verton Solution Inc. logo treatment across the protected login and authenticated workspace while preserving portal accessibility and layout.
 - [x] Replace the broken company-logo asset, add an official-mark favicon and compact mobile workspace header mark, standardize company wording, and add a dashboard-link hover treatment.
+- [x] Repair the Talent Pipeline Open profile action and add a role-gated talent-profile detail view using only current recruiter-visible candidate fields.

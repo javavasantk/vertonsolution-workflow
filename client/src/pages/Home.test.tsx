@@ -309,6 +309,26 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.queryByText("Controls")).toBeNull();
   });
 
+  it("opens the representative Talent Pipeline profile detail and routes authorized profile addition to protected recruiting", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("admin", "Avery Admin");
+    renderRoute("/workspace");
+
+    await user.click(screen.getByRole("button", { name: "Talent pipeline" }));
+    await user.click(screen.getAllByText("Priya Shah")[0]);
+    await user.click(screen.getByRole("button", { name: /Open profile/ }));
+
+    const profile = screen.getByRole("dialog", { name: "Priya Shah talent profile" });
+    expect(within(profile).getByText("Representative talent profile preview")).toBeTruthy();
+    expect(within(profile).getByText("Python · Snowflake · dbt")).toBeTruthy();
+    expect(within(profile).queryByText("private resume object key")).toBeNull();
+    await user.click(within(profile).getByRole("button", { name: "Close talent profile" }));
+    expect(screen.queryByRole("dialog", { name: "Priya Shah talent profile" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Add talent profile/ }));
+    expect(screen.getAllByText("New-hire progress").length).toBeGreaterThan(0);
+  });
+
   it("lets an administrator review and confirm one approved role change before saving", async () => {
     const user = userEvent.setup();
     adminTestState.users = [{ id: 42, name: "Jordan Lee", email: "jordan@vertonsolutions.com", role: "consultant", lastSignedIn: new Date("2026-08-26") }];

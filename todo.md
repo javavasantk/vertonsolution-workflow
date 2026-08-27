@@ -215,3 +215,6 @@
 - [x] Prompt 16: Verify deterministic candidate-profile and project-status lookup detection from bounded assistant prompts, with structured lookup kind and short record list rendered in the chat.
 - [x] Prompt 16: Restrict lookup queries and AI context to role-permitted candidate metadata and project status, excluding readiness, raw resumes, upload keys, user-role administration, and unauthorized Finance fields.
 - [x] Prompt 16: Add and run tests for candidate/project matches, unsupported roles, prompt limits, safe lookup context, and browser-style Database matches rendering.
+- [x] Prompt 17: Verify normalized Drizzle tables cover users, employee workflow, onboarding, access audits, candidate profiles, private resume metadata, clients, projects, demands, assignments, timesheets, and activities.
+- [x] Prompt 17: Verify a one-off idempotent internal demonstration seed uses stable keys, creates absent records only, and excludes reviews, testimonials, real candidate documents, and confidential client data.
+- [x] Prompt 17: Add or confirm an in-app TiDB/Drizzle provenance note and run schema-contract, seed-idempotency, and prohibited-data tests.

@@ -10,6 +10,7 @@ describe("internal demonstration data seed contract", () => {
       expect(seed).toContain("demoKey");
     }
     expect(seed).toContain("· Demo");
+    expect(seed).not.toMatch(/real candidate document|confidential client/i);
     expect(seed).not.toMatch(/customer review|testimonial|rating/i);
   });
 });

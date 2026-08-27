@@ -237,3 +237,4 @@
 - [x] Implement Onboarding O1 and O2: protected launchboard signals with safe fields and query states, plus clearly labeled representative checklist and reminder UI.
 - [x] Implement Delivery D1 and D2: role-safe protected summary projections and query states, plus confirmed role-limited project curation with access-matrix coverage.
 - [x] Implement Time & Billing TB1–TB3: read-only protected timesheet states, Finance-only representative commercial clarity, and approval-demo quarantine.
+- [x] Implement Controls C1 and C2: accurate representative/source-backed provenance, neutral audit language, and no interactive audit export.

@@ -421,6 +421,19 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("35.2%")).toBeTruthy();
   });
 
+  it("labels Controls material as representative and exposes no audit-export or approval action", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("admin", "Avery Admin");
+    renderRoute("/workspace");
+
+    await user.click(screen.getAllByRole("button", { name: "Controls" })[0]!);
+    expect(screen.getByText("Representative access posture")).toBeTruthy();
+    expect(screen.getByText("Representative event examples")).toBeTruthy();
+    expect(screen.getByText("Audit export unavailable")).toBeTruthy();
+    expect(screen.getByText(/not live telemetry, an event stream, or an immutable ledger/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /export audit|approve/i })).toBeNull();
+  });
+
   it("shows the consultant onboarding checklist as a noninteractive representative reference", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("consultant", "Riley Consultant");

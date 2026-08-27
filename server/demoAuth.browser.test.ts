@@ -114,6 +114,21 @@ describe("real browser demo authentication journey", () => {
       await page.getByPlaceholder("Ask about this workspace…").press("Enter");
       await expect.poll(() => page.getByText(/Database matches \(candidate\)/).count(), { timeout: 50_000 }).toBeGreaterThan(0);
       await page.screenshot({ path: "/home/ubuntu/database-aware-assistant-inline-edit.png", fullPage: true });
+
+      const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      await mobilePage.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+      await mobilePage.getByLabel("Email address").fill("recruiter@demo.vertonsolutions.com");
+      await mobilePage.getByLabel("Password").fill("VertonDemo!2026");
+      await mobilePage.getByRole("button", { name: /Enter Workforce Hub/ }).click();
+      await mobilePage.waitForURL(`${baseUrl}/workspace`);
+      await mobilePage.getByRole("button", { name: "Open navigation" }).click();
+      await mobilePage.getByRole("button", { name: "Talent pipeline" }).last().click();
+      await expect.poll(() => mobilePage.getByRole("button", { name: /Open candidate profile/ }).count(), { timeout: 20_000 }).toBeGreaterThan(0);
+      await mobilePage.getByRole("button", { name: /Open candidate profile/ }).first().click();
+      await mobilePage.waitForURL(/\/workspace\/talent\/\d+$/);
+      await mobilePage.screenshot({ path: "/home/ubuntu/protected-candidate-detail-mobile-diagnostic.png", fullPage: true });
+      await expect.poll(() => mobilePage.getByText("Recruiter-visible candidate profile for human review.").count(), { timeout: 20_000 }).toBe(1);
+      await mobilePage.screenshot({ path: "/home/ubuntu/protected-candidate-detail-mobile.png", fullPage: true });
     } finally {
       await browser.close();
     }

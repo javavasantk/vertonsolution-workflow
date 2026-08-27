@@ -44,7 +44,7 @@ import { AIChatBox, type Message } from "@/components/AIChatBox";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { jsPDF } from "jspdf";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
 type ExportableCandidate = {
@@ -132,6 +132,11 @@ export const workspacePagesByPath: Record<string, string> = {
   "/workspace/recruiting": "New-hire progress",
 };
 
+export function getCandidateDetailIdFromPath(path: string) {
+  const match = path.match(/^\/workspace\/talent\/(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
+
 const allRoles = roles.map(role => role.name);
 export const navItems: NavItem[] = [
   { label: "Overview", icon: Grid2X2, roles: allRoles },
@@ -168,10 +173,14 @@ export function getAllowedNavigation(role: RoleKey) {
 }
 
 export function resolveWorkspacePage(role: RoleKey, requestedPage: string) {
+  if (requestedPage === "Candidate detail") return ["Administrator", "Recruiter"].includes(role) ? requestedPage : "Overview";
   return getAllowedNavigation(role).some(item => item.label === requestedPage) ? requestedPage : "Overview";
 }
 
 export function resolveWorkspacePath(role: RoleKey, requestedPath: string) {
+  if (getCandidateDetailIdFromPath(requestedPath) !== null) {
+    return ["Administrator", "Recruiter"].includes(role) ? requestedPath : "/workspace";
+  }
   const requestedPage = workspacePagesByPath[requestedPath] ?? "Overview";
   return resolveWorkspacePage(role, requestedPage) === requestedPage ? requestedPath : "/workspace";
 }
@@ -454,6 +463,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const { user, isAuthenticated, loading, logout } = useAuth();
   const previewMode = false;
   const activeRole = getRoleKeyFromStoredRole(user?.role);
+  const candidateDetailId = getCandidateDetailIdFromPath(requestedPath);
   const [activePage, setActivePage] = useState(() => resolveWorkspacePage(activeRole, requestedPage));
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [candidateQuery, setCandidateQuery] = useState("");
@@ -481,6 +491,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const [candidateEditingId, setCandidateEditingId] = useState<number | null>(null);
   const [candidateDraft, setCandidateDraft] = useState<{ candidateName: string; location: string; yearsExperience: string; skills: string }>({ candidateName: "", location: "", yearsExperience: "", skills: "" });
   const [talentProfileOpen, setTalentProfileOpen] = useState(false);
+  const talentProfileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const [projectEditingId, setProjectEditingId] = useState<number | null>(null);
   const [projectDraft, setProjectDraft] = useState<{ name: string; deliveryStatus: "planned" | "active" | "at_risk" | "closing"; projectManagerName: string }>({ name: "", deliveryStatus: "planned", projectManagerName: "" });
   const [projectConfirmingId, setProjectConfirmingId] = useState<number | null>(null);
@@ -507,6 +518,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const profileMutation = trpc.profile.requestReview.useMutation({ onSuccess: () => { setProfileMutationMessage(""); setProfileSubmitted(true); myProfileQuery.refetch(); }, onError: () => { setProfileSubmitted(false); setProfileMutationMessage("Your profile update could not be submitted. Review the information and try again."); } });
   const recruiterProgressQuery = trpc.recruiting.newHireProgress.useQuery(undefined, { enabled: !previewMode && (activeRole === "Administrator" || activeRole === "Recruiter") });
   const candidatesQuery = trpc.recruiting.listCandidates.useQuery(undefined, { enabled: !previewMode && (activeRole === "Administrator" || activeRole === "Recruiter") });
+  const candidateDetailQuery = trpc.recruiting.getCandidate.useQuery({ candidateId: candidateDetailId ?? 1 }, { enabled: !previewMode && candidateDetailId !== null && (activeRole === "Administrator" || activeRole === "Recruiter") });
   const portalSummaryQuery = trpc.portal.demoSummary.useQuery(undefined, { enabled: isAuthenticated && !previewMode });
   const resumeParserMutation = trpc.recruiting.parseResume.useMutation({ onSuccess: data => { setResumeProfile(data); setResumePrepared(false); candidatesQuery.refetch(); } });
   const candidateUpdateMutation = trpc.recruiting.updateCandidate.useMutation({ onSuccess: () => { setCandidateEditingId(null); candidatesQuery.refetch(); portalSummaryQuery.refetch(); } });
@@ -581,6 +593,14 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     setProfileStatusNote(visibleProfile.statusNote ?? "");
   }, [visibleProfile]);
 
+  useEffect(() => {
+    if (!talentProfileOpen) return;
+    const focusFrame = window.requestAnimationFrame(() => talentProfileCloseButtonRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setTalentProfileOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => { window.cancelAnimationFrame(focusFrame); window.removeEventListener("keydown", closeOnEscape); };
+  }, [talentProfileOpen]);
+
   const changePage = (page: string) => {
     setActivePage(resolveWorkspacePage(activeRole, page));
     setMobileNavOpen(false);
@@ -624,14 +644,32 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const TalentProfileDialog = () => {
     if (!talentProfileOpen || !selectedCandidate) return null;
     const canOpenRecruitingCapability = activeRole === "Administrator" || activeRole === "Recruiter";
-    return <div role="dialog" aria-modal="true" aria-label={`${selectedCandidate.name} talent profile`} className="fixed inset-0 z-[80] flex items-end bg-[#061a33]/45 p-4 sm:items-center sm:justify-center" onClick={() => setTalentProfileOpen(false)}>
-      <section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-[0_24px_70px_rgba(6,26,51,.30)]" onClick={event => event.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4"><div><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Representative talent profile preview</p><h2 className="mt-2 text-xl font-extrabold tracking-[-.04em] text-[#12345a]">{selectedCandidate.name}</h2><p className="mt-1 text-xs font-semibold text-[#607895]">{selectedCandidate.role}</p></div><button type="button" onClick={() => setTalentProfileOpen(false)} aria-label="Close talent profile" className="grid h-8 w-8 place-items-center rounded-lg text-[#607895] transition hover:bg-[#f1f6fb] hover:text-[#12345a]"><X size={17} /></button></div>
+    return <div role="dialog" aria-modal="true" aria-label={`${selectedCandidate.name} talent profile preview`} className="fixed inset-0 z-[80] flex items-end bg-[#061a33]/45 p-3 sm:items-center sm:justify-center sm:p-6" onClick={() => setTalentProfileOpen(false)}>
+      <section tabIndex={-1} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-[0_24px_70px_rgba(6,26,51,.30)] outline-none sm:max-h-[min(720px,calc(100dvh-3rem))] sm:p-6" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4"><div><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Representative talent profile preview</p><h2 className="mt-2 text-xl font-extrabold tracking-[-.04em] text-[#12345a]">{selectedCandidate.name}</h2><p className="mt-1 text-xs font-semibold text-[#607895]">{selectedCandidate.role}</p></div><button ref={talentProfileCloseButtonRef} type="button" onClick={() => setTalentProfileOpen(false)} aria-label="Close talent profile" className="grid h-8 w-8 place-items-center rounded-lg text-[#607895] transition hover:bg-[#f1f6fb] hover:text-[#12345a] focus-visible:ring-2 focus-visible:ring-[#0b57d0]"><X size={17} /></button></div>
         <div className="mt-5 grid gap-3 border-y border-[#e8eef5] py-4 text-xs"><div className="flex items-center justify-between gap-4"><span className="text-[#7185a0]">Pipeline stage</span><Pill tone="blue">{selectedCandidate.stage}</Pill></div><div className="flex items-center justify-between gap-4"><span className="text-[#7185a0]">Owner</span><span className="font-bold text-[#294969]">{selectedCandidate.owner}</span></div><div className="flex items-center justify-between gap-4"><span className="text-[#7185a0]">Last updated</span><span className="font-semibold text-[#466381]">{selectedCandidate.updated}</span></div><div><span className="text-[#7185a0]">Core capabilities</span><p className="mt-1.5 font-semibold leading-5 text-[#466381]">{selectedCandidate.skills}</p></div></div>
         <p className="mt-4 text-[11px] leading-5 text-[#7185a0]">This profile is representative interface material. It does not expose a protected candidate record, resume content, readiness details, compensation, or a staffing recommendation.</p>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setTalentProfileOpen(false)} className="rounded-xl border border-[#d8e4f0] px-3.5 py-2.5 text-xs font-bold text-[#466381]">Close</button>{canOpenRecruitingCapability && <button type="button" onClick={() => { setTalentProfileOpen(false); changePage("New-hire progress"); }} className="rounded-xl bg-[#0b57d0] px-3.5 py-2.5 text-xs font-bold text-white">Open protected Candidate Finder <ArrowRight className="ml-1 inline" size={14} /></button>}</div>
       </section>
     </div>;
+  };
+
+  const TalentPipelineDataBoundary = () => {
+    const mayViewCandidates = activeRole === "Administrator" || activeRole === "Recruiter";
+    if (!mayViewCandidates) return <section className="mt-5 rounded-2xl border border-dashed border-[#b9d4fa] bg-[#f8fbff] p-4 text-xs leading-5 text-[#52718f]"><b>Protected candidate records are unavailable for this role.</b> The representative pipeline panel below does not expose candidate records, resumes, readiness information, compensation, or staffing decisions.</section>;
+    if (candidatesQuery.isLoading) return <section aria-busy="true" className="mt-5 rounded-2xl border border-[#dce7f3] bg-white p-5"><p className="text-sm font-extrabold">Loading protected candidate profiles…</p><p className="mt-1 text-xs text-[#7185a0]">Retrieving recruiter-visible profile metadata.</p></section>;
+    if (candidatesQuery.error) return <section role="alert" className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-5"><p className="text-sm font-extrabold text-rose-800">Candidate profiles are unavailable.</p><p className="mt-1 text-xs leading-5 text-rose-700">No representative candidate data is substituted for this protected query. Retry from the current workspace when access is available.</p></section>;
+    const profiles = candidatesQuery.data ?? [];
+    if (!profiles.length) return <section className="mt-5 rounded-2xl border border-[#dce7f3] bg-white p-5"><p className="text-sm font-extrabold">No protected candidate profiles yet.</p><p className="mt-1 text-xs text-[#7185a0]">Use the established protected recruiting workflow to parse a resume and create a profile after human review.</p></section>;
+    return <section className="mt-5 overflow-hidden rounded-2xl border border-[#dce7f3] bg-white"><div className="flex flex-col gap-2 border-b border-[#e8eef5] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-extrabold">Protected candidate profiles</p><p className="mt-1 text-xs text-[#7185a0]">Recruiter-visible profile metadata. Source resumes, readiness information, and commercial data remain excluded.</p></div><Pill tone="blue">{profiles.length} profiles</Pill></div><div className="divide-y divide-[#edf2f7]">{profiles.slice(0, 8).map(profile => <div key={profile.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-xs font-extrabold text-[#294969]">{profile.candidateName}</p><p className="mt-1 truncate text-[10px] text-[#7185a0]">{profile.location || "Location not stated"} · {profile.yearsExperience || "Experience not stated"}</p></div><button type="button" onClick={() => setLocation(`/workspace/talent/${profile.id}`)} className="shrink-0 rounded-xl border border-[#bed5f2] bg-[#f8fbff] px-3 py-2 text-xs font-bold text-[#0b57d0] transition hover:-translate-y-0.5 hover:bg-[#edf5ff] focus-visible:ring-2 focus-visible:ring-[#0b57d0]">Open candidate profile <ArrowRight className="ml-1 inline" size={14} /></button></div>)}</div></section>;
+  };
+
+  const CandidateDetailPage = () => {
+    if (candidateDetailId === null) return null;
+    if (candidateDetailQuery.isLoading) return <section aria-busy="true" className="rounded-2xl border border-[#dce7f3] bg-white p-6"><p className="text-sm font-extrabold">Loading protected candidate profile…</p><p className="mt-1 text-xs text-[#7185a0]">Retrieving recruiter-visible metadata only.</p></section>;
+    if (candidateDetailQuery.error || !candidateDetailQuery.data) return <section role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6"><p className="text-sm font-extrabold text-rose-800">Candidate profile is unavailable.</p><p className="mt-1 text-xs leading-5 text-rose-700">The profile was not found or is no longer available to your assigned role.</p><button type="button" onClick={() => setLocation("/workspace")} className="mt-4 rounded-xl bg-[#0b57d0] px-3 py-2 text-xs font-bold text-white">Return to dashboard</button></section>;
+    const candidate = candidateDetailQuery.data;
+    return <><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Protected recruiting capability</p><h1 className="mt-2 text-2xl font-extrabold tracking-[-.05em] text-[#12345a] sm:text-3xl">{candidate.candidateName}</h1><p className="mt-1 text-sm text-[#7185a0]">Recruiter-visible candidate profile for human review.</p></div><button type="button" onClick={() => setLocation("/workspace")} className="rounded-xl border border-[#d8e4f0] bg-white px-3.5 py-2.5 text-xs font-bold text-[#466381]">Back to dashboard</button></div><section className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><div className="rounded-2xl border border-[#dce7f3] bg-white p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8eef5] pb-4"><div><p className="text-sm font-extrabold">Profile details</p><p className="mt-1 text-xs text-[#7185a0]">Contact and experience metadata only.</p></div><Pill tone={candidate.reviewState === "reviewed" ? "green" : candidate.reviewState === "archived" ? "slate" : "amber"}>{formatCandidateReviewState(candidate.reviewState)}</Pill></div><dl className="mt-5 grid gap-4 text-xs sm:grid-cols-2"><div><dt className="text-[#7185a0]">Email</dt><dd className="mt-1 break-all font-bold text-[#294969]">{candidate.email || "Not stated"}</dd></div><div><dt className="text-[#7185a0]">Phone</dt><dd className="mt-1 font-bold text-[#294969]">{candidate.phone || "Not stated"}</dd></div><div><dt className="text-[#7185a0]">Location</dt><dd className="mt-1 font-bold text-[#294969]">{candidate.location || "Not stated"}</dd></div><div><dt className="text-[#7185a0]">Experience</dt><dd className="mt-1 font-bold text-[#294969]">{candidate.yearsExperience || "Not stated"}</dd></div></dl><div className="mt-5 border-t border-[#e8eef5] pt-5"><p className="text-xs text-[#7185a0]">Professional summary</p><p className="mt-1.5 text-sm leading-6 text-[#466381]">{candidate.professionalSummary || "No summary stated."}</p></div><div className="mt-5"><p className="text-xs text-[#7185a0]">Skills</p><div className="mt-2 flex flex-wrap gap-1.5">{candidate.skills.length ? candidate.skills.map(skill => <span key={skill} className="rounded-lg bg-[#eaf3ff] px-2 py-1 text-[10px] font-bold text-[#2862ae]">{skill}</span>) : <span className="text-xs text-[#7185a0]">No skills stated.</span>}</div></div></div><aside className="rounded-2xl border border-[#dce7f3] bg-white p-5 sm:p-6"><p className="text-sm font-extrabold">Human-review context</p><div className="mt-4 space-y-4 text-xs"><div><p className="text-[#7185a0]">Recent roles</p>{candidate.recentRoles.length ? <ul className="mt-2 space-y-2">{candidate.recentRoles.map((role, index) => <li key={`${role.title}-${index}`} className="rounded-xl bg-[#f8fbff] p-3"><p className="font-bold text-[#294969]">{role.title || "Role not stated"}</p><p className="mt-1 text-[#607895]">{role.company || "Company not stated"} · {role.period || "Period not stated"}</p></li>)}</ul> : <p className="mt-1 text-[#7185a0]">No recent roles stated.</p>}</div><div><p className="text-[#7185a0]">Education</p><p className="mt-1 leading-5 text-[#466381]">{candidate.education.join(" · ") || "Not stated"}</p></div><div><p className="text-[#7185a0]">Recruiter notes</p><p className="mt-1 leading-5 text-[#466381]">{candidate.recruiterNotes.join(" · ") || "No notes stated"}</p></div></div><p className="mt-5 rounded-xl border border-[#d8e7f7] bg-[#f8fbff] p-3 text-[10px] leading-4 text-[#52718f]">Use this profile for human review only. It does not contain the source resume, upload keys, readiness details, compensation data, or an automated hiring, eligibility, or staffing decision.</p></aside></section></>;
   };
 
   const ReadinessDataBoundary = () => {
@@ -886,7 +924,8 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const PageContent = () => {
     const permittedPage = resolveWorkspacePage(activeRole, activePage);
     if (permittedPage !== activePage) return <Overview />;
-    const content = activePage === "Talent pipeline" ? <div onClick={event => { const label = (event.target as HTMLElement).closest("button")?.textContent?.trim() ?? ""; if (label.startsWith("Open profile")) setTalentProfileOpen(true); if (label.startsWith("Add talent profile") && (activeRole === "Administrator" || activeRole === "Recruiter")) changePage("New-hire progress"); }}><Talent /><TalentProfileDialog /></div>
+    const content = activePage === "Candidate detail" ? <CandidateDetailPage />
+      : activePage === "Talent pipeline" ? <div onClick={event => { const label = (event.target as HTMLElement).closest("button")?.textContent?.trim() ?? ""; if (label.startsWith("Open profile")) setTalentProfileOpen(true); if (label.startsWith("Add talent profile") && (activeRole === "Administrator" || activeRole === "Recruiter")) changePage("New-hire progress"); }}><TalentPipelineDataBoundary /><div className="mt-5 rounded-2xl border border-dashed border-[#b9d4fa] bg-[#f8fbff] px-4 py-3 text-xs text-[#52718f]"><b>Representative pipeline preview below.</b> Use the protected candidate profiles above to open actual recruiter-visible records.</div><Talent /><TalentProfileDialog /></div>
       : activePage === "Readiness" ? <><ReadinessDataBoundary /><div className="mt-5 rounded-2xl border border-dashed border-[#b9d4fa] bg-[#f8fbff] px-4 py-3 text-xs text-[#52718f]"><b>Representative reference panels below.</b> They illustrate a controlled review layout only and do not replace the authorized live records above.</div><Readiness /><ReadinessChecklist /></>
       : activePage === "Onboarding" ? <RepresentativeOnboardingPreview />
       : activePage === "Delivery" ? <><Delivery /><DatabaseDeliveryLifecycle />{ProjectCurationTable()}</>
@@ -927,7 +966,7 @@ export default function Home() {
   const [location, setLocation] = useLocation();
   const inLogin = location === "/login" || location === "/";
   const inWorkspace = location.startsWith("/workspace");
-  if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} requestedPage={workspacePagesByPath[location] ?? "Overview"} requestedPath={location} />;
+  if (inWorkspace) return <Workspace exitWorkspace={() => setLocation("/")} requestedPage={getCandidateDetailIdFromPath(location) !== null ? "Candidate detail" : workspacePagesByPath[location] ?? "Overview"} requestedPath={location} />;
   if (inLogin) return <CredentialLogin openWorkspace={() => setLocation("/workspace")} />;
   return <CredentialLogin openWorkspace={() => setLocation("/workspace")} />;
 }

@@ -73,6 +73,20 @@ describe("access router", () => {
     progress.mockRestore();
   });
 
+  it("allows only Administrator and Recruiter to read an existing recruiter-visible candidate profile", async () => {
+    const safeCandidate = { id: 22, candidateName: "Jordan Lee", email: "jordan@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Cloud delivery specialist.", yearsExperience: "6 years", skills: ["TypeScript"], recentRoles: [], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm source details."], confidence: "medium", reviewState: "pending_human_review", createdAt: new Date(), updatedAt: new Date() };
+    const candidate = vi.spyOn(db, "getRecruiterCandidateById").mockResolvedValue(safeCandidate as never);
+
+    await expect(appRouter.createCaller(createContext("admin")).recruiting.getCandidate({ candidateId: 22 })).resolves.toEqual(safeCandidate);
+    await expect(appRouter.createCaller(createContext("recruiter")).recruiting.getCandidate({ candidateId: 22 })).resolves.toEqual(safeCandidate);
+    await expect(appRouter.createCaller(createContext("user")).recruiting.getCandidate({ candidateId: 22 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(candidate).toHaveBeenCalledWith(22);
+    expect(safeCandidate).not.toHaveProperty("resumeObjectKey");
+    expect(safeCandidate).not.toHaveProperty("readinessStatus");
+    expect(safeCandidate).not.toHaveProperty("compensation");
+    candidate.mockRestore();
+  });
+
   it("denies role-restricted AI tasks before reaching the model provider", async () => {
     const caller = appRouter.createCaller(createContext("user"));
 

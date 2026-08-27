@@ -178,6 +178,13 @@ export const appRouter = router({
   recruiting: router({
     newHireProgress: recruiterProcedure.query(() => db.listRecruiterNewHireProgress()),
     listCandidates: recruiterProcedure.query(() => db.listRecruiterCandidates()),
+    getCandidate: recruiterProcedure
+      .input(z.object({ candidateId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const candidate = await db.getRecruiterCandidateById(input.candidateId);
+        if (!candidate) throw new TRPCError({ code: "NOT_FOUND", message: "Candidate profile was not found." });
+        return candidate;
+      }),
     updateCandidate: recruiterProcedure.input(candidateInlineUpdateSchema).mutation(({ ctx, input }) => db.updateCandidateProfile(input.candidateId, ctx.user.id, input)),
     parseResume: recruiterProcedure
       .input(z.object({ resumeText: z.string().trim().min(80).max(12_000) }))

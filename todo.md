@@ -245,3 +245,6 @@
 - [x] Apply a standard Verton Solution Inc. logo treatment across the protected login and authenticated workspace while preserving portal accessibility and layout.
 - [x] Replace the broken company-logo asset, add an official-mark favicon and compact mobile workspace header mark, standardize company wording, and add a dashboard-link hover treatment.
 - [x] Repair the Talent Pipeline Open profile action and add a role-gated talent-profile detail view using only current recruiter-visible candidate fields.
+- [x] Add distinct protected Talent Pipeline loading and empty states for candidate data.
+- [x] Create a dedicated Administrator/Recruiter-protected candidate-detail route using only current recruiter-visible candidate fields.
+- [x] Make the Talent Pipeline profile-detail experience fully responsive and accessible on mobile devices.

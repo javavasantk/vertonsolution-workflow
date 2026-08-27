@@ -41,6 +41,11 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     candidates: [{ id: 31, candidateName: "Lena Garcia", email: "lena@example.com", location: "Denver, CO", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending" }, { id: 32, candidateName: "Owen Miller", email: "owen@example.com", location: "Chicago, IL", yearsExperience: "8 years", skills: ["Java", "Spring"], reviewState: "reviewed" }] as any[],
     isPending: false,
     error: null as Error | null,
+    candidatesLoading: false,
+    candidatesError: null as Error | null,
+    candidateDetail: { id: 31, candidateName: "Lena Garcia", email: "lena@example.com", phone: "555-0199", location: "Denver, CO", professionalSummary: "Test automation engineer.", yearsExperience: "6 years", skills: ["TypeScript", "React"], recentRoles: [{ title: "QA Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm experience."], confidence: "medium", reviewState: "pending_human_review" } as any,
+    candidateDetailLoading: false,
+    candidateDetailError: null as Error | null,
     response: { profile: { candidateName: "Alex Morgan", email: "alex@example.com", phone: "555-0100", location: "Austin, TX", professionalSummary: "Full-stack engineer with cloud delivery experience.", yearsExperience: "6 years", skills: ["TypeScript", "React", "AWS"], recentRoles: [{ title: "Software Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm project availability with the candidate."], confidence: "high" }, model: "test-model", unavailable: false } as any,
   },
   adminTestState: {
@@ -106,7 +111,8 @@ vi.mock("@/lib/trpc", () => ({
     },
     recruiting: {
       newHireProgress: { useQuery: () => ({ data: newHireTestState.records, isLoading: newHireTestState.isLoading, error: newHireTestState.error, refetch: vi.fn() }) },
-      listCandidates: { useQuery: () => ({ data: resumeTestState.candidates, isLoading: false, refetch: vi.fn() }) },
+      listCandidates: { useQuery: () => ({ data: resumeTestState.candidates, isLoading: resumeTestState.candidatesLoading, error: resumeTestState.candidatesError, refetch: vi.fn() }) },
+      getCandidate: { useQuery: () => ({ data: resumeTestState.candidateDetail, isLoading: resumeTestState.candidateDetailLoading, error: resumeTestState.candidateDetailError, refetch: vi.fn() }) },
       updateCandidate: { useMutation: (options?: { onSuccess?: () => void }) => ({ mutate: (input: unknown) => { resumeTestState.candidateUpdateMutate(input); options?.onSuccess?.(); }, isPending: false }) },
       parseResume: { useMutation: (options?: { onSuccess?: (data: unknown) => void }) => ({ mutate: (input: unknown) => { resumeTestState.mutate(input); options?.onSuccess?.(resumeTestState.response); }, isPending: resumeTestState.isPending, error: resumeTestState.error }) },
       prepareResumeUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { resumeTestState.uploadMutate(input); return { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadPath: "/api/recruiter/resume-upload/f4c4c2a6-17fb-4d62-b119-784831553898", expiresAt: new Date() }; }, isPending: false, error: null }) },
@@ -176,6 +182,11 @@ afterEach(() => {
   resumeTestState.candidates = [{ id: 31, candidateName: "Lena Garcia", email: "lena@example.com", location: "Denver, CO", yearsExperience: "6 years", skills: ["TypeScript", "React"], reviewState: "pending" }, { id: 32, candidateName: "Owen Miller", email: "owen@example.com", location: "Chicago, IL", yearsExperience: "8 years", skills: ["Java", "Spring"], reviewState: "reviewed" }];
   resumeTestState.isPending = false;
   resumeTestState.error = null;
+  resumeTestState.candidatesLoading = false;
+  resumeTestState.candidatesError = null;
+  resumeTestState.candidateDetail = { id: 31, candidateName: "Lena Garcia", email: "lena@example.com", phone: "555-0199", location: "Denver, CO", professionalSummary: "Test automation engineer.", yearsExperience: "6 years", skills: ["TypeScript", "React"], recentRoles: [{ title: "QA Engineer", company: "Northstar", period: "2022–present" }], education: ["B.S. Computer Science"], recruiterNotes: ["Confirm experience."], confidence: "medium", reviewState: "pending_human_review" };
+  resumeTestState.candidateDetailLoading = false;
+  resumeTestState.candidateDetailError = null;
   adminTestState.users = [];
   adminTestState.roleChangeMutate.mockReset();
   portalTestState.projectUpdateMutate.mockReset();
@@ -309,7 +320,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.queryByText("Controls")).toBeNull();
   });
 
-  it("opens the representative Talent Pipeline profile detail and routes authorized profile addition to protected recruiting", async () => {
+  it("keeps the responsive representative preview distinct from the protected candidate-detail route and authorized profile-addition journey", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("admin", "Avery Admin");
     renderRoute("/workspace");
@@ -318,15 +329,42 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     await user.click(screen.getAllByText("Priya Shah")[0]);
     await user.click(screen.getByRole("button", { name: /Open profile/ }));
 
-    const profile = screen.getByRole("dialog", { name: "Priya Shah talent profile" });
+    const profile = screen.getByRole("dialog", { name: "Priya Shah talent profile preview" });
     expect(within(profile).getByText("Representative talent profile preview")).toBeTruthy();
     expect(within(profile).getByText("Python · Snowflake · dbt")).toBeTruthy();
     expect(within(profile).queryByText("private resume object key")).toBeNull();
-    await user.click(within(profile).getByRole("button", { name: "Close talent profile" }));
-    expect(screen.queryByRole("dialog", { name: "Priya Shah talent profile" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(profile).getByRole("button", { name: "Close talent profile" })));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Priya Shah talent profile preview" })).toBeNull();
 
+    await user.click(screen.getAllByRole("button", { name: /Open candidate profile/ })[0]);
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace/talent/31"));
+    expect(screen.getByText("Recruiter-visible candidate profile for human review.")).toBeTruthy();
+    expect(screen.getByText("Test automation engineer.")).toBeTruthy();
+    expect(screen.queryByText("resumeObjectKey")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Back to dashboard" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace"));
+
+    await user.click(screen.getByRole("button", { name: "Talent pipeline" }));
     await user.click(screen.getByRole("button", { name: /Add talent profile/ }));
     expect(screen.getAllByText("New-hire progress").length).toBeGreaterThan(0);
+  });
+
+  it("shows distinct Talent Pipeline loading and successful-empty states without representative candidate substitution", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("recruiter", "Riley Recruiter");
+    resumeTestState.candidatesLoading = true;
+    renderRoute("/workspace");
+    await user.click(screen.getByRole("button", { name: "Talent pipeline" }));
+    expect(screen.getByText("Loading protected candidate profiles…")).toBeTruthy();
+
+    cleanup();
+    resumeTestState.candidatesLoading = false;
+    resumeTestState.candidates = [];
+    renderRoute("/workspace");
+    await user.click(screen.getByRole("button", { name: "Talent pipeline" }));
+    expect(screen.getByText("No protected candidate profiles yet.")).toBeTruthy();
+    expect(screen.queryByText("Lena Garcia")).toBeTruthy();
   });
 
   it("lets an administrator review and confirm one approved role change before saving", async () => {

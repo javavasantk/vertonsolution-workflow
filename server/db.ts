@@ -364,6 +364,13 @@ export async function listRecruiterCandidates() {
   return rows.map(presentCandidate);
 }
 
+export async function getRecruiterCandidateById(candidateId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(candidateProfiles).where(eq(candidateProfiles.id, candidateId)).limit(1);
+  return rows[0] ? presentCandidate(rows[0]) : null;
+}
+
 export async function updateCandidateProfile(candidateId: number, updatedByUserId: number, input: Pick<CandidateProfileInput, "candidateName" | "location" | "yearsExperience" | "skills">) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");

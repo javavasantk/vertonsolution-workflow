@@ -13,8 +13,8 @@ android {
         applicationId = "com.projectpolaris.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.4.3-language-fix"
+        versionCode = 8
+        versionName = "0.4.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

@@ -42,8 +42,8 @@ No shipping-locale manifest or native linguistic approvals exist. Do **not** cre
 | App name | Project Polaris | Product approval required |
 | Short description | Plan tasks, appointments, and routines offline on your device. | Product and legal approval required |
 | Full description | Project Polaris is a calm, local-first way to organize work, home, personal, and project activities. Create tasks, choose an activity category, add an optional date and time, and review tasks by day, week, or month. Organize tasks into Areas, keep notes and checklists, use local search, and export your device-local workspace when you choose. Optional reminders are enabled only after you choose to allow notifications. Project Polaris currently keeps planning data on your device and does not provide cloud backup or shared workspaces in this preview. | Product, legal, privacy, and localization approval required |
-| Support email | `SUPPORT_EMAIL_TO_BE_REPLACED@example.com` | **Placeholder — blocking** |
-| Privacy policy URL | `https://example.com/project-polaris/privacy-policy` | **Placeholder — blocking** |
+| Support email | `vasantkatta1416@gmail.com` | Provided by release owner; legal review remains required |
+| Privacy policy URL | `https://javavasantk.github.io/project-polaris-privacy-policy/` | Public HTTPS page verified; legal review remains required |
 | Category | Productivity | Product owner to validate |
 | Audience wording | “Project Polaris is a general-purpose planning app. Availability and intended audience must be finalized by the release owner before submission.” | **Legal/policy review required** |
 
@@ -82,7 +82,7 @@ Internal testing is the only permitted first Play destination after the prerequi
 
 | ID | Blocking condition | Owner | Required evidence |
 |---|---|---|---|
-| GP-01 | Support email and hosted privacy-policy URL are placeholders. | Product / Legal | Approved public values and final policy. |
+| GP-01 | The public policy requires qualified legal review and alignment verification with the signed AAB. | Product / Legal | Legal approval ID; final policy-to-binary comparison. |
 | GP-02 | No approved audience, App Content, Data Safety, or policy review decision. | Legal / Policy | Completed reviewed forms and approval IDs. |
 | GP-03 | No release/upload keystore, protected signing workflow, or signed AAB. | Release engineering | CI signing evidence and certificate fingerprint. |
 | GP-04 | No physical-device UI verification for version 5. | Android QA | Test report, screenshots, permission-denial test. |

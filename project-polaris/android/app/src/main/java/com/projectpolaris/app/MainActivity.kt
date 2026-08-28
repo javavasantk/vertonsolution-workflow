@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppTab { TODAY, INBOX, PLAN, FOCUS, SETTINGS, PRIVACY, POLARIS }
+enum class AppTab { TODAY, INBOX, CALENDAR, FOCUS, SETTINGS, PRIVACY, POLARIS }
 
 @Composable
 private fun PolarisTheme(dark: Boolean, content: @Composable () -> Unit) {
@@ -175,12 +175,12 @@ private fun WorkflowApp(store: WorkflowStore) {
                     onComplete = { task, value -> store.complete(task.id, value) }, onPlan = { store.togglePlan(it.id) },
                     onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name },
                     onArea = { taskForArea = it }, onDetails = { taskForDetails = it }, onEdit = { taskForEdit = it }, onArchive = { task -> store.archiveTask(task.id, !task.archived); scope.launch { snackbars.showSnackbar(if (task.archived) taskRestored else taskArchived) } }, onDelete = { taskForDelete = it })
-                AppTab.PLAN -> PlanScreen(state.tasks, state.areas, onToggle = { store.togglePlan(it.id) }, onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name })
+                AppTab.CALENDAR -> CalendarScreen(state.tasks, state.areas) { taskForDetails = it }
                 AppTab.FOCUS -> FocusScreen(state.tasks.filterNot { it.completed }, state.focusTaskId, state.focusEndsAtMillis, store::startFocus, store::endFocus, { tabName = AppTab.INBOX.name })
                 AppTab.SETTINGS -> SettingsScreen(store, { tabName = AppTab.PRIVACY.name }, { message -> scope.launch { snackbars.showSnackbar(message) } }, enableReminders)
                 AppTab.PRIVACY -> PrivacyScreen(onNotice = { message -> scope.launch { snackbars.showSnackbar(message) } }, onExport = { exportLauncher.launch("project-polaris-local-export.json") })
                 AppTab.POLARIS -> PolarisPreviewScreen(state.tasks.filterNot { it.completed }) { title ->
-                    store.addTask(TaskForm(title = title, type = "Action", effort = "15 min"))
+                    store.addTask(TaskForm(title = title, type = "Task", effort = "15 min"))
                     scope.launch { snackbars.showSnackbar(taskAdded) }
                 }
             }
@@ -224,7 +224,7 @@ private fun WorkflowApp(store: WorkflowStore) {
 @Composable
 private fun Header(tab: AppTab, onPrivacy: () -> Unit, onPolaris: () -> Unit) {
     val title = when (tab) {
-        AppTab.TODAY -> stringRes(R.string.today); AppTab.INBOX -> stringRes(R.string.inbox); AppTab.PLAN -> stringRes(R.string.plan)
+        AppTab.TODAY -> stringRes(R.string.today); AppTab.INBOX -> stringRes(R.string.inbox); AppTab.CALENDAR -> stringRes(R.string.calendar)
         AppTab.FOCUS -> stringRes(R.string.focus); AppTab.SETTINGS -> stringRes(R.string.settings); AppTab.PRIVACY -> stringRes(R.string.privacy); AppTab.POLARIS -> stringRes(R.string.assistant_title)
     }
     Row(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -236,7 +236,7 @@ private fun Header(tab: AppTab, onPrivacy: () -> Unit, onPolaris: () -> Unit) {
 
 @Composable
 private fun AppNavigation(current: AppTab, onSelect: (AppTab) -> Unit) {
-    val items = listOf(AppTab.TODAY to stringRes(R.string.today), AppTab.INBOX to stringRes(R.string.inbox), AppTab.PLAN to stringRes(R.string.plan), AppTab.FOCUS to stringRes(R.string.focus), AppTab.SETTINGS to stringRes(R.string.settings))
+    val items = listOf(AppTab.TODAY to stringRes(R.string.today), AppTab.INBOX to stringRes(R.string.inbox), AppTab.CALENDAR to stringRes(R.string.calendar), AppTab.FOCUS to stringRes(R.string.focus), AppTab.SETTINGS to stringRes(R.string.settings))
     NavigationBar {
         items.forEach { (target, label) ->
             NavigationBarItem(selected = current == target, onClick = { onSelect(target) }, icon = { Box(Modifier.size(1.dp)) }, label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) })
@@ -488,8 +488,8 @@ private fun TaskDialog(areas: List<WorkflowArea>, onDismiss: () -> Unit, initial
                     item { OutlinedTextField(notes, { notes = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.notes)) }, placeholder = { Text(stringRes(R.string.notes_hint)) }, minLines = 2) }
                     item { OutlinedTextField(project, { project = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.project)) }, placeholder = { Text(stringRes(R.string.project_hint)) }) }
                     item { ChoiceSection(stringRes(R.string.status), status, TaskOptions.statuses) { status = it } }
-                    item { ChoiceSection(stringRes(R.string.task_type), type, TaskOptions.types) { type = it } }
-                    item { OutlinedTextField(dueDate, { dueDate = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.due_date)) }, placeholder = { Text(stringRes(R.string.due_date_hint)) }) }
+                    item { ActivityCategoryPicker(type) { type = it } }
+                    item { DueDateTimePicker(dueDate) { dueDate = it } }
                     item { ChoiceSection(stringRes(R.string.effort), effort, TaskOptions.efforts) { effort = it } }
                     item { ChoiceSection(stringRes(R.string.energy), energy, TaskOptions.energies) { energy = it } }
                     item { OutlinedTextField(tagsText, { tagsText = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.tags)) }, placeholder = { Text(stringRes(R.string.tags_hint)) }) }

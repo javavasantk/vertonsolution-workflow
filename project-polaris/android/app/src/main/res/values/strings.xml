@@ -194,4 +194,19 @@
     <string name="reminder_channel_description">Optional reminders for tasks you choose.</string>
     <string name="reminder_notification_title">Project Polaris reminder</string>
     <string name="reminder_notification_body">A task reminder is ready. Open Project Polaris to review it.</string>
+    <string name="activity_category">Activity category</string>
+    <string name="choose_activity_category">Choose activity category</string>
+    <string name="category_search">Search activities</string>
+    <string name="due_date_time">Due date and time</string>
+    <string name="choose_due_date_time">Choose date and time</string>
+    <string name="clear_due_date_time">Clear date and time</string>
+    <string name="no_due_date_time">No due date or time selected</string>
+    <string name="calendar">Calendar</string>
+    <string name="calendar_day">Day</string>
+    <string name="calendar_week">Week</string>
+    <string name="calendar_month">Month</string>
+    <string name="calendar_previous">Previous</string>
+    <string name="calendar_next">Next</string>
+    <string name="calendar_no_tasks">No due tasks on this date.</string>
+    <string name="calendar_due_at">Due %1$s</string>
 </resources>

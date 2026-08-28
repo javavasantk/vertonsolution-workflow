@@ -13,7 +13,11 @@ import java.util.UUID
 object TaskOptions {
     val priorities = listOf("None", "Low", "Normal", "High", "Urgent")
     val statuses = listOf("Inbox", "Next", "In progress", "Waiting", "Completed")
-    val types = listOf("Action", "Call", "Email", "Errand", "Meeting", "Habit", "Decision", "Review", "Other")
+    val types = listOf(
+        "Task", "Appointment", "Meeting", "Call", "Email", "Follow-up", "Errand", "Shopping", "Delivery",
+        "Household", "Cleaning", "Maintenance", "Health", "Medication", "Exercise", "Meal", "Finance", "Bill or payment",
+        "Work", "Project", "Deadline", "Travel", "Family", "Social", "Education", "Habit", "Decision", "Review", "Other"
+    )
     val efforts = listOf("Not set", "5 min", "15 min", "30 min", "1 hour", "2+ hours")
     val energies = listOf("Not set", "Low energy", "Normal energy", "Deep focus")
     val recurrences = listOf("None", "Daily", "Weekdays", "Weekly", "Monthly")
@@ -23,7 +27,7 @@ object TaskOptions {
 
 data class TaskForm(
     val title: String = "", val notes: String = "", val areaId: String? = null, val project: String = "",
-    val priority: String = "Normal", val status: String = "Inbox", val type: String = "Action", val dueDate: String = "",
+    val priority: String = "Normal", val status: String = "Inbox", val type: String = "Task", val dueDate: String = "",
     val effort: String = "Not set", val energy: String = "Not set", val tags: List<String> = emptyList(),
     val recurrence: String = "None", val reminder: String = "None", val waitingOn: String = "", val location: String = "",
     val privacy: String = "Private", val checklist: List<String> = emptyList(),
@@ -31,7 +35,7 @@ data class TaskForm(
 
 data class WorkflowTask(
     val id: String, val title: String, val notes: String = "", val areaId: String? = null, val project: String = "",
-    val priority: String = "Normal", val status: String = "Inbox", val type: String = "Action", val dueDate: String = "",
+    val priority: String = "Normal", val status: String = "Inbox", val type: String = "Task", val dueDate: String = "",
     val effort: String = "Not set", val energy: String = "Not set", val tags: List<String> = emptyList(),
     val recurrence: String = "None", val reminder: String = "None", val waitingOn: String = "", val location: String = "",
     val privacy: String = "Private", val checklist: List<String> = emptyList(), val completedChecklistIndexes: Set<Int> = emptySet(),

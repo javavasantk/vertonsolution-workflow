@@ -162,7 +162,7 @@ private fun WorkflowApp(store: WorkflowStore) {
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) },
-        topBar = { Header(tab, onPrivacy = { tabName = AppTab.PRIVACY.name }, onPolaris = { tabName = AppTab.POLARIS.name }) },
+        topBar = { Header(onPrivacy = { tabName = AppTab.PRIVACY.name }, onPolaris = { tabName = AppTab.POLARIS.name }) },
         bottomBar = { AppNavigation(tab) { tabName = it.name } },
         floatingActionButton = { if (tab == AppTab.TODAY || tab == AppTab.INBOX) Button(onClick = { addTask = true }) { Text(stringRes(R.string.add_task)) } },
     ) { padding ->
@@ -231,13 +231,12 @@ private fun WorkflowApp(store: WorkflowStore) {
 }
 
 @Composable
-private fun Header(tab: AppTab, onPrivacy: () -> Unit, onPolaris: () -> Unit) {
-    val title = when (tab) {
-        AppTab.TODAY -> stringRes(R.string.today); AppTab.INBOX -> stringRes(R.string.inbox); AppTab.CALENDAR -> stringRes(R.string.calendar)
-        AppTab.FOCUS -> stringRes(R.string.focus); AppTab.SETTINGS -> stringRes(R.string.settings); AppTab.ABOUT -> stringRes(R.string.about_title); AppTab.PRIVACY -> stringRes(R.string.privacy); AppTab.POLARIS -> stringRes(R.string.assistant_title)
-    }
-    Row(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f).semantics { heading() })
+private fun Header(onPrivacy: () -> Unit, onPolaris: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         TextButton(onClick = onPolaris) { Text(stringRes(R.string.assistant_title_short)) }
         TextButton(onClick = onPrivacy) { Text(stringRes(R.string.privacy)) }
     }

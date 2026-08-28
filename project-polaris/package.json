@@ -1,0 +1,15 @@
+{
+  "name": "project-polaris-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "check": "pnpm --filter @project-polaris/backend check",
+    "test": "pnpm --filter @project-polaris/backend test",
+    "build": "pnpm --filter @project-polaris/backend build",
+    "contract:check": "pnpm --filter @project-polaris/backend contract:check"
+  },
+  "workspaces": [
+    "backend"
+  ]
+}

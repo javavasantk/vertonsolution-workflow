@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars through approved secret/configuration handling.
+# Do not commit real project IDs, image digests, or notification channel IDs.
+project_id                   = "YOUR_STAGING_PROJECT_ID"
+environment                  = "staging"
+region                       = "YOUR_APPROVED_REGION"
+backend_image                = "YOUR_ARTIFACT_REGISTRY_IMAGE_DIGEST"
+runtime_service_account_id   = "polaris-api-runtime"
+min_instances                = 0
+max_instances                = 2
+alert_notification_channels  = []

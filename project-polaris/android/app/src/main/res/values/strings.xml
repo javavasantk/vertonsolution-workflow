@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Project Polaris</string>
+    <string name="assistant_title">Polaris drafts</string>
+    <string name="assistant_disclosure_title">Review before using Polaris</string>
+    <string name="assistant_disclosure_before_send">Polaris can draft tasks or smaller steps from the text you select. It is optional, may be incorrect, and will not change anything until you review and confirm.</string>
+    <string name="assistant_continue">Continue</string>
+    <string name="assistant_not_now">Not now</string>
+    <string name="assistant_review_title">Review draft suggestions</string>
+    <string name="assistant_apply_selected">Apply selected drafts</string>
+    <string name="assistant_reject">Reject draft</string>
+    <string name="assistant_requires_review">Review required</string>
+    <string name="assistant_uncertainties">Please check these details</string>
+    <string name="assistant_fallback_offline">Polaris drafts are unavailable while you are offline. You can create the task manually instead.</string>
+    <string name="assistant_fallback_sign_in">Polaris drafts are an optional backup-account feature. You can continue planning without signing in.</string>
+    <string name="assistant_fallback_consent">Polaris drafts are off until you choose to use them. You can continue planning without AI.</string>
+    <string name="assistant_fallback_unavailable">Polaris drafts are not available right now. Your task stays on this device and you can continue manually.</string>
+    <string name="assistant_error_invalid_draft">This draft could not be verified. Nothing was changed.</string>
+    <string name="assistant_error_confirmation_invalid">The draft could not be confirmed. Nothing was changed.</string>
+    <string name="assistant_error_draft_expired">This draft has expired. You can continue manually or request a new draft when you choose.</string>
+    <string name="assistant_error_invalid_selection">Choose at least one draft suggestion to review.</string>
+    <string name="assistant_manual_task">Create task manually</string>
+    <string name="assistant_manual_smaller_step">Make this smaller manually</string>
+    <string name="privacy_dashboard_title">Privacy dashboard</string>
+    <string name="privacy_local_workspace">Your workspace stays on this device unless you choose backup and sync.</string>
+    <string name="privacy_ai">AI features are optional and only use selected content after your review.</string>
+    <string name="privacy_analytics">Product analytics are optional and never include your task text.</string>
+    <string name="privacy_export">Export my data</string>
+    <string name="privacy_delete">Delete account and cloud data</string>
+</resources>

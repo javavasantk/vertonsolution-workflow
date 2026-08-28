@@ -1,0 +1,61 @@
+name: Project Polaris CI
+
+on:
+  pull_request:
+    paths:
+      - 'project-polaris/**'
+      - '.github/workflows/project-polaris-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'project-polaris/**'
+      - '.github/workflows/project-polaris-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend-contracts:
+    name: Backend, contracts, and policy tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: project-polaris
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: project-polaris/pnpm-lock.yaml
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.21.0'
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @project-polaris/backend format:check
+      - run: pnpm check
+      - run: pnpm contract:check
+      - run: pnpm test
+      - run: node scripts/check-no-secrets.mjs
+
+  terraform-validate:
+    name: Terraform format and validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: project-polaris/infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+
+  android-scaffold:
+    name: Android scaffold integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: test -f project-polaris/android/settings.gradle.kts
+      - run: test -f project-polaris/android/app/src/main/AndroidManifest.xml
+      - run: test -f project-polaris/android/core/assistant/src/main/kotlin/com/projectpolaris/assistant/AssistantDraftCoordinator.kt

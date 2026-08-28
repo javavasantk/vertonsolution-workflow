@@ -252,6 +252,15 @@ export const timesheetEntries = mysqlTable("timesheet_entries", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Append-only application activity for consultant-owned time-entry creation, revision, and submission. It is not an approval or financial-processing ledger. */
+export const consultantTimeEntryActivities = mysqlTable("consultant_time_entry_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  timeEntryId: int("timeEntryId").notNull().references(() => timesheetEntries.id),
+  userId: int("userId").notNull().references(() => users.id),
+  activityType: mysqlEnum("activityType", ["created", "updated", "submitted"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 export const operationalActivities = mysqlTable("operational_activities", {
   id: int("id").autoincrement().primaryKey(),
   demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),

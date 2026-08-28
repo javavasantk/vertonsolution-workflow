@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "My work", "My engagement", "Check-ins", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "My work", "My engagement", "Check-ins", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  user: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Onboarding", "Delivery", "Time & billing", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;
@@ -66,14 +66,30 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("keeps the workforce curation mutation surface limited to candidate, project, own-profile, and single-role change procedures", () => {
+  it("denies Consultant Time Submission procedures to every non-consultant-compatible role", async () => {
+    const timeInput = { assignmentId: 1, weekEnding: new Date("2026-08-30"), hours: 40, note: "Completed documented delivery hours." };
+    for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
+      const caller = appRouter.createCaller(createContext(role));
+      await expect(caller.consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.createTimeSubmission(timeInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.updateTimeSubmission({ timeEntryId: 1, weekEnding: timeInput.weekEnding, hours: 40, note: timeInput.note })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.submitTimeSubmission({ timeEntryId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
+  it("keeps the workforce curation mutation surface limited to approved candidate, project, own-profile, role-change, personal-task, check-in, and consultant-time procedures", () => {
     const procedures = Object.keys(appRouter._def.procedures);
     expect(procedures).toContain("access.assignRole");
     expect(procedures).toContain("profile.requestReview");
     expect(procedures).toContain("recruiting.updateCandidate");
     expect(procedures).toContain("portal.updateProject");
+    expect(procedures).toContain("consultant.createTimeSubmission");
+    expect(procedures).toContain("consultant.updateTimeSubmission");
+    expect(procedures).toContain("consultant.submitTimeSubmission");
     expect(procedures).not.toContain("portal.approveTimesheet");
     expect(procedures).not.toContain("portal.createInvoice");
+    expect(procedures).not.toContain("portal.calculatePayroll");
+    expect(procedures).not.toContain("portal.issuePayment");
     expect(procedures).not.toContain("recruiting.createAssignment");
     expect(procedures).not.toContain("access.bulkAssignRoles");
   });

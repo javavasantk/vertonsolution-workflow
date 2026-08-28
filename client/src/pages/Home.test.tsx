@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -102,6 +102,16 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     mutationError: null as Error | null,
     refetch: vi.fn(),
   },
+  consultantTimeSubmissionTestState: {
+    data: { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned project delivery hours.", updatedAt: new Date("2026-08-26") }] } as any,
+    isLoading: false,
+    error: null as Error | null,
+    create: vi.fn(),
+    update: vi.fn(),
+    submit: vi.fn(),
+    mutationError: null as Error | null,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -138,6 +148,10 @@ vi.mock("@/lib/trpc", () => ({
       myEngagement: { useQuery: () => ({ data: consultantEngagementTestState.data, isLoading: consultantEngagementTestState.isLoading, error: consultantEngagementTestState.error, refetch: vi.fn() }) },
       checkIns: { useQuery: () => ({ data: consultantCheckInTestState.data, isLoading: consultantCheckInTestState.isLoading, error: consultantCheckInTestState.error, refetch: consultantCheckInTestState.refetch }) },
       submitCheckIn: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantCheckInTestState.mutate(input); if (consultantCheckInTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantCheckInTestState.mutationError }) },
+      timeSubmissions: { useQuery: () => ({ data: consultantTimeSubmissionTestState.data, isLoading: consultantTimeSubmissionTestState.isLoading, error: consultantTimeSubmissionTestState.error, refetch: consultantTimeSubmissionTestState.refetch }) },
+      createTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.create(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
+      updateTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.update(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
+      submitTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.submit(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
     },
     onboarding: {
       myTasks: { useQuery: () => ({ data: consultantTaskTestState.tasks, isLoading: consultantTaskTestState.isLoading, error: consultantTaskTestState.error, refetch: consultantTaskTestState.refetch }) },
@@ -261,6 +275,14 @@ afterEach(() => {
   consultantCheckInTestState.mutate.mockReset();
   consultantCheckInTestState.mutationError = null;
   consultantCheckInTestState.refetch.mockReset();
+  consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned project delivery hours.", updatedAt: new Date("2026-08-26") }] };
+  consultantTimeSubmissionTestState.isLoading = false;
+  consultantTimeSubmissionTestState.error = null;
+  consultantTimeSubmissionTestState.create.mockReset();
+  consultantTimeSubmissionTestState.update.mockReset();
+  consultantTimeSubmissionTestState.submit.mockReset();
+  consultantTimeSubmissionTestState.mutationError = null;
+  consultantTimeSubmissionTestState.refetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -291,7 +313,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My engagement", "Check-ins", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });
@@ -344,7 +366,7 @@ describe("Workforce Hub role access", () => {
     await user.type(screen.getByLabelText("Factual check-in note"), "Requested clarification on the documented delivery meeting time.");
     await user.click(screen.getByRole("button", { name: "Record factual check-in" }));
 
-    expect(consultantCheckInTestState.mutate).toHaveBeenCalledWith({ category: "support_note", factualNote: "Requested clarification on the documented delivery meeting time." });
+    await waitFor(() => expect(consultantCheckInTestState.mutate).toHaveBeenCalledWith({ category: "support_note", factualNote: "Requested clarification on the documented delivery meeting time." }));
     expect(screen.getByText(/recorded for the designated human owner/i)).toBeTruthy();
     expect(screen.getByText(/does not automatically route, notify, or decide anything/i)).toBeTruthy();
   });
@@ -761,6 +783,42 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     renderRoute("/workspace/my-engagement");
     expect(screen.getByText("No active assignment")).toBeTruthy();
     expect(screen.getByText(/extension handoff requires human follow-up/i)).toBeTruthy();
+  });
+
+  it("limits Consultant Time Submission to own active assignments, draft/correction edits, and human review", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace/time-submission");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Your time entries" })).toBeTruthy());
+    expect(screen.getByText("Casey Rivera")).toBeTruthy();
+    expect(screen.getByText(/cannot approve time, calculate payroll, create an invoice, issue payment, or connect to accounting/i)).toBeTruthy();
+    expect(screen.queryByText(/commercial rate|pay rate/i)).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Time submission assignment"), "1");
+    fireEvent.change(screen.getByLabelText("Time entry week ending"), { target: { value: "2026-09-01" } });
+    await user.type(screen.getByLabelText("Time entry hours"), "40");
+    await user.type(screen.getByLabelText("Time entry note"), "Completed the planned implementation work for the week.");
+    await user.click(screen.getByRole("button", { name: "Create draft entry" }));
+    await waitFor(() => expect(consultantTimeSubmissionTestState.create).toHaveBeenCalledWith(expect.objectContaining({ assignmentId: 1, hours: 40, note: "Completed the planned implementation work for the week." })));
+    await user.click(screen.getByRole("button", { name: "Submit for human review" }));
+    expect(consultantTimeSubmissionTestState.submit).toHaveBeenCalledWith({ timeEntryId: 71 });
+    cleanup();
+
+    consultantTimeSubmissionTestState.isLoading = true;
+    renderRoute("/workspace/time-submission");
+    expect(screen.getByText("Loading your protected time entries…")).toBeTruthy();
+    cleanup();
+
+    consultantTimeSubmissionTestState.isLoading = false;
+    consultantTimeSubmissionTestState.error = new Error("Unavailable");
+    renderRoute("/workspace/time-submission");
+    expect(screen.getByText("Your time-submission records are unavailable.")).toBeTruthy();
+    cleanup();
+
+    consultantTimeSubmissionTestState.error = null;
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [], entries: [] };
+    renderRoute("/workspace/time-submission");
+    expect(screen.getByText("No active assignment is available for time submission.")).toBeTruthy();
+    expect(screen.getByText("No protected time entries yet.")).toBeTruthy();
   });
 
   it("signs out an authenticated user and returns them to the login screen", async () => {

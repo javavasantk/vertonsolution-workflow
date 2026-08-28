@@ -85,6 +85,16 @@ const consultantCheckInSchema = z.object({
   category: z.enum(["engagement_update", "work_update", "support_note"]),
   factualNote: z.string().trim().min(10).max(500),
 });
+const consultantTimeSubmissionSchema = z.object({
+  assignmentId: z.number().int().positive(),
+  weekEnding: z.coerce.date().min(new Date("2000-01-01")),
+  hours: z.number().int().min(1).max(168),
+  note: z.string().trim().max(500).optional(),
+});
+const consultantTimeSubmissionUpdateSchema = consultantTimeSubmissionSchema.omit({ assignmentId: true }).extend({
+  timeEntryId: z.number().int().positive(),
+});
+const consultantTimeSubmissionActionSchema = z.object({ timeEntryId: z.number().int().positive() });
 
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
@@ -211,6 +221,42 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot submit a Consultant Check-in.' });
       }
       return db.createConsultantCheckIn(ctx.user.id, input);
+    }),
+    timeSubmissions: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant time submissions.' });
+      }
+      return db.listConsultantTimeSubmissions(ctx.user.id);
+    }),
+    createTimeSubmission: protectedProcedure.input(consultantTimeSubmissionSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot create Consultant time submissions.' });
+      }
+      try {
+        return await db.createConsultantTimeSubmission(ctx.user.id, input);
+      } catch (error) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Time entry could not be created for the current assignment.' });
+      }
+    }),
+    updateTimeSubmission: protectedProcedure.input(consultantTimeSubmissionUpdateSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot update Consultant time submissions.' });
+      }
+      try {
+        return await db.updateConsultantTimeSubmission(ctx.user.id, input.timeEntryId, input);
+      } catch (error) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only your draft or correction-needed time entry can be updated.' });
+      }
+    }),
+    submitTimeSubmission: protectedProcedure.input(consultantTimeSubmissionActionSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot submit Consultant time entries.' });
+      }
+      try {
+        return await db.submitConsultantTimeSubmission(ctx.user.id, input.timeEntryId);
+      } catch (error) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only your draft or correction-needed time entry can be submitted.' });
+      }
     }),
   }),
 

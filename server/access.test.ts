@@ -198,6 +198,39 @@ describe("access router", () => {
     createCheckIn.mockRestore();
   });
 
+  it("serves and changes only the session consultant's draft or correction-needed time entries", async () => {
+    const safeTimeData = {
+      designatedHumanOwner: "Casey Rivera",
+      assignments: [{ id: 4, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }],
+      entries: [{ id: 72, assignmentId: 4, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed documented delivery hours.", updatedAt: new Date() }],
+    };
+    const list = vi.spyOn(db, "listConsultantTimeSubmissions").mockResolvedValue(safeTimeData as never);
+    const create = vi.spyOn(db, "createConsultantTimeSubmission").mockResolvedValue(safeTimeData.entries[0] as never);
+    const update = vi.spyOn(db, "updateConsultantTimeSubmission").mockResolvedValue(safeTimeData.entries[0] as never);
+    const submit = vi.spyOn(db, "submitConsultantTimeSubmission").mockResolvedValue({ ...safeTimeData.entries[0], status: "submitted" } as never);
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+    const input = { assignmentId: 4, weekEnding: new Date("2026-08-30"), hours: 40, note: "Completed documented delivery hours." };
+
+    await expect(caller.consultant.timeSubmissions()).resolves.toEqual(safeTimeData);
+    await expect(caller.consultant.createTimeSubmission(input)).resolves.toEqual(safeTimeData.entries[0]);
+    await expect(caller.consultant.updateTimeSubmission({ timeEntryId: 72, weekEnding: input.weekEnding, hours: 38, note: "Corrected documented delivery hours." })).resolves.toEqual(safeTimeData.entries[0]);
+    await expect(caller.consultant.submitTimeSubmission({ timeEntryId: 72 })).resolves.toMatchObject({ status: "submitted" });
+    await expect(caller.consultant.createTimeSubmission({ ...input, hours: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.createTimeSubmission(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(list).toHaveBeenCalledWith(17);
+    expect(create).toHaveBeenCalledWith(17, input);
+    expect(update).toHaveBeenCalledWith(17, 72, expect.objectContaining({ hours: 38 }));
+    expect(submit).toHaveBeenCalledWith(17, 72);
+    expect(safeTimeData.entries[0]).not.toHaveProperty("commercialRate");
+    expect(safeTimeData.entries[0]).not.toHaveProperty("payrollAmount");
+    expect(safeTimeData.entries[0]).not.toHaveProperty("invoiceId");
+    list.mockRestore();
+    create.mockRestore();
+    update.mockRestore();
+    submit.mockRestore();
+  });
+
   it("allows only Administrator and HR & Compliance to read the minimized readiness projection", async () => {
     const safeRows = [{ userId: 17, name: "Readiness User", workAuthorizationStatus: "human_review", employmentType: "H-1B", statusNote: "Awaiting designated reviewer follow-up.", expiryDate: null, updatedAt: new Date() }];
     const readiness = vi.spyOn(db, "listReadinessProfiles").mockResolvedValue(safeRows as never);

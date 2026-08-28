@@ -48,6 +48,11 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
     await expect.poll(() => page.getByText("Human follow-up owner").count()).toBe(1);
     await expect.poll(() => page.getByText(/does not automatically route, notify, or decide anything/i).count()).toBe(1);
     await page.screenshot({ path: `/home/ubuntu/consultant-check-ins-${suffix}.png`, fullPage: true });
+
+    await page.goto(`${baseUrl}/workspace/time-submission`, { waitUntil: "networkidle" });
+    await expect.poll(() => page.getByRole("heading", { name: "Your time entries" }).count()).toBe(1);
+    await expect.poll(() => page.getByText(/cannot approve time, calculate payroll, create an invoice, issue payment, or connect to accounting/i).count()).toBe(1);
+    await page.screenshot({ path: `/home/ubuntu/consultant-time-submission-${suffix}.png`, fullPage: true });
   }
 
 function signedUploadResumeFixture() {

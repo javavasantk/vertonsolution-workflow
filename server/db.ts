@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -576,6 +576,114 @@ export async function getConsultantMyEngagement(userId: number) {
     ? timesheetRows.find(row => row.assignmentId === latestAssignment.id) ?? null
     : null;
   return { assignment: latestAssignment, hasActiveAssignment: Boolean(activeAssignment), latestTimesheet };
+}
+
+type ConsultantTimeSubmissionInput = {
+  assignmentId: number;
+  weekEnding: Date;
+  hours: number;
+  note?: string;
+};
+
+function presentConsultantTimeSubmission(row: typeof timesheetEntries.$inferSelect) {
+  return {
+    id: row.id,
+    assignmentId: row.assignmentId,
+    weekEnding: row.weekEnding,
+    hours: row.hours,
+    status: row.status,
+    note: row.note,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/** Own-record projection for consultant time submission. It omits commercial fields, client documents, colleague data, and any approval controls. */
+export async function listConsultantTimeSubmissions(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [assignments, entries] = await Promise.all([
+    db.select({
+      id: consultantAssignments.id,
+      projectName: clientProjects.name,
+      managerName: consultantAssignments.managerName,
+      assignmentState: consultantAssignments.assignmentState,
+      updatedAt: consultantAssignments.updatedAt,
+    }).from(consultantAssignments)
+      .leftJoin(clientProjects, eq(consultantAssignments.projectId, clientProjects.id))
+      .where(eq(consultantAssignments.userId, userId))
+      .orderBy(desc(consultantAssignments.updatedAt)),
+    db.select().from(timesheetEntries)
+      .where(eq(timesheetEntries.userId, userId))
+      .orderBy(desc(timesheetEntries.weekEnding)),
+  ]);
+  return {
+    assignments,
+    entries: entries.map(presentConsultantTimeSubmission),
+    designatedHumanOwner: assignments.find(row => row.assignmentState === "active")?.managerName || assignments[0]?.managerName || "Designated time reviewer",
+  };
+}
+
+async function getOwnedActiveAssignment(userId: number, assignmentId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(consultantAssignments).where(eq(consultantAssignments.id, assignmentId)).limit(1);
+  const assignment = rows[0];
+  if (!assignment || assignment.userId !== userId || assignment.assignmentState !== "active") {
+    throw new Error("Active assignment was not found");
+  }
+  return { db, assignment };
+}
+
+async function getOwnedEditableTimeEntry(userId: number, timeEntryId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, timeEntryId)).limit(1);
+  const entry = rows[0];
+  if (!entry || entry.userId !== userId || !["draft", "exception"].includes(entry.status)) {
+    throw new Error("Draft or correction-needed time entry was not found");
+  }
+  return { db, entry };
+}
+
+/** A consultant creates a time entry only for their current assignment. The entry begins as draft and the activity is append-only. */
+export async function createConsultantTimeSubmission(userId: number, input: ConsultantTimeSubmissionInput) {
+  const { db } = await getOwnedActiveAssignment(userId, input.assignmentId);
+  const occurredAt = new Date();
+  await db.insert(timesheetEntries).values({
+    demoKey: `time-submission-${userId}-${randomUUID()}`,
+    userId,
+    assignmentId: input.assignmentId,
+    weekEnding: input.weekEnding,
+    hours: input.hours,
+    note: input.note || null,
+    status: "draft",
+    createdAt: occurredAt,
+  });
+  const rows = await db.select().from(timesheetEntries).where(eq(timesheetEntries.userId, userId)).orderBy(desc(timesheetEntries.id)).limit(1);
+  const entry = rows[0];
+  if (!entry) throw new Error("Time entry could not be created");
+  await db.insert(consultantTimeEntryActivities).values({ timeEntryId: entry.id, userId, activityType: "created", occurredAt });
+  return presentConsultantTimeSubmission(entry);
+}
+
+/** A consultant may revise only their own draft or exception (returned-for-correction) entry. Assignment and review state cannot be changed here. */
+export async function updateConsultantTimeSubmission(userId: number, timeEntryId: number, input: Omit<ConsultantTimeSubmissionInput, "assignmentId">) {
+  const { db, entry } = await getOwnedEditableTimeEntry(userId, timeEntryId);
+  const occurredAt = new Date();
+  await db.update(timesheetEntries).set({ weekEnding: input.weekEnding, hours: input.hours, note: input.note || null }).where(eq(timesheetEntries.id, entry.id));
+  await db.insert(consultantTimeEntryActivities).values({ timeEntryId: entry.id, userId, activityType: "updated", occurredAt });
+  const rows = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, entry.id)).limit(1);
+  return presentConsultantTimeSubmission(rows[0] ?? entry);
+}
+
+/** Submission is a consultant request for designated human review; this operation never approves or financially processes time. */
+export async function submitConsultantTimeSubmission(userId: number, timeEntryId: number) {
+  const { db, entry } = await getOwnedEditableTimeEntry(userId, timeEntryId);
+  const occurredAt = new Date();
+  await db.update(timesheetEntries).set({ status: "submitted" }).where(eq(timesheetEntries.id, entry.id));
+  await db.insert(consultantTimeEntryActivities).values({ timeEntryId: entry.id, userId, activityType: "submitted", occurredAt });
+  const rows = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, entry.id)).limit(1);
+  return presentConsultantTimeSubmission(rows[0] ?? { ...entry, status: "submitted" });
 }
 
 export async function getDemoPortalSummary(role: PortalSummaryRole, userId: number) {

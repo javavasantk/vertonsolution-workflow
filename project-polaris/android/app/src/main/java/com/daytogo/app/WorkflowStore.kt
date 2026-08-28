@@ -1,4 +1,4 @@
-package com.projectpolaris.app
+package com.daytogo.app
 
 import android.content.Context
 import android.util.Base64
@@ -57,7 +57,7 @@ data class WorkflowSnapshot(
 
 class WorkflowStore(context: Context) {
     private val appContext = context.applicationContext
-    private val legacyPreferences = appContext.getSharedPreferences("project_polaris_preview", Context.MODE_PRIVATE)
+    private val legacyPreferences = appContext.getSharedPreferences("daytodo_preview", Context.MODE_PRIVATE)
     private val database = Room.databaseBuilder(appContext, PolarisDatabase::class.java, "project-polaris.db").build()
     var snapshot by mutableStateOf(loadInitial())
         private set
@@ -133,7 +133,7 @@ class WorkflowStore(context: Context) {
     fun endFocus() = update { it.copy(focusTaskId = null, focusEndsAtMillis = null) }
 
     fun exportJson(): String = buildString {
-        append("{\n  \"format\": \"project-polaris-local-export-v1\",\n  \"exportedAtMillis\": ").append(System.currentTimeMillis()).append(",\n  \"areas\": [")
+        append("{\n  \"format\": \"daytodo-local-export-v1\",\n  \"exportedAtMillis\": ").append(System.currentTimeMillis()).append(",\n  \"areas\": [")
         append(snapshot.areas.joinToString(",") { "{\"id\":\"${json(it.id)}\",\"name\":\"${json(it.name)}\"}" })
         append("],\n  \"tasks\": [")
         append(snapshot.tasks.joinToString(",\n") { task -> "{\"id\":\"${json(task.id)}\",\"title\":\"${json(task.title)}\",\"notes\":\"${json(task.notes)}\",\"areaId\":${task.areaId?.let { "\"${json(it)}\"" } ?: "null"},\"project\":\"${json(task.project)}\",\"priority\":\"${json(task.priority)}\",\"status\":\"${json(task.status)}\",\"type\":\"${json(task.type)}\",\"dueDate\":\"${json(task.dueDate)}\",\"effort\":\"${json(task.effort)}\",\"energy\":\"${json(task.energy)}\",\"tags\":[${task.tags.joinToString(",") { "\"${json(it)}\"" }}],\"recurrence\":\"${json(task.recurrence)}\",\"reminder\":\"${json(task.reminder)}\",\"waitingOn\":\"${json(task.waitingOn)}\",\"location\":\"${json(task.location)}\",\"privacy\":\"${json(task.privacy)}\",\"checklist\":[${task.checklist.joinToString(",") { "\"${json(it)}\"" }}],\"completed\":${task.completed},\"archived\":${task.archived}}" })

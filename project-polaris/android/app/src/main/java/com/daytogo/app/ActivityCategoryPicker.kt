@@ -1,4 +1,4 @@
-package com.projectpolaris.app
+package com.daytogo.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

@@ -1,4 +1,4 @@
-package com.projectpolaris.app
+package com.daytogo.app
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -59,11 +59,11 @@ fun scheduleTaskReminder(context: Context, task: WorkflowTask): Boolean {
     val delay = scheduledMillis - System.currentTimeMillis()
     if (delay <= 0L) return false
     val request = OneTimeWorkRequestBuilder<ReminderWorker>().setInitialDelay(delay, TimeUnit.MILLISECONDS).setInputData(Data.Builder().putString("task_id", task.id).build()).build()
-    WorkManager.getInstance(context).enqueueUniqueWork("polaris-reminder-${task.id}", ExistingWorkPolicy.REPLACE, request)
+    WorkManager.getInstance(context).enqueueUniqueWork("daytodo-reminder-${task.id}", ExistingWorkPolicy.REPLACE, request)
     return true
 }
 
 fun scheduleReminderTest(context: Context) {
     val request = OneTimeWorkRequestBuilder<ReminderWorker>().setInitialDelay(30, TimeUnit.SECONDS).setInputData(Data.Builder().putString("task_id", "test").build()).build()
-    WorkManager.getInstance(context).enqueueUniqueWork("polaris-reminder-test", ExistingWorkPolicy.REPLACE, request)
+    WorkManager.getInstance(context).enqueueUniqueWork("daytodo-reminder-test", ExistingWorkPolicy.REPLACE, request)
 }

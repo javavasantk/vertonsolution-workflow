@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">DayTodo</string>
-    <string name="developed_by">Developed by Project Polaris</string>
+    <string name="developed_by">Developed by Ria-Jay</string>
     <string name="welcome_title">Organize work and life, one clear step at a time.</string>
     <string name="welcome_body">DayTodo is a calm, local-first workspace for personal tasks, home routines, projects, and work activities. You can begin without an account.</string>
     <string name="choose_language">Choose language</string>
@@ -74,6 +74,11 @@
     <string name="settings_reminders">Reminders</string>
     <string name="settings_reminders_body">Choose whether you want local task reminders. DayTodo asks before showing notifications.</string>
     <string name="settings_privacy">Privacy dashboard</string>
+    <string name="settings_about">About DayTodo</string>
+    <string name="about_title">About DayTodo</string>
+    <string name="about_company_label">Company</string>
+    <string name="about_company_name">Ria-Jay</string>
+    <string name="about_body">DayTodo is a local-first task workspace for organizing personal, home, work, and everyday activities.</string>
     <string name="assistant_title">DayTodo preview</string>
     <string name="assistant_title_short">DayTodo</string>
     <string name="assistant_body">This device-only preview does not send content to an AI service. Review every suggestion before you use it.</string>

@@ -1,4 +1,4 @@
-package com.projectpolaris.app
+package com.daytogo.app
 
 import androidx.room.Dao
 import androidx.room.Database

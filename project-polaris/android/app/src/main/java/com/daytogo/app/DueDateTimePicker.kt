@@ -1,4 +1,4 @@
-package com.projectpolaris.app
+package com.daytogo.app
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog

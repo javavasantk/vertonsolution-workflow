@@ -1,4 +1,4 @@
-package com.projectpolaris.app
+package com.daytogo.app
 
 import android.Manifest
 import android.os.Build
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppTab { TODAY, INBOX, CALENDAR, FOCUS, SETTINGS, PRIVACY, POLARIS }
+enum class AppTab { TODAY, INBOX, CALENDAR, FOCUS, SETTINGS, ABOUT, PRIVACY, POLARIS }
 
 @Composable
 private fun PolarisTheme(dark: Boolean, content: @Composable () -> Unit) {
@@ -179,8 +179,15 @@ private fun WorkflowApp(store: WorkflowStore) {
                     onArea = { taskForArea = it }, onDetails = { taskForDetails = it }, onEdit = { taskForEdit = it }, onArchive = { task -> store.archiveTask(task.id, !task.archived); scope.launch { snackbars.showSnackbar(if (task.archived) taskRestored else taskArchived) } }, onDelete = { taskForDelete = it })
                 AppTab.CALENDAR -> CalendarScreen(state.tasks, state.areas) { taskForDetails = it }
                 AppTab.FOCUS -> FocusScreen(state.tasks.filterNot { it.completed }, state.focusTaskId, state.focusEndsAtMillis, store::startFocus, store::endFocus, { tabName = AppTab.INBOX.name })
-                AppTab.SETTINGS -> SettingsScreen(store, { tabName = AppTab.PRIVACY.name }, { message -> scope.launch { snackbars.showSnackbar(message) } }, enableReminders)
-                AppTab.PRIVACY -> PrivacyScreen(onNotice = { message -> scope.launch { snackbars.showSnackbar(message) } }, onExport = { exportLauncher.launch("project-polaris-local-export.json") })
+                AppTab.SETTINGS -> SettingsScreen(
+                    store = store,
+                    onPrivacy = { tabName = AppTab.PRIVACY.name },
+                    onAbout = { tabName = AppTab.ABOUT.name },
+                    onNotice = { message -> scope.launch { snackbars.showSnackbar(message) } },
+                    onEnableReminders = enableReminders,
+                )
+                AppTab.ABOUT -> AboutScreen()
+                AppTab.PRIVACY -> PrivacyScreen(onNotice = { message -> scope.launch { snackbars.showSnackbar(message) } }, onExport = { exportLauncher.launch("daytodo-local-export.json") })
                 AppTab.POLARIS -> PolarisPreviewScreen(state.tasks.filterNot { it.completed }) { title ->
                     store.addTask(TaskForm(title = title, type = "Task", effort = "15 min"))
                     scope.launch { snackbars.showSnackbar(taskAdded) }
@@ -227,7 +234,7 @@ private fun WorkflowApp(store: WorkflowStore) {
 private fun Header(tab: AppTab, onPrivacy: () -> Unit, onPolaris: () -> Unit) {
     val title = when (tab) {
         AppTab.TODAY -> stringRes(R.string.today); AppTab.INBOX -> stringRes(R.string.inbox); AppTab.CALENDAR -> stringRes(R.string.calendar)
-        AppTab.FOCUS -> stringRes(R.string.focus); AppTab.SETTINGS -> stringRes(R.string.settings); AppTab.PRIVACY -> stringRes(R.string.privacy); AppTab.POLARIS -> stringRes(R.string.assistant_title)
+        AppTab.FOCUS -> stringRes(R.string.focus); AppTab.SETTINGS -> stringRes(R.string.settings); AppTab.ABOUT -> stringRes(R.string.about_title); AppTab.PRIVACY -> stringRes(R.string.privacy); AppTab.POLARIS -> stringRes(R.string.assistant_title)
     }
     Row(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f).semantics { heading() })
@@ -391,7 +398,7 @@ private fun FocusScreen(tasks: List<WorkflowTask>, focusTaskId: String?, focusEn
 }
 
 @Composable
-private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onNotice: (String) -> Unit, onEnableReminders: () -> Unit) {
+private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onAbout: () -> Unit, onNotice: (String) -> Unit, onEnableReminders: () -> Unit) {
     var languages by rememberSaveable { mutableStateOf(false) }
     var areas by rememberSaveable { mutableStateOf(false) }
     val state = store.snapshot
@@ -408,10 +415,27 @@ private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onNotice
         item { SettingCard(stringRes(R.string.areas_title), "") { OutlinedButton(onClick = { areas = true }, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.add_area)) }; state.areas.forEach { Text(it.name, Modifier.padding(top = 6.dp)) } } }
         item { SettingCard(stringRes(R.string.sync_beta), stringRes(R.string.sync_beta_body)) { } }
         item { SettingCard(stringRes(R.string.settings_reminders), stringRes(R.string.reminders_permission_body)) { OutlinedButton(onClick = onEnableReminders, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.enable_reminders)) } } }
+        item { OutlinedButton(onClick = onAbout, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringRes(R.string.settings_about)) } }
         item { OutlinedButton(onClick = onPrivacy, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringRes(R.string.settings_privacy)) } }
     }
     if (languages) LanguageDialog(state.localeTag, { store.setLocale(it); languages = false; onNotice(languageSaved) }) { languages = false }
     if (areas) AreaDialog({ areas = false }) { name -> store.addArea(name); areas = false; onNotice(areaSaved) }
+}
+
+@Composable
+private fun AboutScreen() {
+    Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(stringRes(R.string.about_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringRes(R.string.app_name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(stringRes(R.string.about_company_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                Text(stringRes(R.string.about_company_name), style = MaterialTheme.typography.bodyLarge)
+                Text(stringRes(R.string.developed_by), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringRes(R.string.about_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
 }
 
 @Composable

@@ -102,6 +102,7 @@ private fun WelcomeScreen(localeTag: String, onLocale: (String) -> Unit, onFinis
         verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
     ) {
         Text(text = stringRes(R.string.app_name), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+        Text(text = stringRes(R.string.developed_by), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(text = stringRes(R.string.welcome_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         Text(text = stringRes(R.string.welcome_body), style = MaterialTheme.typography.bodyLarge)
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -397,7 +398,10 @@ private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onNotice
     val languageSaved = stringRes(R.string.language_saved)
     val areaSaved = stringRes(R.string.area_added)
     LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text(stringRes(R.string.settings_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() }) }
+        item {
+            Text(stringRes(R.string.settings_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
+            Text(stringRes(R.string.developed_by), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         item { SettingCard(stringRes(R.string.settings_language), stringRes(R.string.selected_language, selectedLanguage)) { OutlinedButton(onClick = { languages = true }, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.choose_language)) } } }
         item { SettingCard(stringRes(R.string.settings_theme), "") { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(stringRes(R.string.settings_theme), Modifier.weight(1f)); Switch(state.darkTheme, store::setDarkTheme) } } }
         item { SettingCard(stringRes(R.string.areas_title), "") { OutlinedButton(onClick = { areas = true }, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.add_area)) }; state.areas.forEach { Text(it.name, Modifier.padding(top = 6.dp)) } } }

@@ -39,13 +39,13 @@ No shipping-locale manifest or native linguistic approvals exist. Do **not** cre
 
 | Field | Draft copy | Approval state |
 |---|---|---|
-| App name | Project Polaris | Product approval required |
+| App name | DayTodo | Product approval required |
 | Short description | Plan tasks, appointments, and routines offline on your device. | Product and legal approval required |
-| Full description | Project Polaris is a calm, local-first way to organize work, home, personal, and project activities. Create tasks, choose an activity category, add an optional date and time, and review tasks by day, week, or month. Organize tasks into Areas, keep notes and checklists, use local search, and export your device-local workspace when you choose. Optional reminders are enabled only after you choose to allow notifications. Project Polaris currently keeps planning data on your device and does not provide cloud backup or shared workspaces in this preview. | Product, legal, privacy, and localization approval required |
+| Full description | DayTodo, developed by Project Polaris, is a calm, local-first way to organize work, home, personal, and project activities. Create tasks, choose an activity category, add an optional date and time, and review tasks by day, week, or month. Organize tasks into Areas, keep notes and checklists, use local search, and export your device-local workspace when you choose. Optional reminders are enabled only after you choose to allow notifications. DayTodo currently keeps planning data on your device and does not provide cloud backup or shared workspaces in this preview. | Product, legal, privacy, and localization approval required |
 | Support email | `vasantkatta1416@gmail.com` | Provided by release owner; legal review remains required |
 | Privacy policy URL | `https://javavasantk.github.io/project-polaris-privacy-policy/` | Public HTTPS page verified; legal review remains required |
 | Category | Productivity | Product owner to validate |
-| Audience wording | “Project Polaris is a general-purpose planning app. Availability and intended audience must be finalized by the release owner before submission.” | **Legal/policy review required** |
+| Audience wording | “DayTodo is a general-purpose task and planning app, developed by Project Polaris. Availability and intended audience must be finalized by the release owner before submission.” | **Legal/policy review required** |
 
 Do not make grade-improvement, health, medical, guaranteed productivity, autonomous-AI, school affiliation, team collaboration, cloud-sync, or language-availability claims. Google Play requires a privacy-policy link even when an app does not collect or share user data.[3]
 

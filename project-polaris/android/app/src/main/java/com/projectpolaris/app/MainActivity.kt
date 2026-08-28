@@ -123,6 +123,7 @@ private fun WorkflowApp(store: WorkflowStore) {
     val snackbars = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var addTask by rememberSaveable { mutableStateOf(false) }
+    var taskForEdit by remember { mutableStateOf<WorkflowTask?>(null) }
     var taskForArea by remember { mutableStateOf<WorkflowTask?>(null) }
     var taskForDelete by remember { mutableStateOf<WorkflowTask?>(null) }
     val taskAdded = stringRes(R.string.task_added)
@@ -143,27 +144,34 @@ private fun WorkflowApp(store: WorkflowStore) {
                     onComplete = { task, value -> store.complete(task.id, value); scope.launch { snackbars.showSnackbar(taskUpdated) } },
                     onPlan = { task -> store.togglePlan(task.id); scope.launch { snackbars.showSnackbar(planUpdated) } },
                     onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name },
-                    onArea = { taskForArea = it }, onDelete = { taskForDelete = it })
+                    onArea = { taskForArea = it }, onEdit = { taskForEdit = it }, onDelete = { taskForDelete = it })
                 AppTab.INBOX -> InboxScreen(state.tasks, state.areas,
                     onComplete = { task, value -> store.complete(task.id, value) }, onPlan = { store.togglePlan(it.id) },
                     onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name },
-                    onArea = { taskForArea = it }, onDelete = { taskForDelete = it })
+                    onArea = { taskForArea = it }, onEdit = { taskForEdit = it }, onDelete = { taskForDelete = it })
                 AppTab.PLAN -> PlanScreen(state.tasks, state.areas, onToggle = { store.togglePlan(it.id) }, onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name })
                 AppTab.FOCUS -> FocusScreen(state.tasks.filterNot { it.completed }, state.focusTaskId, state.focusEndsAtMillis, store::startFocus, store::endFocus, { tabName = AppTab.INBOX.name })
                 AppTab.SETTINGS -> SettingsScreen(store, { tabName = AppTab.PRIVACY.name }, { message -> scope.launch { snackbars.showSnackbar(message) } })
                 AppTab.PRIVACY -> PrivacyScreen { message -> scope.launch { snackbars.showSnackbar(message) } }
                 AppTab.POLARIS -> PolarisPreviewScreen(state.tasks.filterNot { it.completed }) { title ->
-                    store.addTask(title, null)
+                    store.addTask(TaskForm(title = title, type = "Action", effort = "15 min"))
                     scope.launch { snackbars.showSnackbar(taskAdded) }
                 }
             }
         }
     }
     if (addTask) {
-        TaskDialog(state.areas, { addTask = false }) { title, areaId ->
-            store.addTask(title, areaId)
+        TaskDialog(state.areas, { addTask = false }) { form ->
+            store.addTask(form)
             addTask = false
             scope.launch { snackbars.showSnackbar(taskAdded) }
+        }
+    }
+    taskForEdit?.let { task ->
+        TaskDialog(state.areas, { taskForEdit = null }, initial = task.toForm()) { form ->
+            store.updateTask(task.id, form)
+            taskForEdit = null
+            scope.launch { snackbars.showSnackbar(taskUpdated) }
         }
     }
     taskForArea?.let { task ->
@@ -206,28 +214,28 @@ private fun AppNavigation(current: AppTab, onSelect: (AppTab) -> Unit) {
 }
 
 @Composable
-private fun TodayScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+private fun TodayScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
     val today = tasks.filter { it.plannedForToday && !it.completed }
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Spacer(Modifier.height(6.dp)); Text(stringRes(R.string.preview_badge), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary); Text(stringRes(R.string.today), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() }) }
         if (today.isEmpty()) item { EmptyCard(stringRes(R.string.empty_today_title), stringRes(R.string.empty_today_body)) }
-        else items(today, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onDelete) }
+        else items(today, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onEdit, onDelete) }
         item { Spacer(Modifier.height(88.dp)) }
     }
 }
 
 @Composable
-private fun InboxScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+private fun InboxScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Spacer(Modifier.height(6.dp)); Text(stringRes(R.string.inbox), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() }); Text(stringRes(R.string.empty_inbox_body), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         if (tasks.isEmpty()) item { EmptyCard(stringRes(R.string.empty_inbox_title), stringRes(R.string.empty_inbox_body)) }
-        else items(tasks, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onDelete) }
+        else items(tasks, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onEdit, onDelete) }
         item { Spacer(Modifier.height(88.dp)) }
     }
 }
 
 @Composable
-private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
     val areaName = areas.firstOrNull { it.id == task.areaId }?.name ?: stringRes(R.string.task_no_area)
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,6 +246,9 @@ private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: 
                     Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
                     Text(if (task.completed) stringRes(R.string.task_done) else stringRes(R.string.task_open), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(areaName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringRes(R.string.filter_summary, task.type, task.priority), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (task.dueDate.isNotBlank()) Text(stringRes(R.string.filter_detail, stringRes(R.string.due_date), task.dueDate), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (task.tags.isNotEmpty()) Text(stringRes(R.string.filter_detail, stringRes(R.string.tags), task.tags.joinToString(", ")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (!task.completed) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -246,6 +257,7 @@ private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: 
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { onArea(task) }) { Text(stringRes(R.string.assign_area)) }
+                TextButton(onClick = { onEdit(task) }) { Text(stringRes(R.string.edit_task)) }
                 TextButton(onClick = { onDelete(task) }) { Text(stringRes(R.string.task_delete)) }
             }
         }
@@ -376,14 +388,92 @@ private fun PolarisPreviewScreen(tasks: List<WorkflowTask>, onAdd: (String) -> U
 }
 
 @Composable
-private fun TaskDialog(areas: List<WorkflowArea>, onDismiss: () -> Unit, onSave: (String, String?) -> Unit) {
-    var title by rememberSaveable { mutableStateOf("") }; var areaId by rememberSaveable { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringRes(R.string.add_task)) }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.task_label)) }, placeholder = { Text(stringRes(R.string.task_hint)) })
-            areas.forEach { area -> FilterChip(selected = areaId == area.id, onClick = { areaId = if (areaId == area.id) null else area.id }, label = { Text(area.name) }) }
+private fun TaskDialog(areas: List<WorkflowArea>, onDismiss: () -> Unit, initial: TaskForm = TaskForm(), onSave: (TaskForm) -> Unit) {
+    var title by rememberSaveable(initial.title) { mutableStateOf(initial.title) }
+    var notes by rememberSaveable(initial.notes) { mutableStateOf(initial.notes) }
+    var areaId by rememberSaveable(initial.areaId) { mutableStateOf(initial.areaId) }
+    var project by rememberSaveable(initial.project) { mutableStateOf(initial.project) }
+    var priority by rememberSaveable(initial.priority) { mutableStateOf(initial.priority) }
+    var status by rememberSaveable(initial.status) { mutableStateOf(initial.status) }
+    var type by rememberSaveable(initial.type) { mutableStateOf(initial.type) }
+    var dueDate by rememberSaveable(initial.dueDate) { mutableStateOf(initial.dueDate) }
+    var effort by rememberSaveable(initial.effort) { mutableStateOf(initial.effort) }
+    var energy by rememberSaveable(initial.energy) { mutableStateOf(initial.energy) }
+    var tagsText by rememberSaveable(initial.tags) { mutableStateOf(initial.tags.joinToString(", ")) }
+    var recurrence by rememberSaveable(initial.recurrence) { mutableStateOf(initial.recurrence) }
+    var reminder by rememberSaveable(initial.reminder) { mutableStateOf(initial.reminder) }
+    var waitingOn by rememberSaveable(initial.waitingOn) { mutableStateOf(initial.waitingOn) }
+    var location by rememberSaveable(initial.location) { mutableStateOf(initial.location) }
+    var privacy by rememberSaveable(initial.privacy) { mutableStateOf(initial.privacy) }
+    var checklistText by rememberSaveable(initial.checklist) { mutableStateOf(initial.checklist.joinToString(", ")) }
+    var showMore by rememberSaveable { mutableStateOf(initial.title.isNotBlank()) }
+    val editing = initial.title.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (editing) stringRes(R.string.edit_task) else stringRes(R.string.add_task)) },
+        text = {
+            LazyColumn(modifier = Modifier.height(440.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                item { OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.task_label)) }, placeholder = { Text(stringRes(R.string.task_hint)) }) }
+                item {
+                    Text(stringRes(R.string.task_area), style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = areaId == null, onClick = { areaId = null }, label = { Text(stringRes(R.string.task_no_area)) })
+                        areas.take(3).forEach { area -> FilterChip(selected = areaId == area.id, onClick = { areaId = area.id }, label = { Text(area.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }) }
+                    }
+                }
+                item { ChoiceSection(stringRes(R.string.priority), priority, TaskOptions.priorities) { priority = it } }
+                item { TextButton(onClick = { showMore = !showMore }) { Text(if (showMore) stringRes(R.string.fewer_options) else stringRes(R.string.more_options)) } }
+                if (showMore) {
+                    item { OutlinedTextField(notes, { notes = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.notes)) }, placeholder = { Text(stringRes(R.string.notes_hint)) }, minLines = 2) }
+                    item { OutlinedTextField(project, { project = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.project)) }, placeholder = { Text(stringRes(R.string.project_hint)) }) }
+                    item { ChoiceSection(stringRes(R.string.status), status, TaskOptions.statuses) { status = it } }
+                    item { ChoiceSection(stringRes(R.string.task_type), type, TaskOptions.types) { type = it } }
+                    item { OutlinedTextField(dueDate, { dueDate = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.due_date)) }, placeholder = { Text(stringRes(R.string.due_date_hint)) }) }
+                    item { ChoiceSection(stringRes(R.string.effort), effort, TaskOptions.efforts) { effort = it } }
+                    item { ChoiceSection(stringRes(R.string.energy), energy, TaskOptions.energies) { energy = it } }
+                    item { OutlinedTextField(tagsText, { tagsText = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.tags)) }, placeholder = { Text(stringRes(R.string.tags_hint)) }) }
+                    item { ChoiceSection(stringRes(R.string.recurrence), recurrence, TaskOptions.recurrences) { recurrence = it } }
+                    item { ChoiceSection(stringRes(R.string.reminder), reminder, TaskOptions.reminders) { reminder = it }; if (reminder != "None") Text(stringRes(R.string.reminder_preview_notice), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    item { OutlinedTextField(waitingOn, { waitingOn = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.waiting_on)) }, placeholder = { Text(stringRes(R.string.waiting_on_hint)) }) }
+                    item { OutlinedTextField(location, { location = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.location)) }, placeholder = { Text(stringRes(R.string.location_hint)) }) }
+                    item { ChoiceSection(stringRes(R.string.privacy_label), privacy, TaskOptions.privacy) { privacy = it } }
+                    item { OutlinedTextField(checklistText, { checklistText = it }, Modifier.fillMaxWidth(), label = { Text(stringRes(R.string.checklist)) }, placeholder = { Text(stringRes(R.string.checklist_hint)) }) }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onSave(TaskForm(title, notes, areaId, project, priority, status, type, dueDate, effort, energy, tagsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }, recurrence, reminder, waitingOn, location, privacy, checklistText.split(",").map { it.trim() }.filter { it.isNotEmpty() }))
+            }, enabled = title.trim().isNotEmpty()) { Text(if (editing) stringRes(R.string.save_changes) else stringRes(R.string.save_task)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringRes(R.string.cancel)) } },
+    )
+}
+
+@Composable
+private fun ChoiceSection(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        options.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { option -> FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(optionLabel(option), maxLines = 1, overflow = TextOverflow.Ellipsis) }) }
+            }
         }
-    }, confirmButton = { Button(onClick = { onSave(title, areaId) }, enabled = title.trim().isNotEmpty()) { Text(stringRes(R.string.save_task)) } }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringRes(R.string.cancel)) } })
+    }
+}
+
+@Composable
+private fun optionLabel(value: String): String = when (value) {
+    "None" -> stringRes(R.string.option_none); "Low" -> stringRes(R.string.option_low); "Normal" -> stringRes(R.string.option_normal); "High" -> stringRes(R.string.option_high); "Urgent" -> stringRes(R.string.option_urgent)
+    "Inbox" -> stringRes(R.string.option_inbox); "Next" -> stringRes(R.string.option_next); "In progress" -> stringRes(R.string.option_in_progress); "Waiting" -> stringRes(R.string.option_waiting); "Completed" -> stringRes(R.string.option_completed)
+    "Action" -> stringRes(R.string.option_action); "Call" -> stringRes(R.string.option_call); "Email" -> stringRes(R.string.option_email); "Errand" -> stringRes(R.string.option_errand); "Meeting" -> stringRes(R.string.option_meeting); "Habit" -> stringRes(R.string.option_habit); "Decision" -> stringRes(R.string.option_decision); "Review" -> stringRes(R.string.option_review); "Other" -> stringRes(R.string.option_other)
+    "Not set" -> stringRes(R.string.option_not_set); "5 min" -> stringRes(R.string.option_5_min); "15 min" -> stringRes(R.string.option_15_min); "30 min" -> stringRes(R.string.option_30_min); "1 hour" -> stringRes(R.string.option_1_hour); "2+ hours" -> stringRes(R.string.option_2_hours)
+    "Low energy" -> stringRes(R.string.option_low_energy); "Normal energy" -> stringRes(R.string.option_normal_energy); "Deep focus" -> stringRes(R.string.option_deep_focus)
+    "Daily" -> stringRes(R.string.option_daily); "Weekdays" -> stringRes(R.string.option_weekdays); "Weekly" -> stringRes(R.string.option_weekly); "Monthly" -> stringRes(R.string.option_monthly)
+    "At due time" -> stringRes(R.string.option_at_due); "15 min before" -> stringRes(R.string.option_15_before); "1 hour before" -> stringRes(R.string.option_1_hour_before); "1 day before" -> stringRes(R.string.option_1_day_before)
+    "Private" -> stringRes(R.string.option_private); "Personal" -> stringRes(R.string.option_personal); "Shared later" -> stringRes(R.string.option_shared_later)
+    else -> value
 }
 
 @Composable

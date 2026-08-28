@@ -57,7 +57,7 @@ data class AssistantDraft(
     val language: String,
     val summary: String,
     val uncertainties: List<String>,
-    val learnerQuestions: List<String>,
+    val userQuestions: List<String>,
     val draftActions: List<DraftAction>,
     val safetyFlags: List<String>,
     val contextFingerprint: String,

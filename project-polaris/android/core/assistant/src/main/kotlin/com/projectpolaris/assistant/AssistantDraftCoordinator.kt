@@ -159,7 +159,7 @@ class AssistantDraftCoordinator(
         when (action) {
             LocalFallbackAction.KEEP_AS_NOTE -> fallback.keepAsNote(source)
             LocalFallbackAction.CREATE_TASK_MANUALLY -> fallback.openManualTaskCreation(source)
-            LocalFallbackAction.USE_MANUAL_SMALLER_STEP -> requireNotNull(taskId).let(fallback::openManualSmallerStep)
+            LocalFallbackAction.USE_MANUAL_SMALLER_STEP -> fallback.openManualSmallerStep(requireNotNull(taskId))
             LocalFallbackAction.CONTINUE_PLANNING -> Unit
         }
         mutableState.value = AssistantUiState.Idle

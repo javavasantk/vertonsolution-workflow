@@ -1,8 +1,12 @@
 package com.projectpolaris.app
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
@@ -123,6 +128,7 @@ private fun WorkflowApp(store: WorkflowStore) {
     val snackbars = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var addTask by rememberSaveable { mutableStateOf(false) }
+    var taskForDetails by remember { mutableStateOf<WorkflowTask?>(null) }
     var taskForEdit by remember { mutableStateOf<WorkflowTask?>(null) }
     var taskForArea by remember { mutableStateOf<WorkflowTask?>(null) }
     var taskForDelete by remember { mutableStateOf<WorkflowTask?>(null) }
@@ -131,6 +137,26 @@ private fun WorkflowApp(store: WorkflowStore) {
     val planUpdated = stringRes(R.string.task_planned)
     val areaUpdated = stringRes(R.string.area_updated)
     val taskDeleted = stringRes(R.string.task_deleted)
+    val taskArchived = stringRes(R.string.task_archived)
+    val taskRestored = stringRes(R.string.task_restored)
+    val exportComplete = stringRes(R.string.export_complete)
+    val exportCancelled = stringRes(R.string.export_cancelled)
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) scope.launch { snackbars.showSnackbar(exportCancelled) }
+        else runCatching { context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(store.exportJson()) } }.onSuccess { scope.launch { snackbars.showSnackbar(exportComplete) } }.onFailure { scope.launch { snackbars.showSnackbar(exportCancelled) } }
+    }
+    val remindersEnabled = stringRes(R.string.reminders_enabled)
+    val reminderDateRequired = stringRes(R.string.reminder_date_required)
+    val remindersDenied = stringRes(R.string.reminders_denied)
+    val reminderPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        scope.launch { snackbars.showSnackbar(if (granted) remindersEnabled else remindersDenied) }
+    }
+    val enableReminders: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationsAllowed(context)) reminderPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else { scope.launch { snackbars.showSnackbar(remindersEnabled) } }
+        Unit
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbars) },
@@ -144,15 +170,15 @@ private fun WorkflowApp(store: WorkflowStore) {
                     onComplete = { task, value -> store.complete(task.id, value); scope.launch { snackbars.showSnackbar(taskUpdated) } },
                     onPlan = { task -> store.togglePlan(task.id); scope.launch { snackbars.showSnackbar(planUpdated) } },
                     onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name },
-                    onArea = { taskForArea = it }, onEdit = { taskForEdit = it }, onDelete = { taskForDelete = it })
+                    onArea = { taskForArea = it }, onDetails = { taskForDetails = it }, onEdit = { taskForEdit = it }, onArchive = { task -> store.archiveTask(task.id, !task.archived); scope.launch { snackbars.showSnackbar(if (task.archived) taskRestored else taskArchived) } }, onDelete = { taskForDelete = it })
                 AppTab.INBOX -> InboxScreen(state.tasks, state.areas,
                     onComplete = { task, value -> store.complete(task.id, value) }, onPlan = { store.togglePlan(it.id) },
                     onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name },
-                    onArea = { taskForArea = it }, onEdit = { taskForEdit = it }, onDelete = { taskForDelete = it })
+                    onArea = { taskForArea = it }, onDetails = { taskForDetails = it }, onEdit = { taskForEdit = it }, onArchive = { task -> store.archiveTask(task.id, !task.archived); scope.launch { snackbars.showSnackbar(if (task.archived) taskRestored else taskArchived) } }, onDelete = { taskForDelete = it })
                 AppTab.PLAN -> PlanScreen(state.tasks, state.areas, onToggle = { store.togglePlan(it.id) }, onFocus = { task -> store.startFocus(task.id, 25); tabName = AppTab.FOCUS.name })
                 AppTab.FOCUS -> FocusScreen(state.tasks.filterNot { it.completed }, state.focusTaskId, state.focusEndsAtMillis, store::startFocus, store::endFocus, { tabName = AppTab.INBOX.name })
-                AppTab.SETTINGS -> SettingsScreen(store, { tabName = AppTab.PRIVACY.name }, { message -> scope.launch { snackbars.showSnackbar(message) } })
-                AppTab.PRIVACY -> PrivacyScreen { message -> scope.launch { snackbars.showSnackbar(message) } }
+                AppTab.SETTINGS -> SettingsScreen(store, { tabName = AppTab.PRIVACY.name }, { message -> scope.launch { snackbars.showSnackbar(message) } }, enableReminders)
+                AppTab.PRIVACY -> PrivacyScreen(onNotice = { message -> scope.launch { snackbars.showSnackbar(message) } }, onExport = { exportLauncher.launch("project-polaris-local-export.json") })
                 AppTab.POLARIS -> PolarisPreviewScreen(state.tasks.filterNot { it.completed }) { title ->
                     store.addTask(TaskForm(title = title, type = "Action", effort = "15 min"))
                     scope.launch { snackbars.showSnackbar(taskAdded) }
@@ -162,14 +188,19 @@ private fun WorkflowApp(store: WorkflowStore) {
     }
     if (addTask) {
         TaskDialog(state.areas, { addTask = false }) { form ->
-            store.addTask(form)
+            val createdId = store.addTask(form)
+            if (createdId != null && form.reminder != "None" && !store.scheduleReminder(context, createdId)) scope.launch { snackbars.showSnackbar(reminderDateRequired) }
             addTask = false
             scope.launch { snackbars.showSnackbar(taskAdded) }
         }
     }
+    taskForDetails?.let { task ->
+        TaskDetailsDialog(task, state.areas, { taskForDetails = null }, onChecklistToggle = { index -> store.toggleChecklistItem(task.id, index) }, onEdit = { taskForDetails = null; taskForEdit = task })
+    }
     taskForEdit?.let { task ->
         TaskDialog(state.areas, { taskForEdit = null }, initial = task.toForm()) { form ->
             store.updateTask(task.id, form)
+            if (form.reminder != "None" && !store.scheduleReminder(context, task.id)) scope.launch { snackbars.showSnackbar(reminderDateRequired) }
             taskForEdit = null
             scope.launch { snackbars.showSnackbar(taskUpdated) }
         }
@@ -214,28 +245,55 @@ private fun AppNavigation(current: AppTab, onSelect: (AppTab) -> Unit) {
 }
 
 @Composable
-private fun TodayScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+private fun TodayScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onDetails: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onArchive: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
     val today = tasks.filter { it.plannedForToday && !it.completed }
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Spacer(Modifier.height(6.dp)); Text(stringRes(R.string.preview_badge), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary); Text(stringRes(R.string.today), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() }) }
         if (today.isEmpty()) item { EmptyCard(stringRes(R.string.empty_today_title), stringRes(R.string.empty_today_body)) }
-        else items(today, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onEdit, onDelete) }
+        else items(today, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onDetails, onEdit, onArchive, onDelete) }
         item { Spacer(Modifier.height(88.dp)) }
     }
 }
 
 @Composable
-private fun InboxScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+private fun InboxScreen(tasks: List<WorkflowTask>, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onDetails: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onArchive: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var view by rememberSaveable { mutableStateOf("Active") }
+    val visible = tasks.filter { task ->
+        val area = areas.firstOrNull { it.id == task.areaId }?.name.orEmpty()
+        val text = listOf(task.title, task.notes, task.project, area, task.tags.joinToString(" "), task.waitingOn, task.location).joinToString(" ")
+        val matches = query.isBlank() || text.contains(query, ignoreCase = true)
+        matches && when (view) {
+            "Active" -> !task.archived && !task.completed
+            "Waiting" -> !task.archived && task.status == "Waiting"
+            "Completed" -> !task.archived && task.completed
+            "Archived" -> task.archived
+            else -> !task.archived
+        }
+    }
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Spacer(Modifier.height(6.dp)); Text(stringRes(R.string.inbox), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() }); Text(stringRes(R.string.empty_inbox_body), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        if (tasks.isEmpty()) item { EmptyCard(stringRes(R.string.empty_inbox_title), stringRes(R.string.empty_inbox_body)) }
-        else items(tasks, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onEdit, onDelete) }
+        item {
+            Spacer(Modifier.height(6.dp)); Text(stringRes(R.string.inbox), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), label = { Text(stringRes(R.string.search_tasks)) }, placeholder = { Text(stringRes(R.string.search_tasks_hint)) }, singleLine = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+                FilterChip(view == "Active", { view = "Active" }, label = { Text(stringRes(R.string.view_active)) })
+                FilterChip(view == "Waiting", { view = "Waiting" }, label = { Text(stringRes(R.string.view_waiting)) })
+                FilterChip(view == "Completed", { view = "Completed" }, label = { Text(stringRes(R.string.view_completed)) })
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(view == "All", { view = "All" }, label = { Text(stringRes(R.string.view_all)) })
+                FilterChip(view == "Archived", { view = "Archived" }, label = { Text(stringRes(R.string.view_archived)) })
+            }
+        }
+        if (visible.isEmpty() && tasks.isEmpty()) item { EmptyCard(stringRes(R.string.empty_inbox_title), stringRes(R.string.empty_inbox_body)) }
+        else if (visible.isEmpty()) item { EmptyCard(stringRes(R.string.no_search_results), stringRes(R.string.search_tasks_hint)) }
+        else items(visible, key = { it.id }) { TaskCard(it, areas, onComplete, onPlan, onFocus, onArea, onDetails, onEdit, onArchive, onDelete) }
         item { Spacer(Modifier.height(88.dp)) }
     }
 }
 
 @Composable
-private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
+private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: (WorkflowTask, Boolean) -> Unit, onPlan: (WorkflowTask) -> Unit, onFocus: (WorkflowTask) -> Unit, onArea: (WorkflowTask) -> Unit, onDetails: (WorkflowTask) -> Unit, onEdit: (WorkflowTask) -> Unit, onArchive: (WorkflowTask) -> Unit, onDelete: (WorkflowTask) -> Unit) {
     val areaName = areas.firstOrNull { it.id == task.areaId }?.name ?: stringRes(R.string.task_no_area)
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -256,8 +314,10 @@ private fun TaskCard(task: WorkflowTask, areas: List<WorkflowArea>, onComplete: 
                 FilterChip(selected = false, onClick = { onFocus(task) }, label = { Text(stringRes(R.string.task_focus)) })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { onDetails(task) }) { Text(stringRes(R.string.task_details)) }
                 TextButton(onClick = { onArea(task) }) { Text(stringRes(R.string.assign_area)) }
                 TextButton(onClick = { onEdit(task) }) { Text(stringRes(R.string.edit_task)) }
+                TextButton(onClick = { onArchive(task) }) { Text(if (task.archived) stringRes(R.string.restore_task) else stringRes(R.string.archive_task)) }
                 TextButton(onClick = { onDelete(task) }) { Text(stringRes(R.string.task_delete)) }
             }
         }
@@ -329,7 +389,7 @@ private fun FocusScreen(tasks: List<WorkflowTask>, focusTaskId: String?, focusEn
 }
 
 @Composable
-private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onNotice: (String) -> Unit) {
+private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onNotice: (String) -> Unit, onEnableReminders: () -> Unit) {
     var languages by rememberSaveable { mutableStateOf(false) }
     var areas by rememberSaveable { mutableStateOf(false) }
     val state = store.snapshot
@@ -341,8 +401,8 @@ private fun SettingsScreen(store: WorkflowStore, onPrivacy: () -> Unit, onNotice
         item { SettingCard(stringRes(R.string.settings_language), stringRes(R.string.selected_language, selectedLanguage)) { OutlinedButton(onClick = { languages = true }, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.choose_language)) } } }
         item { SettingCard(stringRes(R.string.settings_theme), "") { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(stringRes(R.string.settings_theme), Modifier.weight(1f)); Switch(state.darkTheme, store::setDarkTheme) } } }
         item { SettingCard(stringRes(R.string.areas_title), "") { OutlinedButton(onClick = { areas = true }, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.add_area)) }; state.areas.forEach { Text(it.name, Modifier.padding(top = 6.dp)) } } }
-        item { SettingCard(stringRes(R.string.settings_backup), stringRes(R.string.settings_backup_body)) { } }
-        item { SettingCard(stringRes(R.string.settings_reminders), stringRes(R.string.settings_reminders_body)) { } }
+        item { SettingCard(stringRes(R.string.sync_beta), stringRes(R.string.sync_beta_body)) { } }
+        item { SettingCard(stringRes(R.string.settings_reminders), stringRes(R.string.reminders_permission_body)) { OutlinedButton(onClick = onEnableReminders, modifier = Modifier.fillMaxWidth()) { Text(stringRes(R.string.enable_reminders)) } } }
         item { OutlinedButton(onClick = onPrivacy, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringRes(R.string.settings_privacy)) } }
     }
     if (languages) LanguageDialog(state.localeTag, { store.setLocale(it); languages = false; onNotice(languageSaved) }) { languages = false }
@@ -355,13 +415,13 @@ private fun SettingCard(title: String, body: String, content: @Composable () -> 
 }
 
 @Composable
-private fun PrivacyScreen(onNotice: (String) -> Unit) {
+private fun PrivacyScreen(onNotice: (String) -> Unit, onExport: () -> Unit) {
     val exportMessage = stringRes(R.string.privacy_export_unavailable)
     val deleteMessage = stringRes(R.string.privacy_delete_unavailable)
     Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringRes(R.string.privacy_title), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
         ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(stringRes(R.string.device_only), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary); Text(stringRes(R.string.privacy_local)); Text(stringRes(R.string.privacy_ai)); Text(stringRes(R.string.privacy_analytics)) } }
-        OutlinedButton(onClick = { onNotice(exportMessage) }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringRes(R.string.privacy_export)) }
+        OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringRes(R.string.export_local_data)) }
         OutlinedButton(onClick = { onNotice(deleteMessage) }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringRes(R.string.privacy_delete)) }
     }
 }
@@ -464,7 +524,7 @@ private fun ChoiceSection(label: String, selected: String, options: List<String>
 }
 
 @Composable
-private fun optionLabel(value: String): String = when (value) {
+fun optionLabel(value: String): String = when (value) {
     "None" -> stringRes(R.string.option_none); "Low" -> stringRes(R.string.option_low); "Normal" -> stringRes(R.string.option_normal); "High" -> stringRes(R.string.option_high); "Urgent" -> stringRes(R.string.option_urgent)
     "Inbox" -> stringRes(R.string.option_inbox); "Next" -> stringRes(R.string.option_next); "In progress" -> stringRes(R.string.option_in_progress); "Waiting" -> stringRes(R.string.option_waiting); "Completed" -> stringRes(R.string.option_completed)
     "Action" -> stringRes(R.string.option_action); "Call" -> stringRes(R.string.option_call); "Email" -> stringRes(R.string.option_email); "Errand" -> stringRes(R.string.option_errand); "Meeting" -> stringRes(R.string.option_meeting); "Habit" -> stringRes(R.string.option_habit); "Decision" -> stringRes(R.string.option_decision); "Review" -> stringRes(R.string.option_review); "Other" -> stringRes(R.string.option_other)
@@ -500,4 +560,4 @@ private fun EmptyCard(title: String, body: String, action: (() -> Unit)? = null)
 }
 
 @Composable
-private fun stringRes(id: Int, vararg args: Any): String = androidx.compose.ui.res.stringResource(id, *args)
+fun stringRes(id: Int, vararg args: Any): String = androidx.compose.ui.res.stringResource(id, *args)

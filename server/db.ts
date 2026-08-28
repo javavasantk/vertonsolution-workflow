@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -684,6 +684,78 @@ export async function submitConsultantTimeSubmission(userId: number, timeEntryId
   await db.insert(consultantTimeEntryActivities).values({ timeEntryId: entry.id, userId, activityType: "submitted", occurredAt });
   const rows = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, entry.id)).limit(1);
   return presentConsultantTimeSubmission(rows[0] ?? { ...entry, status: "submitted" });
+}
+
+type ConsultantActionInboxItem = {
+  dedupKey: string;
+  source: "onboarding_task" | "profile_update" | "time_entry" | "assignment";
+  title: string;
+  status: "action_needed" | "awaiting_human_follow_up" | "correction_needed";
+  designatedHumanOwner: string;
+  destination: "/workspace/onboarding" | "/workspace/profile" | "/workspace/time-submission" | "/workspace/my-engagement";
+  updatedAt: Date | null;
+  state: "unread" | "read" | "dismissed";
+};
+
+function taskOwnerLabel(ownerGroup: typeof consultantOnboardingTasks.$inferSelect.ownerGroup) {
+  if (ownerGroup === "hr") return "HR team";
+  if (ownerGroup === "it") return "IT support";
+  if (ownerGroup === "manager") return "Designated manager";
+  return "Workforce Operations";
+}
+
+/**
+ * Deterministically derives private in-app reminders from the current consultant's existing records.
+ * This never sends a message or persists reminder content; the state table holds only the user-scoped
+ * deduplication key and presentation state.
+ */
+export async function listConsultantActionInbox(userId: number, includeDismissed = false) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const [tasks, profiles, timeEntries, assignments, storedStates] = await Promise.all([
+    db.select().from(consultantOnboardingTasks).where(and(eq(consultantOnboardingTasks.userId, userId), eq(consultantOnboardingTasks.consultantCompletionState, "pending"))).orderBy(desc(consultantOnboardingTasks.updatedAt)),
+    db.select({ workAuthorizationStatus: employeeProfiles.workAuthorizationStatus, updatedAt: employeeProfiles.updatedAt }).from(employeeProfiles).where(eq(employeeProfiles.userId, userId)).limit(1),
+    db.select({ id: timesheetEntries.id, status: timesheetEntries.status, weekEnding: timesheetEntries.weekEnding, updatedAt: timesheetEntries.updatedAt }).from(timesheetEntries).where(and(eq(timesheetEntries.userId, userId), inArray(timesheetEntries.status, ["draft", "exception", "submitted"]))).orderBy(desc(timesheetEntries.updatedAt)).limit(12),
+    db.select({ id: consultantAssignments.id, managerName: consultantAssignments.managerName, assignmentState: consultantAssignments.assignmentState, endDate: consultantAssignments.endDate, updatedAt: consultantAssignments.updatedAt }).from(consultantAssignments).where(eq(consultantAssignments.userId, userId)).orderBy(desc(consultantAssignments.updatedAt)),
+    db.select().from(consultantActionInboxStates).where(eq(consultantActionInboxStates.userId, userId)),
+  ]);
+  const stateByKey = new Map(storedStates.map(row => [row.dedupKey, row.state]));
+  const items: ConsultantActionInboxItem[] = [];
+
+  tasks.forEach(task => {
+    const dedupKey = `onboarding-task:${task.id}:pending`;
+    items.push({ dedupKey, source: "onboarding_task", title: task.title, status: "action_needed", designatedHumanOwner: taskOwnerLabel(task.ownerGroup), destination: "/workspace/onboarding", updatedAt: task.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+  });
+  const profile = profiles[0];
+  if (profile?.workAuthorizationStatus === "details_requested") {
+    const dedupKey = "profile-update:details-requested";
+    items.push({ dedupKey, source: "profile_update", title: "Profile update is awaiting human review", status: "awaiting_human_follow_up", designatedHumanOwner: "HR & Compliance", destination: "/workspace/profile", updatedAt: profile.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+  }
+  timeEntries.forEach(entry => {
+    const status = entry.status === "exception" ? "correction_needed" : entry.status === "draft" ? "action_needed" : "awaiting_human_follow_up";
+    const title = entry.status === "exception" ? "Time entry is returned for correction" : entry.status === "draft" ? "Draft time entry is ready for your review" : "Time entry is awaiting designated human review";
+    const dedupKey = `time-entry:${entry.id}:${entry.status}`;
+    items.push({ dedupKey, source: "time_entry", title, status, designatedHumanOwner: "Designated time reviewer", destination: "/workspace/time-submission", updatedAt: entry.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+  });
+  assignments.filter(assignment => assignment.assignmentState === "extension_due" || assignment.assignmentState === "roll_off" || Boolean(assignment.endDate && assignment.endDate >= now && assignment.endDate <= thirtyDaysFromNow)).forEach(assignment => {
+    const signal = assignment.assignmentState === "extension_due" ? "extension_due" : assignment.assignmentState === "roll_off" ? "roll_off" : "end_date_soon";
+    const dedupKey = `assignment:${assignment.id}:${signal}`;
+    items.push({ dedupKey, source: "assignment", title: signal === "extension_due" ? "Engagement extension needs human follow-up" : signal === "roll_off" ? "Engagement roll-off needs human follow-up" : "Engagement end date is approaching", status: "awaiting_human_follow_up", designatedHumanOwner: assignment.managerName || "Designated engagement owner", destination: "/workspace/my-engagement", updatedAt: assignment.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+  });
+  const deduplicated = Array.from(new Map(items.map(item => [item.dedupKey, item])).values()).sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
+  return includeDismissed ? deduplicated : deduplicated.filter(item => item.state !== "dismissed");
+}
+
+/** Changes presentation state only after proving the deterministic item belongs to this session user. */
+export async function setConsultantActionInboxState(userId: number, dedupKey: string, state: "read" | "dismissed") {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const ownItems = await listConsultantActionInbox(userId, true);
+  if (!ownItems.some(item => item.dedupKey === dedupKey)) throw new Error("Action Inbox item was not found");
+  await db.insert(consultantActionInboxStates).values({ userId, dedupKey, state }).onDuplicateKeyUpdate({ set: { state } });
+  return { dedupKey, state } as const;
 }
 
 export async function getDemoPortalSummary(role: PortalSummaryRole, userId: number) {

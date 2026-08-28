@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  user: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;
@@ -77,7 +77,16 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("keeps the workforce curation mutation surface limited to approved candidate, project, own-profile, role-change, personal-task, check-in, and consultant-time procedures", () => {
+  it("denies Consultant Action Inbox reads and presentation-state mutations to every non-consultant-compatible role", async () => {
+    for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
+      const caller = appRouter.createCaller(createContext(role));
+      await expect(caller.consultant.actionInbox()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.markActionRead({ dedupKey: "onboarding-task:41:pending" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.dismissAction({ dedupKey: "onboarding-task:41:pending" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
+  it("keeps the workforce curation mutation surface limited to approved candidate, project, own-profile, role-change, personal-task, check-in, consultant-time, and inbox-state procedures", () => {
     const procedures = Object.keys(appRouter._def.procedures);
     expect(procedures).toContain("access.assignRole");
     expect(procedures).toContain("profile.requestReview");
@@ -86,6 +95,8 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.createTimeSubmission");
     expect(procedures).toContain("consultant.updateTimeSubmission");
     expect(procedures).toContain("consultant.submitTimeSubmission");
+    expect(procedures).toContain("consultant.markActionRead");
+    expect(procedures).toContain("consultant.dismissAction");
     expect(procedures).not.toContain("portal.approveTimesheet");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");

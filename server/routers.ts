@@ -95,6 +95,7 @@ const consultantTimeSubmissionUpdateSchema = consultantTimeSubmissionSchema.omit
   timeEntryId: z.number().int().positive(),
 });
 const consultantTimeSubmissionActionSchema = z.object({ timeEntryId: z.number().int().positive() });
+const consultantActionInboxItemSchema = z.object({ dedupKey: z.string().trim().min(3).max(160) });
 
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
@@ -128,6 +129,22 @@ function mayUseAiTask(role: string, task: z.infer<typeof aiAssistantInputSchema>
   if (task === "recruiter_summary") return ["admin", "recruiter"].includes(role);
   if (task === "access_review") return role === "admin";
   return true;
+}
+
+const consultantActionInboxMutationWindows = new Map<number, { startedAt: number; count: number }>();
+function enforceConsultantActionInboxRateLimit(userId: number) {
+  const now = Date.now();
+  const current = consultantActionInboxMutationWindows.get(userId);
+  if (!current || now - current.startedAt >= 60_000) {
+    consultantActionInboxMutationWindows.set(userId, { startedAt: now, count: 1 });
+    return;
+  }
+  if (current.count >= 20) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait before updating more Action Inbox items." });
+  current.count += 1;
+}
+
+export function resetConsultantActionInboxRateLimitsForTests() {
+  consultantActionInboxMutationWindows.clear();
 }
 
 export const appRouter = router({
@@ -256,6 +273,30 @@ export const appRouter = router({
         return await db.submitConsultantTimeSubmission(ctx.user.id, input.timeEntryId);
       } catch (error) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only your draft or correction-needed time entry can be submitted.' });
+      }
+    }),
+    actionInbox: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant Action Inbox.' });
+      }
+      return db.listConsultantActionInbox(ctx.user.id);
+    }),
+    markActionRead: protectedProcedure.input(consultantActionInboxItemSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot update the Consultant Action Inbox.' });
+      enforceConsultantActionInboxRateLimit(ctx.user.id);
+      try { return await db.setConsultantActionInboxState(ctx.user.id, input.dedupKey, 'read'); }
+      catch (error) {
+        if (error instanceof Error && error.message === 'Action Inbox item was not found') throw new TRPCError({ code: 'NOT_FOUND', message: 'Action Inbox item was not found for this account.' });
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Action Inbox state could not be updated.' });
+      }
+    }),
+    dismissAction: protectedProcedure.input(consultantActionInboxItemSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot update the Consultant Action Inbox.' });
+      enforceConsultantActionInboxRateLimit(ctx.user.id);
+      try { return await db.setConsultantActionInboxState(ctx.user.id, input.dedupKey, 'dismissed'); }
+      catch (error) {
+        if (error instanceof Error && error.message === 'Action Inbox item was not found') throw new TRPCError({ code: 'NOT_FOUND', message: 'Action Inbox item was not found for this account.' });
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Action Inbox state could not be updated.' });
       }
     }),
   }),

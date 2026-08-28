@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantActionInboxTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -112,6 +112,15 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     mutationError: null as Error | null,
     refetch: vi.fn(),
   },
+  consultantActionInboxTestState: {
+    items: [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), state: "unread" }] as any[],
+    isLoading: false,
+    error: null as Error | null,
+    markRead: vi.fn(),
+    dismiss: vi.fn(),
+    mutationError: null as Error | null,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -152,6 +161,9 @@ vi.mock("@/lib/trpc", () => ({
       createTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.create(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
       updateTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.update(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
       submitTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.submit(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
+      actionInbox: { useQuery: () => ({ data: consultantActionInboxTestState.items, isLoading: consultantActionInboxTestState.isLoading, error: consultantActionInboxTestState.error, refetch: consultantActionInboxTestState.refetch }) },
+      markActionRead: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.markRead(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
+      dismissAction: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.dismiss(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
     },
     onboarding: {
       myTasks: { useQuery: () => ({ data: consultantTaskTestState.tasks, isLoading: consultantTaskTestState.isLoading, error: consultantTaskTestState.error, refetch: consultantTaskTestState.refetch }) },
@@ -283,6 +295,13 @@ afterEach(() => {
   consultantTimeSubmissionTestState.submit.mockReset();
   consultantTimeSubmissionTestState.mutationError = null;
   consultantTimeSubmissionTestState.refetch.mockReset();
+  consultantActionInboxTestState.items = [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), state: "unread" }];
+  consultantActionInboxTestState.isLoading = false;
+  consultantActionInboxTestState.error = null;
+  consultantActionInboxTestState.markRead.mockReset();
+  consultantActionInboxTestState.dismiss.mockReset();
+  consultantActionInboxTestState.mutationError = null;
+  consultantActionInboxTestState.refetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -313,7 +332,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });
@@ -329,6 +348,51 @@ describe("Workforce Hub role access", () => {
     expect(screen.getByText(/does not expose colleague records, client documents, restricted readiness content/i)).toBeTruthy();
     expect(screen.getByText(/Manager: Casey Rivera/)).toBeTruthy();
     expect(screen.queryByText("Candidate Finder")).toBeNull();
+  });
+
+  it("renders the consultant-only Action Inbox from safe own-record reminders and supports accessible state changes", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/action-inbox");
+
+    expect(screen.getByRole("heading", { name: "Action Inbox" })).toBeTruthy();
+    expect(screen.getByText("Review your workforce profile")).toBeTruthy();
+    expect(screen.getByText(/Source: Onboarding task/)).toBeTruthy();
+    expect(screen.getByText(/Human owner: Workforce Operations/)).toBeTruthy();
+    expect(screen.getByText(/does not send external messages or make decisions/)).toBeTruthy();
+    expect(screen.getByText(/excludes readiness details, compensation, client-confidential data, colleague data/i)).toBeTruthy();
+    const markRead = screen.getByRole("button", { name: "Mark read" });
+    markRead.focus();
+    expect(document.activeElement).toBe(markRead);
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(consultantActionInboxTestState.markRead).toHaveBeenCalledWith({ dedupKey: "onboarding-task:41:pending" }));
+    expect(consultantActionInboxTestState.refetch).toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(consultantActionInboxTestState.dismiss).toHaveBeenCalledWith({ dedupKey: "onboarding-task:41:pending" });
+  });
+
+  it("keeps Action Inbox loading, unavailable, successful-empty, and permitted-destination behavior distinct", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantActionInboxTestState.isLoading = true;
+    const view = renderRoute("/workspace/action-inbox");
+    expect(screen.getByText("Loading your protected Action Inbox…")).toBeTruthy();
+
+    consultantActionInboxTestState.isLoading = false;
+    consultantActionInboxTestState.error = new Error("Unavailable");
+    view.rerender(<Home />);
+    expect(screen.getByText("Your Action Inbox is unavailable.")).toBeTruthy();
+
+    consultantActionInboxTestState.error = null;
+    consultantActionInboxTestState.items = [];
+    view.rerender(<Home />);
+    expect(screen.getByText("Your Action Inbox is clear.")).toBeTruthy();
+
+    consultantActionInboxTestState.items = [{ dedupKey: "time-entry:72:draft", source: "time_entry", title: "Draft time entry is ready for your review", status: "action_needed", designatedHumanOwner: "Designated time reviewer", destination: "/workspace/time-submission", updatedAt: new Date("2026-08-26"), state: "read" }];
+    view.rerender(<Home />);
+    await user.click(screen.getByRole("button", { name: /Open destination/ }));
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace/time-submission"));
+    expect(consultantActionInboxTestState.markRead).not.toHaveBeenCalled();
   });
 
   it("keeps My Work loading, unavailable, empty, and no-assignment states distinct", () => {
@@ -399,6 +463,8 @@ describe("Workforce Hub role access", () => {
     expect(resolveWorkspacePage("HR & Compliance", "Readiness")).toBe("Readiness");
     expect(resolveWorkspacePath("Consultant", "/workspace/admin")).toBe("/workspace");
     expect(resolveWorkspacePath("Administrator", "/workspace/admin")).toBe("/workspace/admin");
+    expect(resolveWorkspacePath("Consultant", "/workspace/action-inbox")).toBe("/workspace/action-inbox");
+    expect(resolveWorkspacePath("Administrator", "/workspace/action-inbox")).toBe("/workspace");
   });
 
   it("labels recruiter handoffs from approved onboarding and assignment workflow values without making a staffing decision", () => {

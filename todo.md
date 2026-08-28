@@ -256,3 +256,4 @@
 - [x] Add a protected Consultant My Engagement page using only current session-owned assignment and permitted time-entry relationship data with neutral follow-up and live query states.
 - [x] Add a protected factual Consultant Check-in capability with bounded categories/notes, session-owned access, designated human-owner context, and append-only activity capture.
 - [x] Implement the approved Consultant Time Submission capability with own-assignment draft/correction-only edits, designated human review boundaries, validation, and factual audit history.
+- [x] Add a protected Consultant in-app Action Inbox with deterministic own-record reminders, session-scoped read/dismiss state, deduplication, rate limits, and accessible live states.

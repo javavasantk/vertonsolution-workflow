@@ -1,4 +1,4 @@
-import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -260,7 +260,15 @@ export const consultantTimeEntryActivities = mysqlTable("consultant_time_entry_a
   activityType: mysqlEnum("activityType", ["created", "updated", "submitted"]).notNull(),
   occurredAt: timestamp("occurredAt").defaultNow().notNull(),
 });
-
+/** Session-scoped presentation state for deterministic Action Inbox items. Reminder content remains derived from protected source records. */
+export const consultantActionInboxStates = mysqlTable("consultant_action_inbox_states", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  dedupKey: varchar("dedupKey", { length: 160 }).notNull(),
+  state: mysqlEnum("state", ["unread", "read", "dismissed"]).default("unread").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("consultant_inbox_user_dedup_uq").on(table.userId, table.dedupKey)]);
 export const operationalActivities = mysqlTable("operational_activities", {
   id: int("id").autoincrement().primaryKey(),
   demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
@@ -286,4 +294,5 @@ export type ClientProject = typeof clientProjects.$inferSelect;
 export type StaffingDemand = typeof staffingDemands.$inferSelect;
 export type ConsultantAssignment = typeof consultantAssignments.$inferSelect;
 export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
+export type ConsultantActionInboxState = typeof consultantActionInboxStates.$inferSelect;
 export type OperationalActivity = typeof operationalActivities.$inferSelect;

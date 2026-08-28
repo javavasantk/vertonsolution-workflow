@@ -53,6 +53,14 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
     await expect.poll(() => page.getByRole("heading", { name: "Your time entries" }).count()).toBe(1);
     await expect.poll(() => page.getByText(/cannot approve time, calculate payroll, create an invoice, issue payment, or connect to accounting/i).count()).toBe(1);
     await page.screenshot({ path: `/home/ubuntu/consultant-time-submission-${suffix}.png`, fullPage: true });
+
+    await page.goto(`${baseUrl}/workspace/action-inbox`, { waitUntil: "networkidle" });
+    await expect.poll(() => page.getByRole("heading", { name: "Action Inbox" }).count()).toBe(1);
+    await expect.poll(() => page.getByText("Your active reminders").count()).toBe(1);
+    await expect.poll(() => page.getByText(/Source:/).count()).toBeGreaterThan(0);
+    await expect.poll(() => page.getByText(/does not send external messages or make decisions/i).count()).toBe(1);
+    await expect.poll(() => page.getByText("Northstar Retail · Demo", { exact: true }).count()).toBe(0);
+    await page.screenshot({ path: `/home/ubuntu/consultant-action-inbox-${suffix}.png`, fullPage: true });
   }
 
 function signedUploadResumeFixture() {

@@ -7,17 +7,35 @@ plugins {
 
 android {
     namespace = "com.projectpolaris.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.projectpolaris.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0"
+        targetSdk = 36
+        versionCode = 5
+        versionName = "0.4.1-internal.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("playUpload") {
+            val storeFilePath = providers.gradleProperty("POLARIS_STORE_FILE").orNull
+            if (storeFilePath != null) {
+                storeFile = file(storeFilePath)
+                storePassword = providers.gradleProperty("POLARIS_STORE_PASSWORD").orNull
+                keyAlias = providers.gradleProperty("POLARIS_KEY_ALIAS").orNull
+                keyPassword = providers.gradleProperty("POLARIS_KEY_PASSWORD").orNull
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            val uploadConfigured = providers.gradleProperty("POLARIS_STORE_FILE").isPresent
+            if (uploadConfigured) signingConfig = signingConfigs.getByName("playUpload")
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true

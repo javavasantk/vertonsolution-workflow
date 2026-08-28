@@ -1,0 +1,9 @@
+# Copy this file to ~/.gradle/gradle.properties or inject the values through protected CI variables.
+# Do not commit a real keystore or any password to this repository.
+POLARIS_STORE_FILE=/absolute/path/to/project-polaris-upload-keystore.jks
+POLARIS_STORE_PASSWORD=REPLACE_WITH_SECRET
+POLARIS_KEY_ALIAS=project-polaris-upload
+POLARIS_KEY_PASSWORD=REPLACE_WITH_SECRET
+
+# The Gradle release variant uses this configuration only when POLARIS_STORE_FILE is provided.
+# Verify the SHA-256 upload certificate fingerprint with the designated release owner before Play upload.

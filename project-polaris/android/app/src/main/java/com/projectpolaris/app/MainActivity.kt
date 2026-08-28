@@ -62,8 +62,9 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val store = WorkflowStore(applicationContext)
+        store.reconcileLocaleWithSystem()
         setContent {
-            val store = remember { WorkflowStore(applicationContext) }
             val state = store.snapshot
             PolarisTheme(state.darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {

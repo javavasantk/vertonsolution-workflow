@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.room.Room
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
@@ -61,7 +63,33 @@ class WorkflowStore(context: Context) {
         private set
 
     fun finishOnboarding() = update { it.copy(onboarded = true) }
-    fun setLocale(tag: String) = update { it.copy(localeTag = tag) }
+
+    /**
+     * Saves the selected BCP 47 tag before asking AndroidX to apply it.  AppCompat may
+     * recreate the activity, so the Room snapshot is already durable when that happens.
+     */
+    fun setLocale(tag: String) {
+        require(previewLanguages.any { it.tag == tag }) { "Unsupported preview locale" }
+        update { it.copy(localeTag = tag) }
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+    }
+
+    /**
+     * Reconciles the app's durable choice with Android's per-app setting. A system-selected
+     * supported locale wins; otherwise the previously saved in-app choice is applied. This
+     * keeps Settings accurate after process death and allows repeated changes in either place.
+     */
+    fun reconcileLocaleWithSystem() {
+        val appliedTag = AppCompatDelegate.getApplicationLocales().toLanguageTags()
+        val supportedAppliedTag = appliedTag.takeIf { candidate -> previewLanguages.any { it.tag == candidate } }
+        if (supportedAppliedTag != null) {
+            if (snapshot.localeTag != supportedAppliedTag) update { it.copy(localeTag = supportedAppliedTag) }
+        } else {
+            val savedTag = snapshot.localeTag
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(savedTag))
+        }
+    }
+
     fun setDarkTheme(enabled: Boolean) = update { it.copy(darkTheme = enabled) }
 
     fun addTask(form: TaskForm): String? {

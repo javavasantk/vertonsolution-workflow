@@ -3,6 +3,7 @@
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.DayTodo"
         android:supportsRtl="true">
         <activity

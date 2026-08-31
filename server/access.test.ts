@@ -235,7 +235,7 @@ describe("access router", () => {
     submit.mockRestore();
   });
 
-  it("prepares private client-approved timesheet upload evidence only for the current consultant's submitted or approved entry", async () => {
+  it("prepares private client-approved timesheet upload evidence only for the current consultant's own time entry", async () => {
     const createUpload = vi.spyOn(db, "createConsultantTimesheetUploadSession").mockResolvedValue({ id: "f4c4c2a6-17fb-4d62-b119-784831553898", fileKey: "consultant-timesheets/17/private.pdf", expiresAt: new Date("2026-08-27") } as never);
     const input = { timeEntryId: 72, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 256, confirmClientApproved: true as const };
     const caller = appRouter.createCaller(createContext("consultant", 17));
@@ -247,6 +247,24 @@ describe("access router", () => {
       await expect(appRouter.createCaller(createContext(role, 22)).consultant.prepareTimesheetEvidenceUpload(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
     createUpload.mockRestore();
+  });
+
+  it("returns selected-period entered-hour totals only for the session consultant and never a financial calculation", async () => {
+    const summary = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), entryCount: 2, enteredHoursTotal: 72, statusCounts: { draft: 1, submitted: 1, approved: 0, exception: 0 } };
+    const totals = vi.spyOn(db, "getConsultantTimeSubmissionPeriodTotal").mockResolvedValue(summary as never);
+    const input = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31") };
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.timeSubmissionPeriodTotal(input)).resolves.toEqual(summary);
+    expect(totals).toHaveBeenCalledWith(17, input.startDate, input.endDate);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.timeSubmissionPeriodTotal(input)).resolves.toEqual(summary);
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 22)).consultant.timeSubmissionPeriodTotal(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.timeSubmissionPeriodTotal({ startDate: new Date("2026-08-31"), endDate: new Date("2026-08-01") })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(summary).not.toHaveProperty("payroll");
+    expect(summary).not.toHaveProperty("billRate");
+    expect(summary).not.toHaveProperty("invoiceAmount");
+    totals.mockRestore();
   });
 
   it("keeps private timesheet evidence completion and OCR retry session-owned, without leaking document or commercial fields", async () => {
@@ -298,6 +316,30 @@ describe("access router", () => {
     expect(safeRows[0]).not.toHaveProperty("compensation");
     expect(safeRows[0]).not.toHaveProperty("approvalDecision");
     review.mockRestore();
+  });
+
+  it("allows only Finance to assign a designated Finance reviewer and record a bounded human discrepancy note", async () => {
+    const reviewers = vi.spyOn(db, "listEligibleTimesheetEvidenceReviewers").mockResolvedValue([{ id: 8, name: "Morgan Patel", email: "finance@example.test" }] as never);
+    const assign = vi.spyOn(db, "assignFinanceTimesheetEvidenceReviewer").mockResolvedValue({ evidenceId: 91, reviewerUserId: 8, assignedAt: new Date() } as never);
+    const addNote = vi.spyOn(db, "addFinanceTimesheetEvidenceDiscrepancyNote").mockResolvedValue({ evidenceId: 91, authorUserId: 8, note: "Entered hours and visible total require human follow-up.", createdAt: new Date() } as never);
+    const financeCaller = appRouter.createCaller(createContext("finance", 8));
+
+    await expect(financeCaller.finance.eligibleTimesheetEvidenceReviewers()).resolves.toEqual([{ id: 8, name: "Morgan Patel", email: "finance@example.test" }]);
+    await expect(financeCaller.finance.assignTimesheetEvidenceReviewer({ evidenceId: 91, reviewerUserId: 8 })).resolves.toMatchObject({ evidenceId: 91, reviewerUserId: 8 });
+    await expect(financeCaller.finance.addTimesheetEvidenceDiscrepancyNote({ evidenceId: 91, note: "Entered hours and visible total require human follow-up." })).resolves.toMatchObject({ evidenceId: 91, authorUserId: 8 });
+    expect(assign).toHaveBeenCalledWith(8, 91, 8);
+    expect(addNote).toHaveBeenCalledWith(8, 91, "Entered hours and visible total require human follow-up.");
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "consultant", "user"] as const) {
+      const caller = appRouter.createCaller(createContext(role, 9));
+      await expect(caller.finance.eligibleTimesheetEvidenceReviewers()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.finance.assignTimesheetEvidenceReviewer({ evidenceId: 91, reviewerUserId: 8 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.finance.addTimesheetEvidenceDiscrepancyNote({ evidenceId: 91, note: "Entered hours and visible total require human follow-up." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    addNote.mockRejectedValueOnce(new Error("Only the designated Finance reviewer may add a discrepancy note"));
+    await expect(financeCaller.finance.addTimesheetEvidenceDiscrepancyNote({ evidenceId: 91, note: "Entered hours and visible total require human follow-up." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    reviewers.mockRestore();
+    assign.mockRestore();
+    addNote.mockRestore();
   });
 
   it("serves deterministic Consultant Action Inbox items only to consultant-compatible session roles with safe fields", async () => {

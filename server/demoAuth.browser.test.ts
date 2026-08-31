@@ -51,6 +51,10 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
 
     await page.goto(`${baseUrl}/workspace/time-submission`, { waitUntil: "networkidle" });
     await expect.poll(() => page.getByRole("heading", { name: "Your time entries" }).count()).toBe(1);
+    await expect.poll(() => page.getByText("Selected-period work hours").count()).toBe(1);
+    await expect.poll(() => page.getByLabel("Time total period start").count()).toBe(1);
+    await expect.poll(() => page.getByLabel("Time total period end").count()).toBe(1);
+    await expect.poll(() => page.getByText("Total entered work hours").count()).toBe(1);
     await expect.poll(() => page.getByText(/cannot approve time, calculate payroll, create an invoice, issue payment, or connect to accounting/i).count()).toBe(1);
     await expect.poll(() => page.getByText("Client-approved timesheet evidence").count()).toBeGreaterThan(0);
     await expect.poll(() => page.getByLabel("Timesheet evidence upload").count()).toBe(1);

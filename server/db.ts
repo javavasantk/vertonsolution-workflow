@@ -1,7 +1,7 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetUploadSessions, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -635,10 +635,18 @@ export async function listConsultantTimeSubmissions(userId: number) {
       .where(eq(consultantTimesheetEvidence.userId, userId))
       .orderBy(desc(consultantTimesheetEvidence.createdAt)),
   ]);
-  const evidenceByTimeEntry = new Map<number, ReturnType<typeof presentConsultantTimesheetEvidence>[]>();
+  const evidenceIds = evidenceRows.map(row => row.id);
+  const [reviewRows, discrepancyNotes] = evidenceIds.length ? await Promise.all([
+    db.select({ evidenceId: consultantTimesheetEvidenceReviews.evidenceId }).from(consultantTimesheetEvidenceReviews).where(inArray(consultantTimesheetEvidenceReviews.evidenceId, evidenceIds)),
+    db.select({ id: consultantTimesheetEvidenceDiscrepancyNotes.id, evidenceId: consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, note: consultantTimesheetEvidenceDiscrepancyNotes.note, createdAt: consultantTimesheetEvidenceDiscrepancyNotes.createdAt }).from(consultantTimesheetEvidenceDiscrepancyNotes).where(inArray(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, evidenceIds)).orderBy(desc(consultantTimesheetEvidenceDiscrepancyNotes.createdAt)),
+  ]) : [[], []];
+  const reviewedEvidenceIds = new Set(reviewRows.map(row => row.evidenceId));
+  const notesByEvidence = new Map<number, typeof discrepancyNotes>();
+  discrepancyNotes.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), note]));
+  const evidenceByTimeEntry = new Map<number, Array<ReturnType<typeof presentConsultantTimesheetEvidence> & { designatedReviewerAssigned: boolean; discrepancyNotes: typeof discrepancyNotes }>>();
   evidenceRows.forEach(row => {
     const evidence = evidenceByTimeEntry.get(row.timeEntryId) ?? [];
-    evidence.push(presentConsultantTimesheetEvidence(row));
+    evidence.push({ ...presentConsultantTimesheetEvidence(row), designatedReviewerAssigned: reviewedEvidenceIds.has(row.id), discrepancyNotes: notesByEvidence.get(row.id) ?? [] });
     evidenceByTimeEntry.set(row.timeEntryId, evidence);
   });
   return {
@@ -646,6 +654,18 @@ export async function listConsultantTimeSubmissions(userId: number) {
     entries: entries.map(entry => ({ ...presentConsultantTimeSubmission(entry), evidence: evidenceByTimeEntry.get(entry.id) ?? [] })),
     designatedHumanOwner: assignments.find(row => row.assignmentState === "active")?.managerName || assignments[0]?.managerName || "Designated time reviewer",
   };
+}
+
+/** Summarizes only a consultant's entered work hours for an explicitly selected date range; it never calculates pay or alters records. */
+export async function getConsultantTimeSubmissionPeriodTotal(userId: number, startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select({ hours: timesheetEntries.hours, status: timesheetEntries.status })
+    .from(timesheetEntries)
+    .where(and(eq(timesheetEntries.userId, userId), gte(timesheetEntries.weekEnding, startDate), lte(timesheetEntries.weekEnding, endDate)));
+  const statusCounts = { draft: 0, submitted: 0, approved: 0, exception: 0 };
+  rows.forEach(row => { statusCounts[row.status] += 1; });
+  return { startDate, endDate, entryCount: rows.length, enteredHoursTotal: rows.reduce((sum, row) => sum + row.hours, 0), statusCounts };
 }
 
 async function getOwnedActiveAssignment(userId: number, assignmentId: number) {
@@ -716,11 +736,11 @@ async function getOwnedTimeEntryForEvidence(userId: number, timeEntryId: number)
   if (!db) throw new Error("Database is not available");
   const rows = await db.select().from(timesheetEntries).where(and(eq(timesheetEntries.id, timeEntryId), eq(timesheetEntries.userId, userId))).limit(1);
   const entry = rows[0];
-  if (!entry || !["submitted", "approved"].includes(entry.status)) throw new Error("Submitted or approved time entry was not found");
+  if (!entry) throw new Error("Your time entry was not found");
   return { db, entry };
 }
 
-/** Issues a brief private upload target only for a consultant's submitted or approved time entry. */
+/** Issues a brief private upload target only for a consultant's own time entry. Uploading evidence is separate from submission, approval, and payment. */
 export async function createConsultantTimesheetUploadSession(userId: number, input: { timeEntryId: number; originalFileName: string; mimeType: string; fileSize: number }) {
   const { db } = await getOwnedTimeEntryForEvidence(userId, input.timeEntryId);
   const id = randomUUID();
@@ -820,6 +840,7 @@ export async function recordConsultantTimesheetEvidenceExtraction(userId: number
 export async function listFinanceTimesheetEvidenceReview() {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
+  const reviewer = alias(users, "timesheetEvidenceReviewer");
   const rows = await db.select({
     evidenceId: consultantTimesheetEvidence.id,
     timeEntryId: consultantTimesheetEvidence.timeEntryId,
@@ -834,10 +855,58 @@ export async function listFinanceTimesheetEvidenceReview() {
     weekEnding: timesheetEntries.weekEnding,
     enteredHours: timesheetEntries.hours,
     timeEntryStatus: timesheetEntries.status,
+    reviewerUserId: consultantTimesheetEvidenceReviews.reviewerUserId,
+    reviewerName: reviewer.name,
+    reviewerAssignedAt: consultantTimesheetEvidenceReviews.assignedAt,
   }).from(consultantTimesheetEvidence)
     .innerJoin(timesheetEntries, eq(consultantTimesheetEvidence.timeEntryId, timesheetEntries.id))
+    .leftJoin(consultantTimesheetEvidenceReviews, eq(consultantTimesheetEvidenceReviews.evidenceId, consultantTimesheetEvidence.id))
+    .leftJoin(reviewer, eq(reviewer.id, consultantTimesheetEvidenceReviews.reviewerUserId))
     .orderBy(desc(consultantTimesheetEvidence.createdAt));
-  return rows;
+  const evidenceIds = rows.map(row => row.evidenceId);
+  const noteAuthor = alias(users, "timesheetEvidenceNoteAuthor");
+  const notes = evidenceIds.length ? await db.select({ evidenceId: consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, id: consultantTimesheetEvidenceDiscrepancyNotes.id, note: consultantTimesheetEvidenceDiscrepancyNotes.note, createdAt: consultantTimesheetEvidenceDiscrepancyNotes.createdAt, authorUserId: consultantTimesheetEvidenceDiscrepancyNotes.authorUserId, authorName: noteAuthor.name })
+    .from(consultantTimesheetEvidenceDiscrepancyNotes)
+    .leftJoin(noteAuthor, eq(noteAuthor.id, consultantTimesheetEvidenceDiscrepancyNotes.authorUserId))
+    .where(inArray(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, evidenceIds))
+    .orderBy(desc(consultantTimesheetEvidenceDiscrepancyNotes.createdAt)) : [];
+  const notesByEvidence = new Map<number, typeof notes>();
+  notes.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), note]));
+  return rows.map(row => ({ ...row, discrepancyNotes: notesByEvidence.get(row.evidenceId) ?? [] }));
+}
+
+export async function listEligibleTimesheetEvidenceReviewers() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.role, "finance")).orderBy(users.name);
+}
+
+async function requireFinanceTimesheetEvidenceReviewer(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number) {
+  const rows = await db.select({ id: users.id }).from(users).where(and(eq(users.id, userId), eq(users.role, "finance"))).limit(1);
+  if (!rows[0]) throw new Error("A Finance reviewer was not found");
+}
+
+export async function assignFinanceTimesheetEvidenceReviewer(actorUserId: number, evidenceId: number, reviewerUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const evidence = await db.select({ id: consultantTimesheetEvidence.id }).from(consultantTimesheetEvidence).where(eq(consultantTimesheetEvidence.id, evidenceId)).limit(1);
+  if (!evidence[0]) throw new Error("Timesheet evidence was not found");
+  await requireFinanceTimesheetEvidenceReviewer(db, actorUserId);
+  await requireFinanceTimesheetEvidenceReviewer(db, reviewerUserId);
+  const occurredAt = new Date();
+  await db.insert(consultantTimesheetEvidenceReviews).values({ evidenceId, reviewerUserId, assignedAt: occurredAt })
+    .onDuplicateKeyUpdate({ set: { reviewerUserId, assignedAt: occurredAt, updatedAt: occurredAt } });
+  return { evidenceId, reviewerUserId, assignedAt: occurredAt };
+}
+
+export async function addFinanceTimesheetEvidenceDiscrepancyNote(authorUserId: number, evidenceId: number, note: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const assignment = await db.select({ reviewerUserId: consultantTimesheetEvidenceReviews.reviewerUserId }).from(consultantTimesheetEvidenceReviews).where(eq(consultantTimesheetEvidenceReviews.evidenceId, evidenceId)).limit(1);
+  if (!assignment[0] || assignment[0].reviewerUserId !== authorUserId) throw new Error("Only the designated Finance reviewer may add a discrepancy note");
+  const occurredAt = new Date();
+  await db.insert(consultantTimesheetEvidenceDiscrepancyNotes).values({ evidenceId, authorUserId, note, createdAt: occurredAt });
+  return { evidenceId, authorUserId, note, createdAt: occurredAt };
 }
 
 /** Returns a private object key only to an internal server-side document route after Finance authorization. */

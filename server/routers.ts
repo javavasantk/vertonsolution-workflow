@@ -107,6 +107,13 @@ const consultantTimesheetEvidenceMetadataSchema = z.object({
 });
 const consultantTimesheetEvidenceCompletionSchema = z.object({ sessionId: z.string().uuid() });
 const consultantTimesheetEvidenceRetrySchema = z.object({ evidenceId: z.number().int().positive() });
+const consultantTimeSubmissionPeriodSchema = z.object({
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+}).refine(input => input.endDate >= input.startDate, { message: "The period end must be on or after the period start.", path: ["endDate"] })
+  .refine(input => input.endDate.getTime() - input.startDate.getTime() <= 366 * 24 * 60 * 60 * 1000, { message: "Select a period of no more than 366 days." });
+const financeTimesheetEvidenceReviewerSchema = z.object({ evidenceId: z.number().int().positive(), reviewerUserId: z.number().int().positive() });
+const financeTimesheetEvidenceDiscrepancyNoteSchema = z.object({ evidenceId: z.number().int().positive(), note: z.string().trim().min(10).max(1000) });
 
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
@@ -272,6 +279,12 @@ export const appRouter = router({
       }
       return db.listConsultantTimeSubmissions(ctx.user.id);
     }),
+    timeSubmissionPeriodTotal: protectedProcedure.input(consultantTimeSubmissionPeriodSchema).query(({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant time totals.' });
+      }
+      return db.getConsultantTimeSubmissionPeriodTotal(ctx.user.id, input.startDate, input.endDate);
+    }),
     createTimeSubmission: protectedProcedure.input(consultantTimeSubmissionSchema).mutation(async ({ ctx, input }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot create Consultant time submissions.' });
@@ -387,6 +400,28 @@ export const appRouter = router({
     timesheetEvidenceReview: protectedProcedure.query(({ ctx }) => {
       if (ctx.user.role !== "finance") throw new TRPCError({ code: "FORBIDDEN", message: "Finance access is required for the timesheet evidence review queue." });
       return db.listFinanceTimesheetEvidenceReview();
+    }),
+    eligibleTimesheetEvidenceReviewers: protectedProcedure.query(({ ctx }) => {
+      if (ctx.user.role !== "finance") throw new TRPCError({ code: "FORBIDDEN", message: "Finance access is required to assign a timesheet evidence reviewer." });
+      return db.listEligibleTimesheetEvidenceReviewers();
+    }),
+    assignTimesheetEvidenceReviewer: protectedProcedure.input(financeTimesheetEvidenceReviewerSchema).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "finance") throw new TRPCError({ code: "FORBIDDEN", message: "Finance access is required to assign a timesheet evidence reviewer." });
+      try {
+        return await db.assignFinanceTimesheetEvidenceReviewer(ctx.user.id, input.evidenceId, input.reviewerUserId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The reviewer could not be assigned.";
+        throw new TRPCError({ code: message.includes("not found") ? "NOT_FOUND" : "BAD_REQUEST", message });
+      }
+    }),
+    addTimesheetEvidenceDiscrepancyNote: protectedProcedure.input(financeTimesheetEvidenceDiscrepancyNoteSchema).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "finance") throw new TRPCError({ code: "FORBIDDEN", message: "Finance access is required to add a timesheet discrepancy note." });
+      try {
+        return await db.addFinanceTimesheetEvidenceDiscrepancyNote(ctx.user.id, input.evidenceId, input.note);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The discrepancy note could not be recorded.";
+        throw new TRPCError({ code: message.includes("designated Finance reviewer") ? "FORBIDDEN" : message.includes("not found") ? "NOT_FOUND" : "BAD_REQUEST", message });
+      }
     }),
   }),
 

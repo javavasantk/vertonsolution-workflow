@@ -72,6 +72,7 @@ describe("cross-workspace regression gate", () => {
     for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
       const caller = appRouter.createCaller(createContext(role));
       await expect(caller.consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.timeSubmissionPeriodTotal({ startDate: timeInput.weekEnding, endDate: timeInput.weekEnding })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.createTimeSubmission(timeInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.updateTimeSubmission({ timeEntryId: 1, weekEnding: timeInput.weekEnding, hours: 40, note: timeInput.note })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.submitTimeSubmission({ timeEntryId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -90,6 +91,15 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
+  it("denies Finance evidence reviewer assignment and human discrepancy notes to every non-Finance role", async () => {
+    for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => role !== "finance")) {
+      const caller = appRouter.createCaller(createContext(role));
+      await expect(caller.finance.eligibleTimesheetEvidenceReviewers()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.finance.assignTimesheetEvidenceReviewer({ evidenceId: 1, reviewerUserId: 8 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.finance.addTimesheetEvidenceDiscrepancyNote({ evidenceId: 1, note: "A factual human review note is required." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
   it("keeps the workforce mutation surface limited to approved curation, own-record time, private evidence extraction, and inbox-state procedures", () => {
     const procedures = Object.keys(appRouter._def.procedures);
     expect(procedures).toContain("access.assignRole");
@@ -99,13 +109,17 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.createTimeSubmission");
     expect(procedures).toContain("consultant.updateTimeSubmission");
     expect(procedures).toContain("consultant.submitTimeSubmission");
+    expect(procedures).toContain("consultant.timeSubmissionPeriodTotal");
     expect(procedures).toContain("consultant.prepareTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.completeTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.retryTimesheetHoursExtraction");
+    expect(procedures).toContain("finance.assignTimesheetEvidenceReviewer");
+    expect(procedures).toContain("finance.addTimesheetEvidenceDiscrepancyNote");
     expect(procedures).toContain("consultant.markActionRead");
     expect(procedures).toContain("consultant.dismissAction");
     expect(procedures).not.toContain("portal.approveTimesheet");
     expect(procedures).not.toContain("consultant.applyExtractedHours");
+    expect(procedures).not.toContain("finance.approveTimesheetEvidence");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");
     expect(procedures).not.toContain("portal.issuePayment");

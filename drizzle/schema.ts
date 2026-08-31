@@ -305,6 +305,24 @@ export const consultantTimesheetEvidenceActivities = mysqlTable("consultant_time
   occurredAt: timestamp("occurredAt").defaultNow().notNull(),
 });
 
+/** A single designated Finance reviewer may claim one private timesheet-evidence record for human follow-up. */
+export const consultantTimesheetEvidenceReviews = mysqlTable("consultant_timesheet_evidence_reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
+  reviewerUserId: int("reviewerUserId").notNull().references(() => users.id),
+  assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("consultant_timesheet_evidence_review_uq").on(table.evidenceId)]);
+
+/** Append-only factual discrepancy notes. A note is not an approval, correction, payroll, invoice, or legal decision. */
+export const consultantTimesheetEvidenceDiscrepancyNotes = mysqlTable("consultant_timesheet_evidence_discrepancy_notes", {
+  id: int("id").autoincrement().primaryKey(),
+  evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
+  authorUserId: int("authorUserId").notNull().references(() => users.id),
+  note: varchar("note", { length: 1000 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 /** Session-scoped presentation state for deterministic Action Inbox items. Reminder content remains derived from protected source records. */
 export const consultantActionInboxStates = mysqlTable("consultant_action_inbox_states", {
   id: int("id").autoincrement().primaryKey(),
@@ -341,5 +359,7 @@ export type ConsultantAssignment = typeof consultantAssignments.$inferSelect;
 export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
 export type ConsultantTimesheetEvidence = typeof consultantTimesheetEvidence.$inferSelect;
 export type ConsultantTimesheetUploadSession = typeof consultantTimesheetUploadSessions.$inferSelect;
+export type ConsultantTimesheetEvidenceReview = typeof consultantTimesheetEvidenceReviews.$inferSelect;
+export type ConsultantTimesheetEvidenceDiscrepancyNote = typeof consultantTimesheetEvidenceDiscrepancyNotes.$inferSelect;
 export type ConsultantActionInboxState = typeof consultantActionInboxStates.$inferSelect;
 export type OperationalActivity = typeof operationalActivities.$inferSelect;

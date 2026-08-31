@@ -66,14 +66,18 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("denies Consultant Time Submission procedures to every non-consultant-compatible role", async () => {
+  it("denies Consultant Time Submission and private evidence procedures to every non-consultant-compatible role", async () => {
     const timeInput = { assignmentId: 1, weekEnding: new Date("2026-08-30"), hours: 40, note: "Completed documented delivery hours." };
+    const evidenceInput = { timeEntryId: 1, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 128, confirmClientApproved: true as const };
     for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
       const caller = appRouter.createCaller(createContext(role));
       await expect(caller.consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.createTimeSubmission(timeInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.updateTimeSubmission({ timeEntryId: 1, weekEnding: timeInput.weekEnding, hours: 40, note: timeInput.note })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.submitTimeSubmission({ timeEntryId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.prepareTimesheetEvidenceUpload(evidenceInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.completeTimesheetEvidenceUpload({ sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.retryTimesheetHoursExtraction({ evidenceId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
   });
 
@@ -86,7 +90,7 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("keeps the workforce curation mutation surface limited to approved candidate, project, own-profile, role-change, personal-task, check-in, consultant-time, and inbox-state procedures", () => {
+  it("keeps the workforce mutation surface limited to approved curation, own-record time, private evidence extraction, and inbox-state procedures", () => {
     const procedures = Object.keys(appRouter._def.procedures);
     expect(procedures).toContain("access.assignRole");
     expect(procedures).toContain("profile.requestReview");
@@ -95,9 +99,13 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.createTimeSubmission");
     expect(procedures).toContain("consultant.updateTimeSubmission");
     expect(procedures).toContain("consultant.submitTimeSubmission");
+    expect(procedures).toContain("consultant.prepareTimesheetEvidenceUpload");
+    expect(procedures).toContain("consultant.completeTimesheetEvidenceUpload");
+    expect(procedures).toContain("consultant.retryTimesheetHoursExtraction");
     expect(procedures).toContain("consultant.markActionRead");
     expect(procedures).toContain("consultant.dismissAction");
     expect(procedures).not.toContain("portal.approveTimesheet");
+    expect(procedures).not.toContain("consultant.applyExtractedHours");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");
     expect(procedures).not.toContain("portal.issuePayment");

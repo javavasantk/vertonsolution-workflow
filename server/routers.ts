@@ -8,6 +8,8 @@ import { generateAiBriefing, generateWorkspaceAssistantReply } from "./aiService
 import { parseRecruiterResume } from "./resumeParserService";
 import { extractResumeTextFromBytes, validateResumeMetadata } from "./resumeFileService";
 import { storageGetSignedUrl } from "./storage";
+import { processPrivateTimesheetForHours } from "./timesheetEvidenceProcessingService";
+import { validateTimesheetEvidenceMetadata } from "./timesheetEvidenceFileService";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, recruiterProcedure, router } from "./_core/trpc";
 
@@ -96,6 +98,15 @@ const consultantTimeSubmissionUpdateSchema = consultantTimeSubmissionSchema.omit
 });
 const consultantTimeSubmissionActionSchema = z.object({ timeEntryId: z.number().int().positive() });
 const consultantActionInboxItemSchema = z.object({ dedupKey: z.string().trim().min(3).max(160) });
+const consultantTimesheetEvidenceMetadataSchema = z.object({
+  timeEntryId: z.number().int().positive(),
+  fileName: z.string().trim().min(5).max(255),
+  mimeType: z.enum(["application/pdf", "image/png", "image/jpeg"]),
+  fileSize: z.number().int().min(1).max(5 * 1024 * 1024),
+  confirmClientApproved: z.literal(true),
+});
+const consultantTimesheetEvidenceCompletionSchema = z.object({ sessionId: z.string().uuid() });
+const consultantTimesheetEvidenceRetrySchema = z.object({ evidenceId: z.number().int().positive() });
 
 const resumeUploadMetadataSchema = z.object({
   fileName: z.string().trim().min(5).max(255),
@@ -145,6 +156,22 @@ function enforceConsultantActionInboxRateLimit(userId: number) {
 
 export function resetConsultantActionInboxRateLimitsForTests() {
   consultantActionInboxMutationWindows.clear();
+}
+
+const consultantTimesheetOcrWindows = new Map<number, { startedAt: number; count: number }>();
+function enforceConsultantTimesheetOcrRateLimit(userId: number) {
+  const now = Date.now();
+  const current = consultantTimesheetOcrWindows.get(userId);
+  if (!current || now - current.startedAt >= 10 * 60_000) {
+    consultantTimesheetOcrWindows.set(userId, { startedAt: now, count: 1 });
+    return;
+  }
+  if (current.count >= 5) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait before running another timesheet hours extraction." });
+  current.count += 1;
+}
+
+export function resetConsultantTimesheetOcrRateLimitsForTests() {
+  consultantTimesheetOcrWindows.clear();
 }
 
 export const appRouter = router({
@@ -275,6 +302,42 @@ export const appRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only your draft or correction-needed time entry can be submitted.' });
       }
     }),
+    prepareTimesheetEvidenceUpload: protectedProcedure.input(consultantTimesheetEvidenceMetadataSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot upload Consultant timesheet evidence.' });
+      try {
+        const metadata = validateTimesheetEvidenceMetadata({ fileName: input.fileName, mimeType: input.mimeType, fileSize: input.fileSize });
+        const session = await db.createConsultantTimesheetUploadSession(ctx.user.id, { timeEntryId: input.timeEntryId, originalFileName: metadata.fileName, mimeType: input.mimeType, fileSize: input.fileSize });
+        return { sessionId: session.id, uploadPath: `/api/consultant/timesheet-upload/${session.id}`, expiresAt: session.expiresAt };
+      } catch (error) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'A private upload can be prepared only for your submitted or approved time entry.' });
+      }
+    }),
+    completeTimesheetEvidenceUpload: protectedProcedure.input(consultantTimesheetEvidenceCompletionSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot complete Consultant timesheet evidence uploads.' });
+      const completedEvidence = await db.getCompletedConsultantTimesheetEvidenceBySession(ctx.user.id, input.sessionId);
+      if (completedEvidence) return completedEvidence;
+      enforceConsultantTimesheetOcrRateLimit(ctx.user.id);
+      const session = await db.getActiveConsultantTimesheetUploadSession(ctx.user.id, input.sessionId);
+      if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'This private timesheet upload session is unavailable.' });
+      try {
+        const { fileSha256, ocr } = await processPrivateTimesheetForHours({ fileKey: session.fileKey, originalFileName: session.originalFileName, mimeType: session.mimeType as "application/pdf" | "image/png" | "image/jpeg", fileSize: session.fileSize });
+        return await db.completeConsultantTimesheetEvidence(ctx.user.id, { sessionId: session.id, fileSha256, ...ocr });
+      } catch (error) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'The private timesheet could not be retrieved or processed. Upload the file again.' });
+      }
+    }),
+    retryTimesheetHoursExtraction: protectedProcedure.input(consultantTimesheetEvidenceRetrySchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot retry Consultant timesheet extraction.' });
+      enforceConsultantTimesheetOcrRateLimit(ctx.user.id);
+      try {
+        const { evidence } = await db.getOwnedConsultantTimesheetEvidenceForProcessing(ctx.user.id, input.evidenceId);
+        const { ocr } = await processPrivateTimesheetForHours({ fileKey: evidence.fileKey, originalFileName: evidence.originalFileName, mimeType: evidence.mimeType as "application/pdf" | "image/png" | "image/jpeg", fileSize: evidence.fileSize });
+        return await db.recordConsultantTimesheetEvidenceExtraction(ctx.user.id, evidence.id, ocr);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Timesheet evidence was not found') throw new TRPCError({ code: 'NOT_FOUND', message: 'Timesheet evidence was not found for this account.' });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'The private timesheet hours extraction could not be retried.' });
+      }
+    }),
     actionInbox: protectedProcedure.query(({ ctx }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant Action Inbox.' });
@@ -317,6 +380,13 @@ export const appRouter = router({
       } catch (error) {
         throw new TRPCError({ code: 'NOT_FOUND', message: error instanceof Error ? error.message : 'Assigned onboarding task was not found.' });
       }
+    }),
+  }),
+
+  finance: router({
+    timesheetEvidenceReview: protectedProcedure.query(({ ctx }) => {
+      if (ctx.user.role !== "finance") throw new TRPCError({ code: "FORBIDDEN", message: "Finance access is required for the timesheet evidence review queue." });
+      return db.listFinanceTimesheetEvidenceReview();
     }),
   }),
 

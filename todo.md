@@ -257,3 +257,4 @@
 - [x] Add a protected factual Consultant Check-in capability with bounded categories/notes, session-owned access, designated human-owner context, and append-only activity capture.
 - [x] Implement the approved Consultant Time Submission capability with own-assignment draft/correction-only edits, designated human review boundaries, validation, and factual audit history.
 - [x] Add a protected Consultant in-app Action Inbox with deterministic own-record reminders, session-scoped read/dismiss state, deduplication, rate limits, and accessible live states.
+- [x] Extend protected Consultant Time Submission into end-to-end timesheet management with private client-approved upload evidence, bounded OCR-based total-hours extraction, designated human review, and responsive lifecycle states.

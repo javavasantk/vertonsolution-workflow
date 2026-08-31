@@ -260,6 +260,51 @@ export const consultantTimeEntryActivities = mysqlTable("consultant_time_entry_a
   activityType: mysqlEnum("activityType", ["created", "updated", "submitted"]).notNull(),
   occurredAt: timestamp("occurredAt").defaultNow().notNull(),
 });
+
+/** A short-lived, consultant-bound private upload session for one existing own time entry. */
+export const consultantTimesheetUploadSessions = mysqlTable("consultant_timesheet_upload_sessions", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  timeEntryId: int("timeEntryId").notNull().references(() => timesheetEntries.id),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  originalFileName: varchar("originalFileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  fileSize: int("fileSize").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Private client-approved timesheet evidence metadata and bounded OCR total. Document bytes remain in private object storage. */
+export const consultantTimesheetEvidence = mysqlTable("consultant_timesheet_evidence", {
+  id: int("id").autoincrement().primaryKey(),
+  uploadSessionId: varchar("uploadSessionId", { length: 64 }).notNull(),
+  userId: int("userId").notNull().references(() => users.id),
+  timeEntryId: int("timeEntryId").notNull().references(() => timesheetEntries.id),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  originalFileName: varchar("originalFileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  fileSize: int("fileSize").notNull(),
+  fileSha256: varchar("fileSha256", { length: 64 }).notNull(),
+  extractionStatus: mysqlEnum("extractionStatus", ["extracted", "needs_human_review"]).default("needs_human_review").notNull(),
+  extractedHours: int("extractedHours"),
+  extractionConfidence: mysqlEnum("extractionConfidence", ["high", "medium", "low"]).default("low").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("consultant_timesheet_evidence_session_uq").on(table.uploadSessionId),
+  uniqueIndex("consultant_timesheet_evidence_file_uq").on(table.userId, table.timeEntryId, table.fileSha256),
+]);
+
+/** Append-only operational activity for upload and extraction outcomes. It contains no document content. */
+export const consultantTimesheetEvidenceActivities = mysqlTable("consultant_timesheet_evidence_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
+  userId: int("userId").notNull().references(() => users.id),
+  activityType: mysqlEnum("activityType", ["uploaded", "hours_extracted", "needs_human_review"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 /** Session-scoped presentation state for deterministic Action Inbox items. Reminder content remains derived from protected source records. */
 export const consultantActionInboxStates = mysqlTable("consultant_action_inbox_states", {
   id: int("id").autoincrement().primaryKey(),
@@ -294,5 +339,7 @@ export type ClientProject = typeof clientProjects.$inferSelect;
 export type StaffingDemand = typeof staffingDemands.$inferSelect;
 export type ConsultantAssignment = typeof consultantAssignments.$inferSelect;
 export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
+export type ConsultantTimesheetEvidence = typeof consultantTimesheetEvidence.$inferSelect;
+export type ConsultantTimesheetUploadSession = typeof consultantTimesheetUploadSessions.$inferSelect;
 export type ConsultantActionInboxState = typeof consultantActionInboxStates.$inferSelect;
 export type OperationalActivity = typeof operationalActivities.$inferSelect;

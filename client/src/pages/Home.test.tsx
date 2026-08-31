@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantActionInboxTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -103,13 +103,17 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     refetch: vi.fn(),
   },
   consultantTimeSubmissionTestState: {
-    data: { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned project delivery hours.", updatedAt: new Date("2026-08-26") }] } as any,
+    data: { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned project delivery hours.", updatedAt: new Date("2026-08-26"), evidence: [] }] } as any,
     isLoading: false,
     error: null as Error | null,
     create: vi.fn(),
     update: vi.fn(),
     submit: vi.fn(),
+    prepareEvidence: vi.fn(),
+    completeEvidence: vi.fn(),
+    retryEvidence: vi.fn(),
     mutationError: null as Error | null,
+    evidenceError: null as Error | null,
     refetch: vi.fn(),
   },
   consultantActionInboxTestState: {
@@ -119,6 +123,12 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     markRead: vi.fn(),
     dismiss: vi.fn(),
     mutationError: null as Error | null,
+    refetch: vi.fn(),
+  },
+  financeTimesheetEvidenceTestState: {
+    data: [] as any[],
+    isLoading: false,
+    error: null as Error | null,
     refetch: vi.fn(),
   },
 }));
@@ -161,9 +171,15 @@ vi.mock("@/lib/trpc", () => ({
       createTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.create(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
       updateTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.update(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
       submitTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.submit(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
+      prepareTimesheetEvidenceUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { consultantTimeSubmissionTestState.prepareEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) throw consultantTimeSubmissionTestState.evidenceError; return { sessionId: "b6d2ba3c-6f44-4d4c-b7f9-9a457bca80f2", uploadPath: "/api/consultant/timesheet-upload/b6d2ba3c-6f44-4d4c-b7f9-9a457bca80f2", expiresAt: new Date() }; }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
+      completeTimesheetEvidenceUpload: { useMutation: (options?: { onSuccess?: (data: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.completeEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) options?.onError?.(consultantTimeSubmissionTestState.evidenceError); else options?.onSuccess?.({ id: 91, timeEntryId: 71, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }); }, mutateAsync: async (input: unknown) => { consultantTimeSubmissionTestState.completeEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) { options?.onError?.(consultantTimeSubmissionTestState.evidenceError); throw consultantTimeSubmissionTestState.evidenceError; } const result = { id: 91, timeEntryId: 71, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }; options?.onSuccess?.(result); return result; }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
+      retryTimesheetHoursExtraction: { useMutation: (options?: { onSuccess?: (data: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.retryEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) options?.onError?.(consultantTimeSubmissionTestState.evidenceError); else options?.onSuccess?.({ id: 91, timeEntryId: 71, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high" }); }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
       actionInbox: { useQuery: () => ({ data: consultantActionInboxTestState.items, isLoading: consultantActionInboxTestState.isLoading, error: consultantActionInboxTestState.error, refetch: consultantActionInboxTestState.refetch }) },
       markActionRead: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.markRead(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
       dismissAction: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.dismiss(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
+    },
+    finance: {
+      timesheetEvidenceReview: { useQuery: () => ({ data: financeTimesheetEvidenceTestState.data, isLoading: financeTimesheetEvidenceTestState.isLoading, error: financeTimesheetEvidenceTestState.error, refetch: financeTimesheetEvidenceTestState.refetch }) },
     },
     onboarding: {
       myTasks: { useQuery: () => ({ data: consultantTaskTestState.tasks, isLoading: consultantTaskTestState.isLoading, error: consultantTaskTestState.error, refetch: consultantTaskTestState.refetch }) },
@@ -287,13 +303,17 @@ afterEach(() => {
   consultantCheckInTestState.mutate.mockReset();
   consultantCheckInTestState.mutationError = null;
   consultantCheckInTestState.refetch.mockReset();
-  consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned project delivery hours.", updatedAt: new Date("2026-08-26") }] };
+  consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned project delivery hours.", updatedAt: new Date("2026-08-26"), evidence: [] }] };
   consultantTimeSubmissionTestState.isLoading = false;
   consultantTimeSubmissionTestState.error = null;
   consultantTimeSubmissionTestState.create.mockReset();
   consultantTimeSubmissionTestState.update.mockReset();
   consultantTimeSubmissionTestState.submit.mockReset();
+  consultantTimeSubmissionTestState.prepareEvidence.mockReset();
+  consultantTimeSubmissionTestState.completeEvidence.mockReset();
+  consultantTimeSubmissionTestState.retryEvidence.mockReset();
   consultantTimeSubmissionTestState.mutationError = null;
+  consultantTimeSubmissionTestState.evidenceError = null;
   consultantTimeSubmissionTestState.refetch.mockReset();
   consultantActionInboxTestState.items = [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), state: "unread" }];
   consultantActionInboxTestState.isLoading = false;
@@ -302,6 +322,10 @@ afterEach(() => {
   consultantActionInboxTestState.dismiss.mockReset();
   consultantActionInboxTestState.mutationError = null;
   consultantActionInboxTestState.refetch.mockReset();
+  financeTimesheetEvidenceTestState.data = [];
+  financeTimesheetEvidenceTestState.isLoading = false;
+  financeTimesheetEvidenceTestState.error = null;
+  financeTimesheetEvidenceTestState.refetch.mockReset();
   window.history.pushState({}, "", "/");
 });
 
@@ -770,6 +794,45 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("35.2%")).toBeTruthy();
   });
 
+  it("renders Finance-only private timesheet evidence review with safe metadata and distinct query states", async () => {
+    const user = userEvent.setup();
+    financeTimesheetEvidenceTestState.data = [{ evidenceId: 91, timeEntryId: 72, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 256, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", uploadedAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26"), weekEnding: new Date("2026-08-23"), enteredHours: 40, timeEntryStatus: "submitted" }];
+    setAuthenticatedRole("finance", "Finley Finance");
+    renderRoute("/workspace/time-submission");
+    expect(screen.queryByText("Private timesheet evidence review")).toBeNull();
+    cleanup();
+
+    renderRoute("/workspace/time-billing");
+    await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]);
+    expect(screen.getByText("Private timesheet evidence review")).toBeTruthy();
+    expect(screen.getByText("approved-week.pdf")).toBeTruthy();
+    expect(screen.getByText(/OCR total: 40 hours/)).toBeTruthy();
+    const source = screen.getByRole("link", { name: /Open private source/ });
+    expect(source.getAttribute("href")).toBe("/api/finance/timesheet-evidence/91");
+    expect(screen.queryByText(/fileKey|consultant-timesheets\//i)).toBeNull();
+    expect(screen.getByText(/cannot approve time, alter the consultant’s entered hours, calculate payroll/i)).toBeTruthy();
+    cleanup();
+
+    financeTimesheetEvidenceTestState.isLoading = true;
+    renderRoute("/workspace/time-billing");
+    await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]);
+    expect(screen.getByText("Loading private timesheet evidence review queue…")).toBeTruthy();
+    cleanup();
+
+    financeTimesheetEvidenceTestState.isLoading = false;
+    financeTimesheetEvidenceTestState.error = new Error("Unavailable");
+    renderRoute("/workspace/time-billing");
+    await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]);
+    expect(screen.getByText("Private timesheet evidence is unavailable.")).toBeTruthy();
+    cleanup();
+
+    financeTimesheetEvidenceTestState.error = null;
+    financeTimesheetEvidenceTestState.data = [];
+    renderRoute("/workspace/time-billing");
+    await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]);
+    expect(screen.getByText("No private timesheet evidence is awaiting review.")).toBeTruthy();
+  });
+
   it("labels Controls material as representative and exposes no audit-export or approval action", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("admin", "Avery Admin");
@@ -885,6 +948,52 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     renderRoute("/workspace/time-submission");
     expect(screen.getByText("No active assignment is available for time submission.")).toBeTruthy();
     expect(screen.getByText("No protected time entries yet.")).toBeTruthy();
+  });
+
+  it("uploads a client-approved own timesheet privately and presents the OCR total only for human review", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchSpy);
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", note: "Submitted for designated review.", updatedAt: new Date("2026-08-26"), evidence: [] }] };
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/time-submission");
+
+    expect(screen.getByText("Client-approved timesheet evidence")).toBeTruthy();
+    expect(screen.getByText(/PDF, PNG, or JPEG only · 5 MB maximum/i)).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Timesheet evidence entry"), "71");
+    const file = new File(["%PDF approved timesheet"], "approved-week.pdf", { type: "application/pdf" });
+    await user.upload(screen.getByLabelText("Timesheet evidence upload"), file);
+    const uploadButton = screen.getByRole("button", { name: "Upload & extract total hours" }) as HTMLButtonElement;
+    expect(uploadButton.disabled).toBe(true);
+    await user.click(screen.getByLabelText("Confirm client-approved timesheet"));
+    expect(uploadButton.disabled).toBe(false);
+    await user.click(uploadButton);
+
+    await waitFor(() => expect(consultantTimeSubmissionTestState.prepareEvidence).toHaveBeenCalledWith(expect.objectContaining({ timeEntryId: 71, fileName: "approved-week.pdf", fileSize: file.size, confirmClientApproved: true })));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/api/consultant/timesheet-upload/b6d2ba3c-6f44-4d4c-b7f9-9a457bca80f2", expect.objectContaining({ method: "PUT", credentials: "include" })));
+    await waitFor(() => expect(consultantTimeSubmissionTestState.completeEvidence).toHaveBeenCalledWith({ sessionId: "b6d2ba3c-6f44-4d4c-b7f9-9a457bca80f2" }));
+    expect(screen.getByText(/Hours extracted: 40/)).toBeTruthy();
+    expect(screen.getByText(/has not changed your time entry/i)).toBeTruthy();
+    expect(screen.getByText(/cannot approve time, determine eligibility, calculate payroll, create invoices, issue payments/i)).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps OCR retry and no-eligible-evidence states distinct without exposing private document content", async () => {
+    const user = userEvent.setup();
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", note: "Submitted for designated review.", updatedAt: new Date("2026-08-26"), evidence: [{ id: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "needs_human_review", extractedHours: null, extractionConfidence: "low", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }] }] };
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/time-submission");
+
+    expect(screen.getByText("approved-week.pdf")).toBeTruthy();
+    expect(screen.getByText(/OCR total: Not available/)).toBeTruthy();
+    expect(screen.queryByText(/consultant-timesheets\/|fileSha256|fileKey/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Retry hours extraction" }));
+    expect(consultantTimeSubmissionTestState.retryEvidence).toHaveBeenCalledWith({ evidenceId: 91 });
+    cleanup();
+
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Draft record.", updatedAt: new Date("2026-08-26"), evidence: [] }] };
+    renderRoute("/workspace/time-submission");
+    expect(screen.getByText("No submitted or approved time entry is ready for evidence upload.")).toBeTruthy();
   });
 
   it("signs out an authenticated user and returns them to the login screen", async () => {

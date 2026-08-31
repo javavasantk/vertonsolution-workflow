@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { appRouter, resetConsultantActionInboxRateLimitsForTests } from "./routers";
+import { appRouter, resetConsultantActionInboxRateLimitsForTests, resetConsultantTimesheetOcrRateLimitsForTests } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import * as db from "./db";
 
@@ -22,7 +22,10 @@ function createContext(role: "user" | "admin" | "recruiter" | "hr_compliance" | 
 }
 
 describe("access router", () => {
-  beforeEach(() => resetConsultantActionInboxRateLimitsForTests());
+  beforeEach(() => {
+    resetConsultantActionInboxRateLimitsForTests();
+    resetConsultantTimesheetOcrRateLimitsForTests();
+  });
   it("rejects role-management access for non-administrator accounts", async () => {
     const caller = appRouter.createCaller(createContext("user"));
 
@@ -230,6 +233,71 @@ describe("access router", () => {
     create.mockRestore();
     update.mockRestore();
     submit.mockRestore();
+  });
+
+  it("prepares private client-approved timesheet upload evidence only for the current consultant's submitted or approved entry", async () => {
+    const createUpload = vi.spyOn(db, "createConsultantTimesheetUploadSession").mockResolvedValue({ id: "f4c4c2a6-17fb-4d62-b119-784831553898", fileKey: "consultant-timesheets/17/private.pdf", expiresAt: new Date("2026-08-27") } as never);
+    const input = { timeEntryId: 72, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 256, confirmClientApproved: true as const };
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+
+    await expect(caller.consultant.prepareTimesheetEvidenceUpload(input)).resolves.toMatchObject({ sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898", uploadPath: "/api/consultant/timesheet-upload/f4c4c2a6-17fb-4d62-b119-784831553898" });
+    expect(createUpload).toHaveBeenCalledWith(17, { timeEntryId: 72, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 256 });
+    await expect(caller.consultant.prepareTimesheetEvidenceUpload({ ...input, confirmClientApproved: false })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 22)).consultant.prepareTimesheetEvidenceUpload(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    createUpload.mockRestore();
+  });
+
+  it("keeps private timesheet evidence completion and OCR retry session-owned, without leaking document or commercial fields", async () => {
+    const completedEvidence = vi.spyOn(db, "getCompletedConsultantTimesheetEvidenceBySession").mockResolvedValue(undefined);
+    const unavailableSession = vi.spyOn(db, "getActiveConsultantTimesheetUploadSession").mockResolvedValue(undefined);
+    const privateEvidence = vi.spyOn(db, "getOwnedConsultantTimesheetEvidenceForProcessing").mockRejectedValue(new Error("Timesheet evidence was not found"));
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+
+    await expect(caller.consultant.completeTimesheetEvidenceUpload({ sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(caller.consultant.retryTimesheetHoursExtraction({ evidenceId: 999 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(appRouter.createCaller(createContext("admin", 1)).consultant.completeTimesheetEvidenceUpload({ sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const safeEvidence = { id: 91, timeEntryId: 72, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 256, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date(), updatedAt: new Date() };
+    expect(safeEvidence).not.toHaveProperty("fileKey");
+    expect(safeEvidence).not.toHaveProperty("fileSha256");
+    expect(safeEvidence).not.toHaveProperty("clientContent");
+    expect(safeEvidence).not.toHaveProperty("commercialRate");
+    completedEvidence.mockRestore();
+    unavailableSession.mockRestore();
+    privateEvidence.mockRestore();
+  });
+
+  it("limits each consultant to five OCR extraction requests per ten minutes", async () => {
+    const completedEvidence = vi.spyOn(db, "getCompletedConsultantTimesheetEvidenceBySession").mockResolvedValue(undefined);
+    const unavailableSession = vi.spyOn(db, "getActiveConsultantTimesheetUploadSession").mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+    const input = { sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898" };
+
+    for (let index = 0; index < 5; index += 1) {
+      await expect(caller.consultant.completeTimesheetEvidenceUpload(input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    }
+    await expect(caller.consultant.completeTimesheetEvidenceUpload(input)).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(unavailableSession).toHaveBeenCalledTimes(5);
+    completedEvidence.mockRestore();
+    unavailableSession.mockRestore();
+  });
+
+  it("serves the private timesheet evidence review queue only to Finance and omits document keys, client data, and automated decisions", async () => {
+    const safeRows = [{ evidenceId: 91, timeEntryId: 72, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 256, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", uploadedAt: new Date(), updatedAt: new Date(), weekEnding: new Date("2026-08-23"), enteredHours: 40, timeEntryStatus: "submitted" }];
+    const review = vi.spyOn(db, "listFinanceTimesheetEvidenceReview").mockResolvedValue(safeRows as never);
+
+    await expect(appRouter.createCaller(createContext("finance", 8)).finance.timesheetEvidenceReview()).resolves.toEqual(safeRows);
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "consultant", "user"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 9)).finance.timesheetEvidenceReview()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(review).toHaveBeenCalledTimes(1);
+    expect(safeRows[0]).not.toHaveProperty("fileKey");
+    expect(safeRows[0]).not.toHaveProperty("fileSha256");
+    expect(safeRows[0]).not.toHaveProperty("clientName");
+    expect(safeRows[0]).not.toHaveProperty("compensation");
+    expect(safeRows[0]).not.toHaveProperty("approvalDecision");
+    review.mockRestore();
   });
 
   it("serves deterministic Consultant Action Inbox items only to consultant-compatible session roles with safe fields", async () => {

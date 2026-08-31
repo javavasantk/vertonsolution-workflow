@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetUploadSessions, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -597,11 +597,27 @@ function presentConsultantTimeSubmission(row: typeof timesheetEntries.$inferSele
   };
 }
 
+/** Private storage keys and file digests stay server-side; consultants receive only their own evidence metadata and extraction outcome. */
+function presentConsultantTimesheetEvidence(row: typeof consultantTimesheetEvidence.$inferSelect) {
+  return {
+    id: row.id,
+    timeEntryId: row.timeEntryId,
+    originalFileName: row.originalFileName,
+    mimeType: row.mimeType,
+    fileSize: row.fileSize,
+    extractionStatus: row.extractionStatus,
+    extractedHours: row.extractedHours,
+    extractionConfidence: row.extractionConfidence,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 /** Own-record projection for consultant time submission. It omits commercial fields, client documents, colleague data, and any approval controls. */
 export async function listConsultantTimeSubmissions(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
-  const [assignments, entries] = await Promise.all([
+  const [assignments, entries, evidenceRows] = await Promise.all([
     db.select({
       id: consultantAssignments.id,
       projectName: clientProjects.name,
@@ -615,10 +631,19 @@ export async function listConsultantTimeSubmissions(userId: number) {
     db.select().from(timesheetEntries)
       .where(eq(timesheetEntries.userId, userId))
       .orderBy(desc(timesheetEntries.weekEnding)),
+    db.select().from(consultantTimesheetEvidence)
+      .where(eq(consultantTimesheetEvidence.userId, userId))
+      .orderBy(desc(consultantTimesheetEvidence.createdAt)),
   ]);
+  const evidenceByTimeEntry = new Map<number, ReturnType<typeof presentConsultantTimesheetEvidence>[]>();
+  evidenceRows.forEach(row => {
+    const evidence = evidenceByTimeEntry.get(row.timeEntryId) ?? [];
+    evidence.push(presentConsultantTimesheetEvidence(row));
+    evidenceByTimeEntry.set(row.timeEntryId, evidence);
+  });
   return {
     assignments,
-    entries: entries.map(presentConsultantTimeSubmission),
+    entries: entries.map(entry => ({ ...presentConsultantTimeSubmission(entry), evidence: evidenceByTimeEntry.get(entry.id) ?? [] })),
     designatedHumanOwner: assignments.find(row => row.assignmentState === "active")?.managerName || assignments[0]?.managerName || "Designated time reviewer",
   };
 }
@@ -684,6 +709,146 @@ export async function submitConsultantTimeSubmission(userId: number, timeEntryId
   await db.insert(consultantTimeEntryActivities).values({ timeEntryId: entry.id, userId, activityType: "submitted", occurredAt });
   const rows = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, entry.id)).limit(1);
   return presentConsultantTimeSubmission(rows[0] ?? { ...entry, status: "submitted" });
+}
+
+async function getOwnedTimeEntryForEvidence(userId: number, timeEntryId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(timesheetEntries).where(and(eq(timesheetEntries.id, timeEntryId), eq(timesheetEntries.userId, userId))).limit(1);
+  const entry = rows[0];
+  if (!entry || !["submitted", "approved"].includes(entry.status)) throw new Error("Submitted or approved time entry was not found");
+  return { db, entry };
+}
+
+/** Issues a brief private upload target only for a consultant's submitted or approved time entry. */
+export async function createConsultantTimesheetUploadSession(userId: number, input: { timeEntryId: number; originalFileName: string; mimeType: string; fileSize: number }) {
+  const { db } = await getOwnedTimeEntryForEvidence(userId, input.timeEntryId);
+  const id = randomUUID();
+  const safeFileName = input.originalFileName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "") || "timesheet";
+  const fileKey = `consultant-timesheets/${userId}/${id}-${safeFileName}`;
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await db.insert(consultantTimesheetUploadSessions).values({ id, userId, timeEntryId: input.timeEntryId, fileKey, originalFileName: input.originalFileName, mimeType: input.mimeType, fileSize: input.fileSize, expiresAt });
+  return { id, fileKey, expiresAt };
+}
+
+export async function getActiveConsultantTimesheetUploadSession(userId: number, sessionId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(consultantTimesheetUploadSessions).where(and(eq(consultantTimesheetUploadSessions.id, sessionId), eq(consultantTimesheetUploadSessions.userId, userId))).limit(1);
+  const session = rows[0];
+  if (!session || session.completedAt || session.expiresAt.getTime() < Date.now()) return undefined;
+  return session;
+}
+
+export async function getCompletedConsultantTimesheetEvidenceBySession(userId: number, sessionId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(consultantTimesheetEvidence).where(and(eq(consultantTimesheetEvidence.uploadSessionId, sessionId), eq(consultantTimesheetEvidence.userId, userId))).limit(1);
+  return rows[0] ? presentConsultantTimesheetEvidence(rows[0]) : undefined;
+}
+
+/** Persists evidence metadata and a bounded OCR total only after re-proving the upload session belongs to the active consultant. */
+export async function completeConsultantTimesheetEvidence(userId: number, input: {
+  sessionId: string;
+  fileSha256: string;
+  extractionStatus: "extracted" | "needs_human_review";
+  extractedHours: number | null;
+  extractionConfidence: "high" | "medium" | "low";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const existingSessionEvidence = await db.select().from(consultantTimesheetEvidence).where(eq(consultantTimesheetEvidence.uploadSessionId, input.sessionId)).limit(1);
+  if (existingSessionEvidence[0]) return presentConsultantTimesheetEvidence(existingSessionEvidence[0]);
+  const session = await getActiveConsultantTimesheetUploadSession(userId, input.sessionId);
+  if (!session) throw new Error("Timesheet upload session was not found");
+  const duplicate = await db.select().from(consultantTimesheetEvidence).where(and(eq(consultantTimesheetEvidence.userId, userId), eq(consultantTimesheetEvidence.timeEntryId, session.timeEntryId), eq(consultantTimesheetEvidence.fileSha256, input.fileSha256))).limit(1);
+  if (duplicate[0]) {
+    await db.update(consultantTimesheetUploadSessions).set({ completedAt: new Date() }).where(eq(consultantTimesheetUploadSessions.id, session.id));
+    return presentConsultantTimesheetEvidence(duplicate[0]);
+  }
+  const occurredAt = new Date();
+  try {
+    await db.insert(consultantTimesheetEvidence).values({
+      uploadSessionId: session.id,
+      userId,
+      timeEntryId: session.timeEntryId,
+      fileKey: session.fileKey,
+      originalFileName: session.originalFileName,
+      mimeType: session.mimeType,
+      fileSize: session.fileSize,
+      fileSha256: input.fileSha256,
+      extractionStatus: input.extractionStatus,
+      extractedHours: input.extractedHours,
+      extractionConfidence: input.extractionConfidence,
+      createdAt: occurredAt,
+    });
+  } catch (error) {
+    const concurrentEvidence = await db.select().from(consultantTimesheetEvidence).where(eq(consultantTimesheetEvidence.uploadSessionId, session.id)).limit(1);
+    if (concurrentEvidence[0]) return presentConsultantTimesheetEvidence(concurrentEvidence[0]);
+    throw error;
+  }
+  const rows = await db.select().from(consultantTimesheetEvidence).where(eq(consultantTimesheetEvidence.uploadSessionId, session.id)).limit(1);
+  const evidence = rows[0];
+  if (!evidence) throw new Error("Timesheet evidence could not be recorded");
+  await db.insert(consultantTimesheetEvidenceActivities).values([
+    { evidenceId: evidence.id, userId, activityType: "uploaded", occurredAt },
+    { evidenceId: evidence.id, userId, activityType: input.extractionStatus === "extracted" ? "hours_extracted" : "needs_human_review", occurredAt },
+  ]);
+  await db.update(consultantTimesheetUploadSessions).set({ completedAt: occurredAt }).where(eq(consultantTimesheetUploadSessions.id, session.id));
+  return presentConsultantTimesheetEvidence(evidence);
+}
+
+/** Resolves a private evidence row only for server-side re-extraction and never returns it directly to a client. */
+export async function getOwnedConsultantTimesheetEvidenceForProcessing(userId: number, evidenceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select().from(consultantTimesheetEvidence).where(and(eq(consultantTimesheetEvidence.id, evidenceId), eq(consultantTimesheetEvidence.userId, userId))).limit(1);
+  if (!rows[0]) throw new Error("Timesheet evidence was not found");
+  return { db, evidence: rows[0] };
+}
+
+export async function recordConsultantTimesheetEvidenceExtraction(userId: number, evidenceId: number, result: { extractionStatus: "extracted" | "needs_human_review"; extractedHours: number | null; extractionConfidence: "high" | "medium" | "low" }) {
+  const { db, evidence } = await getOwnedConsultantTimesheetEvidenceForProcessing(userId, evidenceId);
+  const occurredAt = new Date();
+  await db.update(consultantTimesheetEvidence).set(result).where(eq(consultantTimesheetEvidence.id, evidence.id));
+  await db.insert(consultantTimesheetEvidenceActivities).values({ evidenceId: evidence.id, userId, activityType: result.extractionStatus === "extracted" ? "hours_extracted" : "needs_human_review", occurredAt });
+  const rows = await db.select().from(consultantTimesheetEvidence).where(eq(consultantTimesheetEvidence.id, evidence.id)).limit(1);
+  return presentConsultantTimesheetEvidence(rows[0] ?? { ...evidence, ...result, updatedAt: occurredAt });
+}
+
+/** Finance receives only a narrow review queue: entered hours, bounded OCR total, file metadata, and time-entry status. */
+export async function listFinanceTimesheetEvidenceReview() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select({
+    evidenceId: consultantTimesheetEvidence.id,
+    timeEntryId: consultantTimesheetEvidence.timeEntryId,
+    originalFileName: consultantTimesheetEvidence.originalFileName,
+    mimeType: consultantTimesheetEvidence.mimeType,
+    fileSize: consultantTimesheetEvidence.fileSize,
+    extractionStatus: consultantTimesheetEvidence.extractionStatus,
+    extractedHours: consultantTimesheetEvidence.extractedHours,
+    extractionConfidence: consultantTimesheetEvidence.extractionConfidence,
+    uploadedAt: consultantTimesheetEvidence.createdAt,
+    updatedAt: consultantTimesheetEvidence.updatedAt,
+    weekEnding: timesheetEntries.weekEnding,
+    enteredHours: timesheetEntries.hours,
+    timeEntryStatus: timesheetEntries.status,
+  }).from(consultantTimesheetEvidence)
+    .innerJoin(timesheetEntries, eq(consultantTimesheetEvidence.timeEntryId, timesheetEntries.id))
+    .orderBy(desc(consultantTimesheetEvidence.createdAt));
+  return rows;
+}
+
+/** Returns a private object key only to an internal server-side document route after Finance authorization. */
+export async function getFinanceTimesheetEvidenceDocument(evidenceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select({ fileKey: consultantTimesheetEvidence.fileKey, mimeType: consultantTimesheetEvidence.mimeType, originalFileName: consultantTimesheetEvidence.originalFileName })
+    .from(consultantTimesheetEvidence)
+    .where(eq(consultantTimesheetEvidence.id, evidenceId))
+    .limit(1);
+  return rows[0];
 }
 
 type ConsultantActionInboxItem = {

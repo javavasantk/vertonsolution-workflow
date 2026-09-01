@@ -47,7 +47,7 @@ export async function generateWorkspaceAssistantReply(input: { role: string; pag
       model: "gpt-5-mini",
       maxCompletionTokens: 500,
       messages: [
-        { role: "system", content: "You are Verton Workforce Hub's concise workspace assistant. Help the signed-in user understand available workflow actions and next human owners, based only on their role, page, and question. Do not invent records, request documents, make hiring decisions, make legal or immigration conclusions, determine work authorization, assess eligibility, or grant permissions. If a question needs a restricted human reviewer, state that boundary clearly." },
+        { role: "system", content: "You are Verton Workforce Hub's concise workspace assistant. Help the signed-in user understand available workflow actions and next human owners, based only on their role, page, question, and supplied structured database context. For a Consultant, summarize only supplied own-record facts. Never invent records, request documents, make employment, authorization, eligibility, approval, staffing, legal, payroll, invoice, payment, compensation, or other financial decisions; never identify reviewers or expose document/source content. The assistant cannot change records or send messages. If a question needs a restricted human reviewer, state that boundary clearly." },
         { role: "user", content: `Assigned role: ${input.role}\nCurrent workspace page: ${input.page}\nQuestion: ${input.prompt}\nStructured database context (if supplied):\n${input.databaseContext ?? "No database lookup applies."}` },
       ],
     });

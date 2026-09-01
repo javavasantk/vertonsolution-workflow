@@ -112,6 +112,13 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
     await expect.poll(() => page.getByText(/send email|send sms|push notification|Slack|schedule reminder/i).count()).toBe(0);
     await page.getByRole("tab", { name: "Active" }).click();
     await page.screenshot({ path: `/home/ubuntu/consultant-action-inbox-${suffix}.png`, fullPage: true });
+
+    await page.getByRole("button", { name: "Open AI assistant" }).click();
+    await page.getByRole("button", { name: "Show my onboarding tasks" }).click();
+    await expect.poll(() => page.getByText(/Database matches \(consultant_onboarding\)/).count(), { timeout: 60_000 }).toBeGreaterThan(0);
+    await expect.poll(() => page.getByText(/consultant-timesheets\/|fileSha256|presigned URL|reviewer identity:/i).count()).toBe(0);
+    await expect.poll(() => page.getByRole("button", { name: /send email|send sms|send slack|notify/i }).count()).toBe(0);
+    await page.screenshot({ path: `/home/ubuntu/consultant-assistant-own-record-${suffix}.png`, fullPage: true });
   }
 
 function signedUploadResumeFixture() {
@@ -133,7 +140,7 @@ describe("real browser demo authentication journey", () => {
     } finally {
       await browser.close();
     }
-  }, 45_000);
+  }, 150_000);
 
   runBrowserJourney("opens only a Consultant's private timesheet source through the no-store attachment handoff", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });

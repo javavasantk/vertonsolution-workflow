@@ -511,6 +511,84 @@ export async function getWorkspaceAssistantLookup(role: string, prompt: string) 
   return { kind: "none" as const, records: [], context: "No database lookup applies to this question. Provide workflow guidance only." };
 }
 
+export type ConsultantAssistantLookupKind = "consultant_onboarding" | "consultant_time_records" | "consultant_period_hours" | "consultant_engagement" | "consultant_action_inbox" | "consultant_profile_request" | "none";
+type ConsultantAssistantPeriod = { startDate: Date; endDate: Date } | null;
+type ConsultantAssistantLookup = { kind: ConsultantAssistantLookupKind; records: Array<Record<string, string | number | null>>; context: string; unavailable: boolean };
+
+/** Detects only narrow Consultant own-record lookup families; it never infers employment, authorization, financial, or staffing outcomes. */
+export function detectConsultantAssistantLookupIntent(prompt: string): Exclude<ConsultantAssistantLookupKind, "none"> | "none" {
+  const normalized = prompt.toLowerCase();
+  if (/\b(action inbox|inbox|reminder|reminders)\b/.test(normalized)) return "consultant_action_inbox";
+  if (/\b(onboarding|onboard|task|tasks)\b/.test(normalized)) return "consultant_onboarding";
+  if (/\b(selected period|period hours|total hours|my hours|work hours|hours this|hours for)\b/.test(normalized)) return "consultant_period_hours";
+  if (/\b(timesheet|time record|time records|submitted time|correction|exception)\b/.test(normalized)) return "consultant_time_records";
+  if (/\b(engagement|assignment|project|manager|roll[- ]?off|extension)\b/.test(normalized)) return "consultant_engagement";
+  if (/\b(profile request|profile status|details requested|my profile|profile)\b/.test(normalized)) return "consultant_profile_request";
+  return "none";
+}
+
+function assistantDateLabel(value: Date | null) {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
+function currentUtcMonthPeriod(): NonNullable<ConsultantAssistantPeriod> {
+  const now = new Date();
+  return {
+    startDate: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+    endDate: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999)),
+  };
+}
+
+/** Retrieves at most five minimal records owned by the signed-in Consultant and excludes evidence, reviewer, readiness, client, and financial data. */
+export async function getConsultantWorkspaceAssistantLookup(userId: number, prompt: string, selectedPeriod: ConsultantAssistantPeriod = null): Promise<ConsultantAssistantLookup> {
+  const db = await getDb();
+  if (!db) return { kind: "none", records: [], context: "The protected own-record lookup is temporarily unavailable. Continue with the designated human owner.", unavailable: true };
+  const kind = detectConsultantAssistantLookupIntent(prompt);
+  const unavailable = () => ({ kind, records: [], context: "The protected own-record lookup is temporarily unavailable. Continue with the designated human owner.", unavailable: true } as ConsultantAssistantLookup);
+  try {
+    if (kind === "consultant_onboarding") {
+      const rows = await db.select({ title: consultantOnboardingTasks.title, completionState: consultantOnboardingTasks.consultantCompletionState, dueDate: consultantOnboardingTasks.dueDate, ownerGroup: consultantOnboardingTasks.ownerGroup })
+        .from(consultantOnboardingTasks).where(eq(consultantOnboardingTasks.userId, userId)).orderBy(desc(consultantOnboardingTasks.updatedAt)).limit(5);
+      const records = rows.map(row => ({ title: row.title, completionState: row.completionState, dueDate: assistantDateLabel(row.dueDate), ownerGroup: row.ownerGroup, destination: "/workspace/onboarding" }));
+      return { kind, records, context: records.length ? records.map(row => `Onboarding task: ${row.title}; completion: ${row.completionState}; due date: ${row.dueDate ?? "not recorded"}; owner group: ${row.ownerGroup}.`).join("\n") : "No own onboarding tasks are available.", unavailable: false };
+    }
+    if (kind === "consultant_time_records") {
+      const rows = await db.select({ weekEnding: timesheetEntries.weekEnding, enteredHours: timesheetEntries.hours, status: timesheetEntries.status })
+        .from(timesheetEntries).where(and(eq(timesheetEntries.userId, userId), inArray(timesheetEntries.status, ["submitted", "exception"]))).orderBy(desc(timesheetEntries.weekEnding), desc(timesheetEntries.id)).limit(5);
+      const records = rows.map(row => ({ weekEnding: assistantDateLabel(row.weekEnding), enteredHours: row.enteredHours, status: row.status, destination: "/workspace/time-submission" }));
+      return { kind, records, context: records.length ? records.map(row => `Time record: week ending ${row.weekEnding}; entered hours: ${row.enteredHours}; status: ${row.status}.`).join("\n") : "No submitted or correction-needed own time records are available.", unavailable: false };
+    }
+    if (kind === "consultant_period_hours") {
+      const period = selectedPeriod ?? currentUtcMonthPeriod();
+      const rows = await db.select({ hours: timesheetEntries.hours }).from(timesheetEntries)
+        .where(and(eq(timesheetEntries.userId, userId), gte(timesheetEntries.weekEnding, period.startDate), lte(timesheetEntries.weekEnding, period.endDate)));
+      const record = { periodStart: assistantDateLabel(period.startDate), periodEnd: assistantDateLabel(period.endDate), enteredHoursTotal: rows.reduce((sum, row) => sum + row.hours, 0), entryCount: rows.length, destination: "/workspace/time-submission" };
+      return { kind, records: [record], context: `Selected period: ${record.periodStart} to ${record.periodEnd}; entered work hours total: ${record.enteredHoursTotal}; time entries: ${record.entryCount}. This is a factual entered-hours total only.`, unavailable: false };
+    }
+    if (kind === "consultant_engagement") {
+      const rows = await db.select({ projectLabel: clientProjects.name, assignmentState: consultantAssignments.assignmentState, startDate: consultantAssignments.startDate, endDate: consultantAssignments.endDate, managerLabel: consultantAssignments.managerName })
+        .from(consultantAssignments).leftJoin(clientProjects, eq(consultantAssignments.projectId, clientProjects.id)).where(eq(consultantAssignments.userId, userId)).orderBy(desc(consultantAssignments.updatedAt)).limit(5);
+      const assignment = rows.find(row => row.assignmentState === "active") ?? rows[0];
+      const records = assignment ? [{ projectLabel: assignment.projectLabel ?? "Project label not recorded", assignmentState: assignment.assignmentState, startDate: assistantDateLabel(assignment.startDate), endDate: assistantDateLabel(assignment.endDate), managerLabel: assignment.managerLabel ?? "Manager label not recorded", destination: "/workspace/my-engagement" }] : [];
+      return { kind, records, context: records.length ? records.map(row => `Engagement: project ${row.projectLabel}; assignment state: ${row.assignmentState}; start date: ${row.startDate ?? "not recorded"}; end date: ${row.endDate ?? "not recorded"}; manager: ${row.managerLabel}.`).join("\n") : "No own engagement record is available.", unavailable: false };
+    }
+    if (kind === "consultant_action_inbox") {
+      const rows = await listConsultantActionInbox(userId, false);
+      const records = rows.slice(0, 5).map(row => ({ source: row.source, title: row.title, status: row.status, designatedHumanOwner: row.designatedHumanOwner, destination: row.destination }));
+      return { kind, records, context: records.length ? records.map(row => `Action Inbox reminder: ${row.title}; source: ${row.source}; status: ${row.status}; designated human owner: ${row.designatedHumanOwner}.`).join("\n") : "No active own Action Inbox reminders are available.", unavailable: false };
+    }
+    if (kind === "consultant_profile_request") {
+      const rows = await db.select({ requestState: employeeProfileRequests.requestState, submittedAt: employeeProfileRequests.submittedAt })
+        .from(employeeProfileRequests).where(eq(employeeProfileRequests.userId, userId)).orderBy(desc(employeeProfileRequests.submittedAt), desc(employeeProfileRequests.id)).limit(5);
+      const records = rows.map(row => ({ requestState: row.requestState, submittedAt: assistantDateLabel(row.submittedAt), destination: "/workspace/profile" }));
+      return { kind, records, context: records.length ? records.map(row => `Profile request: state ${row.requestState}; submitted ${row.submittedAt ?? "date not recorded"}.`).join("\n") : "No own profile review requests are available.", unavailable: false };
+    }
+    return { kind: "none", records: [], context: "No protected own-record lookup applies to this question. Provide workflow guidance only.", unavailable: false };
+  } catch {
+    return unavailable();
+  }
+}
+
 export type PortalSummaryRole = "admin" | "recruiter" | "hr_compliance" | "account_manager" | "delivery_manager" | "project_manager" | "finance" | "consultant" | "user";
 
 /** Narrow own-record projection for the Consultant My Work dashboard. */

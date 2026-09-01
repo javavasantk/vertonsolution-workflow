@@ -661,7 +661,17 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     onSuccess: data => setAssistantMessages(messages => {
       const records = data.records as Array<any> | undefined;
       const lookupSummary = records?.length
-        ? `\n\nDatabase matches (${data.lookupKind}):\n${records.map(record => data.lookupKind === "candidate" ? `• ${record.candidateName} — ${record.location || "location not stated"}; ${record.yearsExperience || "experience not stated"}; ${(record.skills || []).join(", ") || "skills not stated"}` : `• ${record.name} — ${String(record.deliveryStatus || "status pending").replaceAll("_", " ")}; ${record.projectManagerName || "manager pending"}`).join("\n")}`
+        ? `\n\nDatabase matches (${data.lookupKind}):\n${records.map(record => {
+          if (data.lookupKind === "candidate") return `• ${record.candidateName} — ${record.location || "location not stated"}; ${record.yearsExperience || "experience not stated"}; ${(record.skills || []).join(", ") || "skills not stated"}`;
+          if (data.lookupKind === "project") return `• ${record.name} — ${String(record.deliveryStatus || "status pending").replaceAll("_", " ")}; ${record.projectManagerName || "manager pending"}`;
+          if (data.lookupKind === "consultant_onboarding") return `• ${record.title || "Onboarding task"} — ${String(record.completionState || "not stated").replaceAll("_", " ")}; due ${record.dueDate || "not recorded"}; owner group ${record.ownerGroup || "not recorded"}`;
+          if (data.lookupKind === "consultant_time_records") return `• Week ending ${record.weekEnding || "not recorded"} — ${record.enteredHours ?? "not stated"} entered hours; ${String(record.status || "not stated").replaceAll("_", " ")}`;
+          if (data.lookupKind === "consultant_period_hours") return `• ${record.periodStart || "period start"} to ${record.periodEnd || "period end"} — ${record.enteredHoursTotal ?? 0} entered hours across ${record.entryCount ?? 0} records`;
+          if (data.lookupKind === "consultant_engagement") return `• ${record.projectLabel || "Project label not recorded"} — ${String(record.assignmentState || "not stated").replaceAll("_", " ")}; manager ${record.managerLabel || "not recorded"}; ends ${record.endDate || "not recorded"}`;
+          if (data.lookupKind === "consultant_action_inbox") return `• ${record.title || "Action Inbox reminder"} — ${String(record.status || "not stated").replaceAll("_", " ")}; human owner ${record.designatedHumanOwner || "not recorded"}`;
+          if (data.lookupKind === "consultant_profile_request") return `• Profile request — ${String(record.requestState || "not stated").replaceAll("_", " ")}; submitted ${record.submittedAt || "not recorded"}`;
+          return "• No protected record details are available.";
+        }).join("\n")}`
         : "";
       return [...messages, { role: "assistant", content: `${data.reply}${lookupSummary}` }];
     }),
@@ -1231,6 +1241,8 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     ? ["Find candidate profiles with Java skills", "What is the status of the Northstar project?"]
     : activeRole === "Administrator"
       ? ["What can I review on this page?", "What is the status of the Northstar project?"]
+      : activeRole === "Consultant"
+        ? ["Show my onboarding tasks", "What are my submitted time records?", "How many hours are in my selected period?"]
       : ["Account Manager", "Delivery Manager", "Project Manager"].includes(activeRole)
         ? ["Show project status", "What can I do on this page?"]
       : ["What can I do on this page?", "Who owns the next human review?"];
@@ -1239,7 +1251,11 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     const cleanPrompt = prompt.trim();
     if (cleanPrompt.length < 4 || cleanPrompt.length > 600 || workspaceAssistantMutation.isPending) return;
     setAssistantMessages(messages => [...messages, { role: "user", content: cleanPrompt }]);
-    workspaceAssistantMutation.mutate({ page: activePage, prompt: cleanPrompt });
+    workspaceAssistantMutation.mutate({
+      page: activePage,
+      prompt: cleanPrompt,
+      ...(activeRole === "Consultant" && activePage === "Time submission" && hasSelectedTimePeriod ? { periodStartDate: selectedTimePeriod.startDate, periodEndDate: selectedTimePeriod.endDate } : {}),
+    });
   };
 
   const TimesheetDetailTable = () => {
@@ -1294,7 +1310,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   </div>
   {mobileNavOpen && <div className="fixed inset-0 z-[60] lg:hidden"><button aria-label="Close menu" onClick={() => setMobileNavOpen(false)} className="absolute inset-0 bg-[#061a33]/55" /><div className="relative flex h-full w-[280px] flex-col bg-[#09264b] text-white shadow-2xl"><div className="flex h-[76px] items-center justify-between border-b border-white/10 px-4"><Logo dark /><button onClick={() => setMobileNavOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-blue-100"><X size={18} /></button></div><WorkspaceNav mobile /></div></div>}
   <div className="fixed bottom-4 right-4 z-[70] flex w-[min(420px,calc(100vw-2rem))] flex-col items-end gap-3 sm:bottom-6 sm:right-6">
-    {assistantOpen && <section className="w-full overflow-hidden rounded-2xl border border-[#bfd7f4] bg-white shadow-[0_20px_55px_rgba(9,38,75,.23)]"><div className="flex items-start justify-between border-b border-[#e3edf7] bg-[#f5faff] px-4 py-3"><div><p className="text-xs font-extrabold text-[#25496a]">Workforce Hub assistant</p><p className="mt-1 text-[10px] leading-4 text-[#7185a0]">Role-aware workflow help only. It does not make employment, eligibility, or authorization decisions.</p></div><button aria-label="Close AI assistant" onClick={() => setAssistantOpen(false)} className="ml-3 grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[#65809d] transition hover:bg-white"><X size={15} /></button></div><AIChatBox messages={assistantMessages} onSendMessage={sendAssistantMessage} isLoading={workspaceAssistantMutation.isPending} height="380px" placeholder="Ask about this workspace…" minInputLength={4} maxInputLength={600} emptyStateMessage={`Ask for help with ${activePage.toLowerCase()}.`} suggestedPrompts={assistantPrompts} />{workspaceAssistantMutation.error && <p className="border-t border-rose-100 bg-rose-50 px-4 py-2.5 text-[11px] font-semibold text-rose-700">The assistant is unavailable. Continue with the designated human owner for this workflow.</p>}</section>}
+    {assistantOpen && <section className="w-full overflow-hidden rounded-2xl border border-[#bfd7f4] bg-white shadow-[0_20px_55px_rgba(9,38,75,.23)]"><div className="flex items-start justify-between border-b border-[#e3edf7] bg-[#f5faff] px-4 py-3"><div><p className="text-xs font-extrabold text-[#25496a]">Workforce Hub assistant</p><p className="mt-1 text-[10px] leading-4 text-[#7185a0]">Role-aware workflow help only. It summarizes existing permitted records and does not make employment, eligibility, authorization, approval, staffing, or financial decisions.</p></div><button aria-label="Close AI assistant" onClick={() => setAssistantOpen(false)} className="ml-3 grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[#65809d] transition hover:bg-white"><X size={15} /></button></div><AIChatBox messages={assistantMessages} onSendMessage={sendAssistantMessage} isLoading={workspaceAssistantMutation.isPending} height="380px" placeholder="Ask about this workspace…" minInputLength={4} maxInputLength={600} emptyStateMessage={`Ask for help with ${activePage.toLowerCase()}.`} suggestedPrompts={assistantPrompts} />{workspaceAssistantMutation.error && <p className="border-t border-rose-100 bg-rose-50 px-4 py-2.5 text-[11px] font-semibold text-rose-700">The assistant is unavailable. Continue with the designated human owner for this workflow.</p>}</section>}
     <button aria-label="Open AI assistant" onClick={() => setAssistantOpen(open => !open)} className="flex h-13 items-center gap-2 rounded-2xl bg-[#0b57d0] px-4 text-xs font-extrabold text-white shadow-[0_12px_28px_rgba(11,87,208,.32)] transition hover:-translate-y-0.5 hover:bg-[#094db9]"><MessageCircle size={18} /> {assistantOpen ? "Close assistant" : "Ask Workforce Hub"}</button>
   </div>
   </div>;

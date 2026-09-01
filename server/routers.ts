@@ -65,7 +65,11 @@ const aiAssistantInputSchema = z.object({
 const workspaceAssistantInputSchema = z.object({
   page: z.string().trim().min(2).max(64),
   prompt: z.string().trim().min(4).max(600),
-});
+  periodStartDate: z.coerce.date().optional(),
+  periodEndDate: z.coerce.date().optional(),
+}).refine(input => Boolean(input.periodStartDate) === Boolean(input.periodEndDate), { message: "Provide both selected-period dates or neither.", path: ["periodEndDate"] })
+  .refine(input => !input.periodStartDate || !input.periodEndDate || input.periodEndDate >= input.periodStartDate, { message: "The selected period end must be on or after the period start.", path: ["periodEndDate"] })
+  .refine(input => !input.periodStartDate || !input.periodEndDate || input.periodEndDate.getTime() - input.periodStartDate.getTime() <= 366 * 24 * 60 * 60 * 1000, { message: "The selected period must be no more than 366 days.", path: ["periodEndDate"] });
 
 const candidateInlineUpdateSchema = z.object({
   candidateId: z.number().int().positive(),
@@ -593,9 +597,21 @@ export const appRouter = router({
     workspaceAssistant: protectedProcedure
       .input(workspaceAssistantInputSchema)
       .mutation(async ({ ctx, input }) => {
-        const lookup = await db.getWorkspaceAssistantLookup(ctx.user.role, input.prompt);
+        const isConsultant = ["consultant", "user"].includes(ctx.user.role);
+        const lookup = isConsultant
+          ? await db.getConsultantWorkspaceAssistantLookup(ctx.user.id, input.prompt, input.periodStartDate && input.periodEndDate ? { startDate: input.periodStartDate, endDate: input.periodEndDate } : null)
+          : await db.getWorkspaceAssistantLookup(ctx.user.role, input.prompt);
+        if (isConsultant && "unavailable" in lookup && lookup.unavailable) {
+          return {
+            reply: "Your protected own-record lookup is temporarily unavailable. Continue with the designated human owner for this workflow; no automated decision has been made.",
+            model: "unavailable",
+            unavailable: true,
+            lookupKind: "none" as const,
+            records: [],
+          };
+        }
         const response = await generateWorkspaceAssistantReply({ role: ctx.user.role, page: input.page, prompt: input.prompt, databaseContext: lookup.context });
-        return { ...response, lookupKind: lookup.kind, records: lookup.records };
+        return { ...response, lookupKind: lookup.kind, records: lookup.records.slice(0, 5) };
       }),
   }),
 

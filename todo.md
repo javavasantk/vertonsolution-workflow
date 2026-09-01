@@ -267,3 +267,4 @@
 - [x] Enhance the protected Consultant Action Inbox with dismissed-item recovery, visible state timestamps, neutral source-update aging, and rate-limited own-record restoration.
 - [x] Add protected My Profile Request History with append-only own-request snapshots, chronological local-time display, and human-review-only boundaries.
 - [x] Add a protected Consultant Engagement Continuity Note route with factual own-assignment notes, designated-human-owner context, and append-only personal history.
+- [x] Extend the authenticated assistant with deterministic Consultant own-record lookup intents, minimal safe projections, bounded results, and no mutation or external-message capability.

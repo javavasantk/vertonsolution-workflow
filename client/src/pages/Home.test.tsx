@@ -1731,6 +1731,46 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Northstar Commerce Cloud · Demo — active; Casey Rivera"))).length).toBeGreaterThan(0);
   });
 
+  it("renders only safe Consultant-owned onboarding matches in the authenticated assistant", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.response = { reply: "One of your onboarding tasks is available.", model: "test-model", unavailable: false, lookupKind: "consultant_onboarding", records: [{ title: "Confirm workspace access", completionState: "pending", dueDate: "2026-09-10", ownerGroup: "Workforce Operations", destination: "/workspace/onboarding" }] } as any;
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    await user.click(screen.getByRole("button", { name: "Show my onboarding tasks" }));
+    expect(workspaceAssistantState.mutate).toHaveBeenCalledWith({ page: "Overview", prompt: "Show my onboarding tasks" });
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Database matches (consultant_onboarding)"))).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Confirm workspace access — pending; due 2026-09-10; owner group Workforce Operations"))).length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toMatch(/storage key|document bytes|reviewer identity|work authorization|compensation|payroll|invoice|payment/i);
+  });
+
+  it("sends the valid selected Time Submission period with a Consultant own-hours lookup", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.response = { reply: "Your selected period has 40 entered hours.", model: "test-model", unavailable: false, lookupKind: "consultant_period_hours", records: [{ periodStart: "2026-08-01", periodEnd: "2026-08-31", enteredHoursTotal: 40, entryCount: 1, destination: "/workspace/time-submission" }] } as any;
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace/time-submission");
+
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    await user.click(screen.getByRole("button", { name: "How many hours are in my selected period?" }));
+    expect(workspaceAssistantState.mutate).toHaveBeenCalledWith(expect.objectContaining({ page: "Time submission", prompt: "How many hours are in my selected period?", periodStartDate: expect.any(Date), periodEndDate: expect.any(Date) }));
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("Database matches (consultant_period_hours)"))).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => Boolean(element?.textContent?.includes("entered hours across 1 records"))).length).toBeGreaterThan(0);
+  });
+
+  it("keeps the Consultant assistant usable in a compact viewport and displays the safe unavailable fallback", async () => {
+    const user = userEvent.setup();
+    workspaceAssistantState.response = { reply: "Your protected own-record lookup is temporarily unavailable. Continue with the designated human owner; no automated decision has been made.", model: "unavailable", unavailable: true, lookupKind: "none", records: [] } as any;
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace");
+
+    await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
+    await user.click(screen.getByRole("button", { name: "Show my onboarding tasks" }));
+    expect(screen.getAllByText(/protected own-record lookup is temporarily unavailable/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Ask about this workspace…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /send email|send sms|send slack|notify/i })).toBeNull();
+  });
+
   it("disables floating assistant prompts while a response is being prepared", async () => {
     const user = userEvent.setup();
     workspaceAssistantState.isPending = true;
@@ -1738,7 +1778,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     renderRoute("/workspace");
 
     await user.click(screen.getByRole("button", { name: /Open AI assistant/ }));
-    expect(screen.getByRole("button", { name: "What can I do on this page?" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Show my onboarding tasks" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("gates typed workspace assistant prompts to the required 4–600 character range", async () => {

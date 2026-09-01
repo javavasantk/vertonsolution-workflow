@@ -72,6 +72,10 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     record: undefined as any,
     isLoading: false,
     error: null as Error | null,
+    history: [] as any[],
+    historyLoading: false,
+    historyError: null as Error | null,
+    historyRefetch: vi.fn(),
     mutation: vi.fn(),
     mutationError: false,
   },
@@ -188,6 +192,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     profile: {
       mine: { useQuery: () => ({ data: profileTestState.record, isLoading: profileTestState.isLoading, error: profileTestState.error, refetch: vi.fn() }) },
+      requestHistory: { useQuery: () => ({ data: profileTestState.history, isLoading: profileTestState.historyLoading, error: profileTestState.historyError, refetch: profileTestState.historyRefetch }) },
       readinessRecords: { useQuery: () => ({ data: readinessTestState.records, isLoading: readinessTestState.isLoading, error: readinessTestState.error, refetch: vi.fn() }) },
       requestReview: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { profileTestState.mutation(input); if (profileTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false }),
     },
@@ -321,6 +326,10 @@ afterEach(() => {
   profileTestState.record = undefined;
   profileTestState.isLoading = false;
   profileTestState.error = null;
+  profileTestState.history = [];
+  profileTestState.historyLoading = false;
+  profileTestState.historyError = null;
+  profileTestState.historyRefetch.mockReset();
   profileTestState.mutation.mockReset();
   profileTestState.mutationError = false;
   consultantMyWorkTestState.data = { profile: { profileUpdateState: "details_requested", updatedAt: new Date("2026-08-26") }, onboarding: { onboardingStage: "manager_confirmation", progressPercent: 82, assignmentState: "active", updatedAt: new Date("2026-08-26") }, assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: null, endDate: null, updatedAt: new Date("2026-08-26") }, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } };
@@ -935,6 +944,48 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     profileTestState.mutationError = false;
     await user.click(screen.getByRole("button", { name: /Submit update for human review/ }));
     expect(screen.getByText(/Update submitted. An authorized reviewer/)).toBeTruthy();
+  });
+
+  it("renders only chronological own My Profile Request History snapshots with first-use, error, and refresh states", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    profileTestState.record = { employmentType: "H-1B", workAuthorizationStatus: "details_requested", statusNote: "Awaiting human review.", updatedAt: new Date("2026-08-26") };
+    profileTestState.history = [
+      { requestId: 42, employmentType: "H-1B", statusNote: "Please review my updated administrative profile details.", requestState: "details_requested", submittedAt: new Date("2026-08-28T12:00:00.000Z") },
+      { requestId: 41, employmentType: "F-1 OPT", statusNote: "Please review my earlier submitted update.", requestState: "details_requested", submittedAt: new Date("2026-08-27T12:00:00.000Z") },
+    ];
+    renderRoute("/workspace/profile");
+
+    const history = screen.getByRole("region", { name: "My Profile Request History" });
+    expect(history).toBeTruthy();
+    expect(screen.getByText("Request #42")).toBeTruthy();
+    expect(screen.getByText("Request #41")).toBeTruthy();
+    const requestRows = within(screen.getByRole("list", { name: "Profile requests in chronological reading order" })).getAllByRole("listitem");
+    expect(requestRows[0]?.textContent).toContain("Request #42");
+    expect(requestRows[1]?.textContent).toContain("Request #41");
+    expect(screen.getByText(/records personal requests for human review, not an authorization/i)).toBeTruthy();
+    expect(history.textContent).not.toContain("Reviewer name:");
+    expect(history.textContent).not.toContain("Reviewer commentary:");
+    expect(history.textContent).not.toContain("Private document key:");
+    expect(screen.queryByRole("button", { name: /reviewer|document|delete|edit/i })).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText("Work authorization category"), "H-1B");
+    await user.type(screen.getByLabelText("Status note"), "Please record this additional profile update for review.");
+    await user.click(screen.getByRole("button", { name: /Submit update for human review/ }));
+    expect(profileTestState.historyRefetch).toHaveBeenCalled();
+
+    cleanup();
+    profileTestState.history = [];
+    renderRoute("/workspace/profile");
+    expect(screen.getByText("No profile requests have been submitted yet.")).toBeTruthy();
+
+    cleanup();
+    profileTestState.historyError = new Error("Unavailable");
+    renderRoute("/workspace/profile");
+    expect(screen.getByText("Your profile request history is unavailable.")).toBeTruthy();
+    const retry = screen.getByRole("button", { name: "Retry history" });
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
   });
 
   it("renders loading and unavailable states without substituting representative data for live Readiness records", async () => {

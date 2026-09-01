@@ -134,6 +134,13 @@
       "when": 1788239414230,
       "tag": "0018_furry_spencer_smythe",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1788240574576,
+      "tag": "0019_massive_leopardon",
+      "breakpoints": true
     }
   ]
 }

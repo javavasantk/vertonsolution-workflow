@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceDiscrepancyResponses, consultantTimesheetEvidenceNoteAcknowledgements, consultantTimesheetEvidenceResponseActivities, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceDiscrepancyResponses, consultantTimesheetEvidenceNoteAcknowledgements, consultantTimesheetEvidenceResponseActivities, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileRequests, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -237,7 +237,31 @@ export async function submitEmployeeProfileUpdate(userId: number, input: { emplo
       updatedByUserId: values.updatedByUserId,
     },
   });
+  await db.insert(employeeProfileRequests).values({
+    userId,
+    employmentType: input.employmentType,
+    statusNote: input.statusNote,
+    requestState: "details_requested",
+    submittedAt: occurredAt,
+  });
   await db.insert(employeeProfileUpdateActivities).values({ userId, activityType: "requested", occurredAt });
+}
+
+/** An append-only, session-owned trace of self-submitted profile review requests. */
+export async function listOwnEmployeeProfileRequests(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  return db
+    .select({
+      requestId: employeeProfileRequests.id,
+      employmentType: employeeProfileRequests.employmentType,
+      statusNote: employeeProfileRequests.statusNote,
+      requestState: employeeProfileRequests.requestState,
+      submittedAt: employeeProfileRequests.submittedAt,
+    })
+    .from(employeeProfileRequests)
+    .where(eq(employeeProfileRequests.userId, userId))
+    .orderBy(desc(employeeProfileRequests.submittedAt), desc(employeeProfileRequests.id));
 }
 
 export const recruiterLaunchboardSelection = {

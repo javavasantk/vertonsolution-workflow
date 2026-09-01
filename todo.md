@@ -265,3 +265,4 @@
 - [x] Add a protected Consultant own-timesheet-evidence viewer with server-side ownership checks, no-store private download handoff, and safe own-account viewing activity.
 - [x] Add a protected read-only Consultant Time Reconciliation workspace with bounded period/status filtering, safe entered-versus-OCR comparison, and responsive own-record states.
 - [x] Enhance the protected Consultant Action Inbox with dismissed-item recovery, visible state timestamps, neutral source-update aging, and rate-limited own-record restoration.
+- [x] Add protected My Profile Request History with append-only own-request snapshots, chronological local-time display, and human-review-only boundaries.

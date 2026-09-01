@@ -72,6 +72,16 @@ export const employeeProfileUpdateActivities = mysqlTable("employee_profile_upda
   occurredAt: timestamp("occurredAt").defaultNow().notNull(),
 });
 
+/** Append-only self-submitted request snapshots. Present profile state remains solely on employee_profiles. */
+export const employeeProfileRequests = mysqlTable("employee_profile_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  employmentType: varchar("employmentType", { length: 96 }).notNull(),
+  statusNote: varchar("statusNote", { length: 500 }).notNull(),
+  requestState: mysqlEnum("requestState", ["details_requested"]).default("details_requested").notNull(),
+  submittedAt: timestamp("submittedAt").defaultNow().notNull(),
+});
+
 /** Recruiter-visible operational progress, separate from restricted reviewer detail. */
 export const onboardingAssignments = mysqlTable("onboarding_assignments", {
   id: int("id").autoincrement().primaryKey(),
@@ -385,6 +395,7 @@ export const operationalActivities = mysqlTable("operational_activities", {
 export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
 export type InsertEmployeeProfile = typeof employeeProfiles.$inferInsert;
 export type EmployeeProfileUpdateActivity = typeof employeeProfileUpdateActivities.$inferSelect;
+export type EmployeeProfileRequest = typeof employeeProfileRequests.$inferSelect;
 export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
 export type InsertOnboardingAssignment = typeof onboardingAssignments.$inferInsert;
 export type ConsultantOnboardingTask = typeof consultantOnboardingTasks.$inferSelect;

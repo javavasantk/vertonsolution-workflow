@@ -30,6 +30,12 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await expect.poll(() => page.getByText(/does not expose colleague records, client documents, restricted readiness content/i).count()).toBe(1);
   await page.screenshot({ path: `/home/ubuntu/consultant-my-work-${suffix}.png`, fullPage: true });
 
+  await page.goto(`${baseUrl}/workspace/profile`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.getByText("My Profile Request History").count()).toBe(1);
+  await expect.poll(() => page.getByText(/personal requests for human review, not an authorization/i).count()).toBe(1);
+  await expect.poll(() => page.getByText(/reviewer identity, commentary, documents, expiry dates, colleague profiles, and compensation are excluded/i).count()).toBe(1);
+  await page.screenshot({ path: `/home/ubuntu/consultant-profile-request-history-${suffix}.png`, fullPage: true });
+
   await page.goto(`${baseUrl}/workspace/my-activity`, { waitUntil: "networkidle" });
   await expect.poll(() => page.getByRole("heading", { name: "My activity" }).count()).toBe(1);
   await expect.poll(() => page.getByText(/factual history of your own workflow events/i).count()).toBe(1);

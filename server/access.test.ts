@@ -119,6 +119,34 @@ describe("access router", () => {
     updateProfile.mockRestore();
   });
 
+  it("returns only the authenticated user's append-only profile request snapshots with no reviewer or restricted fields", async () => {
+    const ownHistory = [{ requestId: 41, employmentType: "H-1B", statusNote: "Please review my submitted administrative update.", requestState: "details_requested", submittedAt: new Date("2026-08-28T12:00:00.000Z") }];
+    const foreignHistory = [{ requestId: 99, employmentType: "F-1 OPT", statusNote: "Another account request.", requestState: "details_requested", submittedAt: new Date("2026-08-27T12:00:00.000Z") }];
+    const history = vi.spyOn(db, "listOwnEmployeeProfileRequests").mockImplementation(async userId => userId === 17 ? ownHistory : foreignHistory);
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).profile.requestHistory()).resolves.toEqual(ownHistory);
+    await expect(appRouter.createCaller(createContext("user", 18)).profile.requestHistory()).resolves.toEqual(foreignHistory);
+    expect(history).toHaveBeenCalledWith(17);
+    expect(history).toHaveBeenCalledWith(18);
+    expect(ownHistory[0]).not.toHaveProperty("userId");
+    expect(ownHistory[0]).not.toHaveProperty("reviewerId");
+    expect(ownHistory[0]).not.toHaveProperty("reviewerCommentary");
+    expect(ownHistory[0]).not.toHaveProperty("documentKey");
+    expect(ownHistory[0]).not.toHaveProperty("expiryDate");
+    expect(ownHistory[0]).not.toHaveProperty("compensation");
+    history.mockRestore();
+  });
+
+  it("retains bounded profile update inputs and exposes no profile-history edit or deletion procedure", async () => {
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+    await expect(caller.profile.requestReview({ employmentType: "x".repeat(97), statusNote: "Please review this requested profile update." })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.profile.requestReview({ employmentType: "H-1B", statusNote: "x".repeat(501) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const procedures = Object.keys(appRouter._def.procedures);
+    expect(procedures).toContain("profile.requestHistory");
+    expect(procedures).not.toContain("profile.editRequestHistory");
+    expect(procedures).not.toContain("profile.deleteRequestHistory");
+  });
+
   it("serves Consultant My Work only from the session user and excludes restricted fields", async () => {
     const safeWork = {
       profile: { profileUpdateState: "details_requested", updatedAt: new Date() },

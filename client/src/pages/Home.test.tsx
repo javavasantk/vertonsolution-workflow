@@ -139,13 +139,15 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     lastInput: undefined as any,
   },
   consultantActionInboxTestState: {
-    items: [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), state: "unread" }] as any[],
+    items: [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), agingLabel: "Updated this week", state: "unread", dismissedAt: null, restoredAt: null, stateUpdatedAt: null }] as any[],
     isLoading: false,
     error: null as Error | null,
     markRead: vi.fn(),
     dismiss: vi.fn(),
+    restore: vi.fn(),
     mutationError: null as Error | null,
     refetch: vi.fn(),
+    lastInput: undefined as any,
   },
   financeTimesheetEvidenceTestState: {
     data: [] as any[],
@@ -207,9 +209,10 @@ vi.mock("@/lib/trpc", () => ({
       retryTimesheetHoursExtraction: { useMutation: (options?: { onSuccess?: (data: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.retryEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) options?.onError?.(consultantTimeSubmissionTestState.evidenceError); else options?.onSuccess?.({ id: 91, timeEntryId: 71, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high" }); }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
       acknowledgeTimesheetEvidenceDiscrepancy: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.acknowledgeDiscrepancy(input); if (consultantTimeSubmissionTestState.discrepancyError) options?.onError?.(consultantTimeSubmissionTestState.discrepancyError); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.discrepancyError }) },
       respondToTimesheetEvidenceDiscrepancy: { useMutation: (options?: { onSuccess?: (data: any, input: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: any) => { consultantTimeSubmissionTestState.respondToDiscrepancy(input); if (consultantTimeSubmissionTestState.discrepancyError) options?.onError?.(consultantTimeSubmissionTestState.discrepancyError); else options?.onSuccess?.({ ...input, createdAt: new Date() }, input); }, isPending: false, error: consultantTimeSubmissionTestState.discrepancyError }) },
-      actionInbox: { useQuery: () => ({ data: consultantActionInboxTestState.items, isLoading: consultantActionInboxTestState.isLoading, error: consultantActionInboxTestState.error, refetch: consultantActionInboxTestState.refetch }) },
+      actionInbox: { useQuery: (input: unknown) => { consultantActionInboxTestState.lastInput = input; return { data: consultantActionInboxTestState.items, isLoading: consultantActionInboxTestState.isLoading, error: consultantActionInboxTestState.error, refetch: consultantActionInboxTestState.refetch }; } },
       markActionRead: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.markRead(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
       dismissAction: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.dismiss(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
+      restoreAction: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.restore(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
     },
     finance: {
       timesheetEvidenceReview: { useQuery: () => ({ data: financeTimesheetEvidenceTestState.data, isLoading: financeTimesheetEvidenceTestState.isLoading, error: financeTimesheetEvidenceTestState.error, refetch: financeTimesheetEvidenceTestState.refetch }) },
@@ -369,13 +372,15 @@ afterEach(() => {
   consultantTimeSubmissionTestState.periodTotalLoading = false;
   consultantTimeSubmissionTestState.periodTotalError = null;
   consultantTimeSubmissionTestState.periodTotalRefetch.mockReset();
-  consultantActionInboxTestState.items = [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), state: "unread" }];
+  consultantActionInboxTestState.items = [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), agingLabel: "Updated this week", state: "unread", dismissedAt: null, restoredAt: null, stateUpdatedAt: null }];
   consultantActionInboxTestState.isLoading = false;
   consultantActionInboxTestState.error = null;
   consultantActionInboxTestState.markRead.mockReset();
   consultantActionInboxTestState.dismiss.mockReset();
+  consultantActionInboxTestState.restore.mockReset();
   consultantActionInboxTestState.mutationError = null;
   consultantActionInboxTestState.refetch.mockReset();
+  consultantActionInboxTestState.lastInput = undefined;
   financeTimesheetEvidenceTestState.data = [];
   financeTimesheetEvidenceTestState.isLoading = false;
   financeTimesheetEvidenceTestState.error = null;
@@ -552,6 +557,35 @@ describe("Workforce Hub role access", () => {
     expect(consultantActionInboxTestState.dismiss).toHaveBeenCalledWith({ dedupKey: "onboarding-task:41:pending" });
   });
 
+  it("provides keyboard-accessible dismissed-item recovery with source aging, visible state timestamps, and permitted destinations only", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantActionInboxTestState.items = [
+      { dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), agingLabel: "Older than seven days", state: "read", dismissedAt: new Date("2026-08-22"), restoredAt: new Date("2026-09-01T08:00:00.000Z"), stateUpdatedAt: new Date("2026-09-01T08:00:00.000Z") },
+      { dedupKey: "time-entry:72:draft", source: "time_entry", title: "Draft time entry is ready for your review", status: "action_needed", designatedHumanOwner: "Designated time reviewer", destination: "/workspace/time-submission", updatedAt: new Date("2026-08-20"), agingLabel: "Older than seven days", state: "dismissed", dismissedAt: new Date("2026-08-30T10:00:00.000Z"), restoredAt: null, stateUpdatedAt: new Date("2026-08-30T10:00:00.000Z") },
+    ];
+    renderRoute("/workspace/action-inbox");
+
+    expect(screen.getByText("Restored", { exact: false })).toBeTruthy();
+    expect(screen.getByText(/Older than seven days/)).toBeTruthy();
+    const activeTab = screen.getByRole("tab", { name: "Active" });
+    activeTab.focus();
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() => expect(consultantActionInboxTestState.lastInput).toEqual({ includeDismissed: true }));
+    expect(screen.getByRole("tab", { name: "Dismissed" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Your dismissed reminders")).toBeTruthy();
+    expect(screen.getAllByText("Dismissed", { exact: false })[0]).toBeTruthy();
+    const restore = screen.getByRole("button", { name: "Restore" });
+    restore.focus();
+    expect(document.activeElement).toBe(restore);
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(consultantActionInboxTestState.restore).toHaveBeenCalledWith({ dedupKey: "time-entry:72:draft" }));
+    expect(screen.getByText(/Action restored to your active inbox/i)).toBeTruthy();
+    expect(screen.queryByText(/send email|send sms|push notification|Slack|schedule reminder/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Open destination/ }));
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace/time-submission"));
+  });
+
   it("keeps Action Inbox loading, unavailable, successful-empty, and permitted-destination behavior distinct", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("consultant", "Jamie Chen");
@@ -574,6 +608,15 @@ describe("Workforce Hub role access", () => {
     await user.click(screen.getByRole("button", { name: /Open destination/ }));
     await waitFor(() => expect(window.location.pathname).toBe("/workspace/time-submission"));
     expect(consultantActionInboxTestState.markRead).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dismissed Action Inbox empty state distinct from active reminders", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantActionInboxTestState.items = [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), agingLabel: "Updated this week", state: "read", dismissedAt: null, restoredAt: null, stateUpdatedAt: null }];
+    renderRoute("/workspace/action-inbox");
+    await user.click(screen.getByRole("tab", { name: "Dismissed" }));
+    expect(screen.getByText("No dismissed reminders are available.")).toBeTruthy();
   });
 
   it("keeps My Work loading, unavailable, empty, and no-assignment states distinct", () => {

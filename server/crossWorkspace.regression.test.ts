@@ -91,6 +91,7 @@ describe("cross-workspace regression gate", () => {
       await expect(caller.consultant.actionInbox()).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.markActionRead({ dedupKey: "onboarding-task:41:pending" })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.dismissAction({ dedupKey: "onboarding-task:41:pending" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.restoreAction({ dedupKey: "onboarding-task:41:pending" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
   });
 
@@ -130,11 +131,13 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("finance.addTimesheetEvidenceDiscrepancyNote");
     expect(procedures).toContain("consultant.markActionRead");
     expect(procedures).toContain("consultant.dismissAction");
+    expect(procedures).toContain("consultant.restoreAction");
     expect(procedures).not.toContain("portal.approveTimesheet");
     expect(procedures).not.toContain("consultant.applyExtractedHours");
     expect(procedures).not.toContain("finance.approveTimesheetEvidence");
     expect(procedures).not.toContain("consultant.resolveTimesheetDiscrepancy");
     expect(procedures).not.toContain("consultant.applyDiscrepancyCorrection");
+    expect(procedures).not.toContain("consultant.sendActionInboxNotification");
     expect(procedures).not.toContain("consultant.updateTimeReconciliation");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");

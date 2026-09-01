@@ -1057,7 +1057,7 @@ export async function getFinanceTimesheetEvidenceDocument(evidenceId: number) {
   return rows[0];
 }
 
-type ConsultantActionInboxItem = {
+export type ConsultantActionInboxItem = {
   dedupKey: string;
   source: "onboarding_task" | "profile_update" | "time_entry" | "assignment";
   title: string;
@@ -1065,7 +1065,11 @@ type ConsultantActionInboxItem = {
   designatedHumanOwner: string;
   destination: "/workspace/onboarding" | "/workspace/profile" | "/workspace/time-submission" | "/workspace/my-engagement";
   updatedAt: Date | null;
+  agingLabel: "Updated today" | "Updated this week" | "Older than seven days" | "Update date unavailable";
   state: "unread" | "read" | "dismissed";
+  dismissedAt: Date | null;
+  restoredAt: Date | null;
+  stateUpdatedAt: Date | null;
 };
 
 function taskOwnerLabel(ownerGroup: typeof consultantOnboardingTasks.$inferSelect.ownerGroup) {
@@ -1073,6 +1077,20 @@ function taskOwnerLabel(ownerGroup: typeof consultantOnboardingTasks.$inferSelec
   if (ownerGroup === "it") return "IT support";
   if (ownerGroup === "manager") return "Designated manager";
   return "Workforce Operations";
+}
+
+/** Labels an existing source update timestamp neutrally; it does not imply urgency, risk, or any automated outcome. */
+export function getConsultantActionInboxAgingLabel(updatedAt: Date | null, now = new Date()): ConsultantActionInboxItem["agingLabel"] {
+  if (!updatedAt) return "Update date unavailable";
+  const ageMs = Math.max(0, now.getTime() - updatedAt.getTime());
+  if (ageMs < 24 * 60 * 60 * 1000) return "Updated today";
+  if (ageMs <= 7 * 24 * 60 * 60 * 1000) return "Updated this week";
+  return "Older than seven days";
+}
+
+/** Keeps the derived inbox deterministic when multiple source reads surface the same stable reminder key. */
+export function deduplicateConsultantActionInboxItems(items: ConsultantActionInboxItem[]) {
+  return Array.from(new Map(items.map(item => [item.dedupKey, item])).values()).sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
 }
 
 /**
@@ -1092,30 +1110,34 @@ export async function listConsultantActionInbox(userId: number, includeDismissed
     db.select({ id: consultantAssignments.id, managerName: consultantAssignments.managerName, assignmentState: consultantAssignments.assignmentState, endDate: consultantAssignments.endDate, updatedAt: consultantAssignments.updatedAt }).from(consultantAssignments).where(eq(consultantAssignments.userId, userId)).orderBy(desc(consultantAssignments.updatedAt)),
     db.select().from(consultantActionInboxStates).where(eq(consultantActionInboxStates.userId, userId)),
   ]);
-  const stateByKey = new Map(storedStates.map(row => [row.dedupKey, row.state]));
+  const stateByKey = new Map(storedStates.map(row => [row.dedupKey, row]));
   const items: ConsultantActionInboxItem[] = [];
+  const withState = (item: Omit<ConsultantActionInboxItem, "agingLabel" | "state" | "dismissedAt" | "restoredAt" | "stateUpdatedAt">): ConsultantActionInboxItem => {
+    const storedState = stateByKey.get(item.dedupKey);
+    return { ...item, agingLabel: getConsultantActionInboxAgingLabel(item.updatedAt, now), state: storedState?.state ?? "unread", dismissedAt: storedState?.dismissedAt ?? null, restoredAt: storedState?.restoredAt ?? null, stateUpdatedAt: storedState?.updatedAt ?? null };
+  };
 
   tasks.forEach(task => {
     const dedupKey = `onboarding-task:${task.id}:pending`;
-    items.push({ dedupKey, source: "onboarding_task", title: task.title, status: "action_needed", designatedHumanOwner: taskOwnerLabel(task.ownerGroup), destination: "/workspace/onboarding", updatedAt: task.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+    items.push(withState({ dedupKey, source: "onboarding_task", title: task.title, status: "action_needed", designatedHumanOwner: taskOwnerLabel(task.ownerGroup), destination: "/workspace/onboarding", updatedAt: task.updatedAt }));
   });
   const profile = profiles[0];
   if (profile?.workAuthorizationStatus === "details_requested") {
     const dedupKey = "profile-update:details-requested";
-    items.push({ dedupKey, source: "profile_update", title: "Profile update is awaiting human review", status: "awaiting_human_follow_up", designatedHumanOwner: "HR & Compliance", destination: "/workspace/profile", updatedAt: profile.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+    items.push(withState({ dedupKey, source: "profile_update", title: "Profile update is awaiting human review", status: "awaiting_human_follow_up", designatedHumanOwner: "HR & Compliance", destination: "/workspace/profile", updatedAt: profile.updatedAt }));
   }
   timeEntries.forEach(entry => {
     const status = entry.status === "exception" ? "correction_needed" : entry.status === "draft" ? "action_needed" : "awaiting_human_follow_up";
     const title = entry.status === "exception" ? "Time entry is returned for correction" : entry.status === "draft" ? "Draft time entry is ready for your review" : "Time entry is awaiting designated human review";
     const dedupKey = `time-entry:${entry.id}:${entry.status}`;
-    items.push({ dedupKey, source: "time_entry", title, status, designatedHumanOwner: "Designated time reviewer", destination: "/workspace/time-submission", updatedAt: entry.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+    items.push(withState({ dedupKey, source: "time_entry", title, status, designatedHumanOwner: "Designated time reviewer", destination: "/workspace/time-submission", updatedAt: entry.updatedAt }));
   });
   assignments.filter(assignment => assignment.assignmentState === "extension_due" || assignment.assignmentState === "roll_off" || Boolean(assignment.endDate && assignment.endDate >= now && assignment.endDate <= thirtyDaysFromNow)).forEach(assignment => {
     const signal = assignment.assignmentState === "extension_due" ? "extension_due" : assignment.assignmentState === "roll_off" ? "roll_off" : "end_date_soon";
     const dedupKey = `assignment:${assignment.id}:${signal}`;
-    items.push({ dedupKey, source: "assignment", title: signal === "extension_due" ? "Engagement extension needs human follow-up" : signal === "roll_off" ? "Engagement roll-off needs human follow-up" : "Engagement end date is approaching", status: "awaiting_human_follow_up", designatedHumanOwner: assignment.managerName || "Designated engagement owner", destination: "/workspace/my-engagement", updatedAt: assignment.updatedAt, state: stateByKey.get(dedupKey) ?? "unread" });
+    items.push(withState({ dedupKey, source: "assignment", title: signal === "extension_due" ? "Engagement extension needs human follow-up" : signal === "roll_off" ? "Engagement roll-off needs human follow-up" : "Engagement end date is approaching", status: "awaiting_human_follow_up", designatedHumanOwner: assignment.managerName || "Designated engagement owner", destination: "/workspace/my-engagement", updatedAt: assignment.updatedAt }));
   });
-  const deduplicated = Array.from(new Map(items.map(item => [item.dedupKey, item])).values()).sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
+  const deduplicated = deduplicateConsultantActionInboxItems(items);
   return includeDismissed ? deduplicated : deduplicated.filter(item => item.state !== "dismissed");
 }
 
@@ -1125,8 +1147,20 @@ export async function setConsultantActionInboxState(userId: number, dedupKey: st
   if (!db) throw new Error("Database is not available");
   const ownItems = await listConsultantActionInbox(userId, true);
   if (!ownItems.some(item => item.dedupKey === dedupKey)) throw new Error("Action Inbox item was not found");
-  await db.insert(consultantActionInboxStates).values({ userId, dedupKey, state }).onDuplicateKeyUpdate({ set: { state } });
-  return { dedupKey, state } as const;
+  const dismissedAt = state === "dismissed" ? new Date() : null;
+  await db.insert(consultantActionInboxStates).values({ userId, dedupKey, state, dismissedAt }).onDuplicateKeyUpdate({ set: { state, ...(dismissedAt ? { dismissedAt } : {}) } });
+  return { dedupKey, state, dismissedAt } as const;
+}
+
+/** Restores only a still-derived own-record reminder; source signals that no longer apply cannot be revived from presentation state. */
+export async function restoreConsultantActionInboxState(userId: number, dedupKey: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const ownItems = await listConsultantActionInbox(userId, true);
+  if (!ownItems.some(item => item.dedupKey === dedupKey)) throw new Error("Action Inbox item was not found");
+  const restoredAt = new Date();
+  await db.insert(consultantActionInboxStates).values({ userId, dedupKey, state: "read", restoredAt }).onDuplicateKeyUpdate({ set: { state: "read", restoredAt } });
+  return { dedupKey, state: "read" as const, restoredAt };
 }
 
 export type ConsultantPersonalTimelineEvent = {

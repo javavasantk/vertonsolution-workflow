@@ -454,11 +454,13 @@ describe("access router", () => {
     const inbox = vi.spyOn(db, "listConsultantActionInbox").mockResolvedValue(safeItems as never);
 
     await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.actionInbox()).resolves.toEqual(safeItems);
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.actionInbox({ includeDismissed: true })).resolves.toEqual(safeItems);
     await expect(appRouter.createCaller(createContext("user", 18)).consultant.actionInbox()).resolves.toEqual(safeItems);
     for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
       await expect(appRouter.createCaller(createContext(role, 19)).consultant.actionInbox()).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
-    expect(inbox).toHaveBeenCalledWith(17);
+    expect(inbox).toHaveBeenCalledWith(17, false);
+    expect(inbox).toHaveBeenCalledWith(17, true);
     expect(safeItems[0]).not.toHaveProperty("userId");
     expect(safeItems[0]).not.toHaveProperty("readinessDetails");
     expect(safeItems[0]).not.toHaveProperty("compensation");
@@ -481,16 +483,36 @@ describe("access router", () => {
     state.mockRestore();
   });
 
-  it("limits each consultant to twenty Action Inbox state updates per minute", async () => {
-    const state = vi.spyOn(db, "setConsultantActionInboxState").mockImplementation(async (_userId, dedupKey, nextState) => ({ dedupKey, state: nextState }));
+  it("restores only a still-derived own Action Inbox item, with foreign, expired-source, and non-consultant requests denied", async () => {
+    const restore = vi.spyOn(db, "restoreConsultantActionInboxState").mockResolvedValue({ dedupKey: "time-entry:72:draft", state: "read", restoredAt: new Date("2026-09-01T12:00:00.000Z") } as never);
     const caller = appRouter.createCaller(createContext("consultant", 17));
 
-    for (let index = 0; index < 20; index += 1) {
+    await expect(caller.consultant.restoreAction({ dedupKey: "time-entry:72:draft" })).resolves.toMatchObject({ state: "read", restoredAt: new Date("2026-09-01T12:00:00.000Z") });
+    expect(restore).toHaveBeenCalledWith(17, "time-entry:72:draft");
+    restore.mockRejectedValueOnce(new Error("Action Inbox item was not found"));
+    await expect(caller.consultant.restoreAction({ dedupKey: "foreign:99" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    restore.mockRejectedValueOnce(new Error("Action Inbox item was not found"));
+    await expect(caller.consultant.restoreAction({ dedupKey: "time-entry:72:expired-source" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 19)).consultant.restoreAction({ dedupKey: "time-entry:72:draft" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    restore.mockRestore();
+  });
+
+  it("limits each consultant to twenty Action Inbox state updates per minute", async () => {
+    const state = vi.spyOn(db, "setConsultantActionInboxState").mockImplementation(async (_userId, dedupKey, nextState) => ({ dedupKey, state: nextState }));
+    const restore = vi.spyOn(db, "restoreConsultantActionInboxState").mockImplementation(async (_userId, dedupKey) => ({ dedupKey, state: "read" as const, restoredAt: new Date() }));
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+
+    for (let index = 0; index < 19; index += 1) {
       await expect(caller.consultant.markActionRead({ dedupKey: `time-entry:${index + 1}:draft` })).resolves.toMatchObject({ state: "read" });
     }
+    await expect(caller.consultant.restoreAction({ dedupKey: "assignment:4:end_date_soon" })).resolves.toMatchObject({ state: "read" });
     await expect(caller.consultant.dismissAction({ dedupKey: "assignment:4:end_date_soon" })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
-    expect(state).toHaveBeenCalledTimes(20);
+    expect(state).toHaveBeenCalledTimes(19);
+    expect(restore).toHaveBeenCalledTimes(1);
     state.mockRestore();
+    restore.mockRestore();
   });
 
   it("allows only Administrator and HR & Compliance to read the minimized readiness projection", async () => {

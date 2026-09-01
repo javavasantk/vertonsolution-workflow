@@ -85,6 +85,13 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
     await expect.poll(() => page.getByText(/Source:/).count()).toBeGreaterThan(0);
     await expect.poll(() => page.getByText(/does not send external messages or make decisions/i).count()).toBe(1);
     await expect.poll(() => page.getByText("Northstar Retail · Demo", { exact: true }).count()).toBe(0);
+    const activeInboxTab = page.getByRole("tab", { name: "Active" });
+    await activeInboxTab.focus();
+    await activeInboxTab.press("ArrowRight");
+    await expect.poll(() => page.getByRole("tab", { name: "Dismissed" }).getAttribute("aria-selected")).toBe("true");
+    await expect.poll(() => page.getByText(/No dismissed reminders are available|Your dismissed reminders/i).count()).toBeGreaterThan(0);
+    await expect.poll(() => page.getByText(/send email|send sms|push notification|Slack|schedule reminder/i).count()).toBe(0);
+    await page.getByRole("tab", { name: "Active" }).click();
     await page.screenshot({ path: `/home/ubuntu/consultant-action-inbox-${suffix}.png`, fullPage: true });
   }
 

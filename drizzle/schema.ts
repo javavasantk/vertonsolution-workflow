@@ -367,6 +367,8 @@ export const consultantActionInboxStates = mysqlTable("consultant_action_inbox_s
   userId: int("userId").notNull().references(() => users.id),
   dedupKey: varchar("dedupKey", { length: 160 }).notNull(),
   state: mysqlEnum("state", ["unread", "read", "dismissed"]).default("unread").notNull(),
+  dismissedAt: timestamp("dismissedAt"),
+  restoredAt: timestamp("restoredAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [uniqueIndex("consultant_inbox_user_dedup_uq").on(table.userId, table.dedupKey)]);

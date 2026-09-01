@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -80,6 +80,14 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     isLoading: false,
     error: null as Error | null,
     refetch: vi.fn(),
+  },
+  consultantActivityTimelineTestState: {
+    firstPage: { items: [{ eventType: "time_entry_submitted", source: "time_submission", summary: "You submitted a time entry for designated human review.", occurredAt: new Date("2026-08-26T12:00:00.000Z"), destination: "/workspace/time-submission", cursor: "first-cursor" }, { eventType: "check_in_submitted", source: "check_in", summary: "You recorded a factual check-in.", occurredAt: new Date("2026-08-25T12:00:00.000Z"), destination: "/workspace/check-ins", cursor: "next-cursor" }], nextCursor: "next-cursor" } as any,
+    nextPage: { items: [{ eventType: "profile_update_requested", source: "profile", summary: "You submitted a profile update request for human review.", occurredAt: new Date("2026-08-24T12:00:00.000Z"), destination: "/workspace/profile", cursor: "final-cursor" }], nextCursor: null } as any,
+    isLoading: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+    lastInput: undefined as any,
   },
   consultantEngagementTestState: {
     data: { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } } as any,
@@ -174,6 +182,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     consultant: {
       myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
+      personalActivityTimeline: { useQuery: (input: any) => { consultantActivityTimelineTestState.lastInput = input; return { data: input?.cursor ? consultantActivityTimelineTestState.nextPage : consultantActivityTimelineTestState.firstPage, isLoading: consultantActivityTimelineTestState.isLoading, error: consultantActivityTimelineTestState.error, refetch: consultantActivityTimelineTestState.refetch }; } },
       myEngagement: { useQuery: () => ({ data: consultantEngagementTestState.data, isLoading: consultantEngagementTestState.isLoading, error: consultantEngagementTestState.error, refetch: vi.fn() }) },
       checkIns: { useQuery: () => ({ data: consultantCheckInTestState.data, isLoading: consultantCheckInTestState.isLoading, error: consultantCheckInTestState.error, refetch: consultantCheckInTestState.refetch }) },
       submitCheckIn: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantCheckInTestState.mutate(input); if (consultantCheckInTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantCheckInTestState.mutationError }) },
@@ -302,6 +311,12 @@ afterEach(() => {
   consultantMyWorkTestState.isLoading = false;
   consultantMyWorkTestState.error = null;
   consultantMyWorkTestState.refetch.mockReset();
+  consultantActivityTimelineTestState.firstPage = { items: [{ eventType: "time_entry_submitted", source: "time_submission", summary: "You submitted a time entry for designated human review.", occurredAt: new Date("2026-08-26T12:00:00.000Z"), destination: "/workspace/time-submission", cursor: "first-cursor" }, { eventType: "check_in_submitted", source: "check_in", summary: "You recorded a factual check-in.", occurredAt: new Date("2026-08-25T12:00:00.000Z"), destination: "/workspace/check-ins", cursor: "next-cursor" }], nextCursor: "next-cursor" };
+  consultantActivityTimelineTestState.nextPage = { items: [{ eventType: "profile_update_requested", source: "profile", summary: "You submitted a profile update request for human review.", occurredAt: new Date("2026-08-24T12:00:00.000Z"), destination: "/workspace/profile", cursor: "final-cursor" }], nextCursor: null };
+  consultantActivityTimelineTestState.isLoading = false;
+  consultantActivityTimelineTestState.error = null;
+  consultantActivityTimelineTestState.refetch.mockReset();
+  consultantActivityTimelineTestState.lastInput = undefined;
   consultantEngagementTestState.data = { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } };
   consultantEngagementTestState.isLoading = false;
   consultantEngagementTestState.error = null;
@@ -380,7 +395,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });
@@ -396,6 +411,50 @@ describe("Workforce Hub role access", () => {
     expect(screen.getByText(/does not expose colleague records, client documents, restricted readiness content/i)).toBeTruthy();
     expect(screen.getByText(/Manager: Casey Rivera/)).toBeTruthy();
     expect(screen.queryByText("Candidate Finder")).toBeNull();
+  });
+
+  it("renders the consultant-only Personal Activity Timeline with safe sources, cursor pagination, and permitted destinations", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    const view = renderRoute("/workspace/my-activity");
+
+    expect(screen.getByRole("heading", { name: "My activity" })).toBeTruthy();
+    expect(screen.getByText("You submitted a time entry for designated human review.")).toBeTruthy();
+    expect(screen.getByText("You recorded a factual check-in.")).toBeTruthy();
+    expect(screen.getByText(/excludes colleague activity, task content, reviewer identity, document content, storage keys/i)).toBeTruthy();
+    expect(screen.queryByText(/Northstar|private\/|work authorization|payroll amount/i)).toBeNull();
+    const openTimeSubmission = screen.getByRole("button", { name: "Open time submission" });
+    openTimeSubmission.focus();
+    expect(document.activeElement).toBe(openTimeSubmission);
+    await user.click(openTimeSubmission);
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace/time-submission"));
+
+    view.unmount();
+    renderRoute("/workspace/my-activity");
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    await waitFor(() => expect(consultantActivityTimelineTestState.lastInput).toEqual({ cursor: "next-cursor", limit: 12 }));
+    expect(screen.getByText("You submitted a profile update request for human review.")).toBeTruthy();
+    expect(screen.getByText("End of your protected activity history.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "First page" }));
+    await waitFor(() => expect(consultantActivityTimelineTestState.lastInput).toEqual({ limit: 12 }));
+  });
+
+  it("keeps Personal Activity Timeline loading, unavailable, successful-empty, and later-page empty states distinct", () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantActivityTimelineTestState.isLoading = true;
+    const view = renderRoute("/workspace/my-activity");
+    expect(screen.getByText("Loading your protected activity history…")).toBeTruthy();
+
+    consultantActivityTimelineTestState.isLoading = false;
+    consultantActivityTimelineTestState.error = new Error("Unavailable");
+    view.rerender(<Home />);
+    expect(screen.getByText("Your protected activity history is unavailable.")).toBeTruthy();
+
+    consultantActivityTimelineTestState.error = null;
+    consultantActivityTimelineTestState.firstPage = { items: [], nextCursor: null };
+    view.rerender(<Home />);
+    expect(screen.getByText("No protected activity yet.")).toBeTruthy();
+    expect(screen.getByText(/does not display a representative history, colleague activity, or any decision outcome/i)).toBeTruthy();
   });
 
   it("renders the consultant-only Action Inbox from safe own-record reminders and supports accessible state changes", async () => {
@@ -513,6 +572,8 @@ describe("Workforce Hub role access", () => {
     expect(resolveWorkspacePath("Administrator", "/workspace/admin")).toBe("/workspace/admin");
     expect(resolveWorkspacePath("Consultant", "/workspace/action-inbox")).toBe("/workspace/action-inbox");
     expect(resolveWorkspacePath("Administrator", "/workspace/action-inbox")).toBe("/workspace");
+    expect(resolveWorkspacePath("Consultant", "/workspace/my-activity")).toBe("/workspace/my-activity");
+    expect(resolveWorkspacePath("Administrator", "/workspace/my-activity")).toBe("/workspace");
   });
 
   it("labels recruiter handoffs from approved onboarding and assignment workflow values without making a staffing decision", () => {

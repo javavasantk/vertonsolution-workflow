@@ -138,6 +138,38 @@ describe("access router", () => {
     summary.mockRestore();
   });
 
+  it("serves a Consultant Personal Activity Timeline only from the session user with safe cursor-paged fields", async () => {
+    const safePage = {
+      items: [{ eventType: "time_entry_submitted", source: "time_submission", summary: "You submitted a time entry for designated human review.", occurredAt: new Date("2026-09-01"), destination: "/workspace/time-submission", cursor: "eyJvY2N1cnJlZEF0IjoxNzU2Njg0ODAwMDAwLCJzb3J0S2V5IjoiYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MCJ9" }],
+      nextCursor: null,
+    };
+    const timeline = vi.spyOn(db, "listConsultantPersonalActivityTimeline").mockResolvedValue(safePage as never);
+    const input = { limit: 12 };
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.personalActivityTimeline(input)).resolves.toEqual(safePage);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.personalActivityTimeline(input)).resolves.toEqual(safePage);
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 19)).consultant.personalActivityTimeline(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(timeline).toHaveBeenCalledWith(17, input);
+    expect(safePage.items[0]).not.toHaveProperty("userId");
+    expect(safePage.items[0]).not.toHaveProperty("eventId");
+    expect(safePage.items[0]).not.toHaveProperty("taskDescription");
+    expect(safePage.items[0]).not.toHaveProperty("reviewerName");
+    expect(safePage.items[0]).not.toHaveProperty("fileKey");
+    expect(safePage.items[0]).not.toHaveProperty("clientName");
+    expect(safePage.items[0]).not.toHaveProperty("readinessDetails");
+    expect(safePage.items[0]).not.toHaveProperty("compensation");
+    expect(safePage.items[0]).not.toHaveProperty("decisionOutcome");
+    timeline.mockRestore();
+  });
+
+  it("rejects malformed Consultant Personal Activity Timeline cursors as a protected bad request", async () => {
+    const timeline = vi.spyOn(db, "listConsultantPersonalActivityTimeline").mockRejectedValue(new Error("Timeline cursor is invalid"));
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.personalActivityTimeline({ cursor: "bad-cursor-value", limit: 12 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    timeline.mockRestore();
+  });
+
   it("serves Consultant My Engagement only from the session user and excludes restricted fields", async () => {
     const safeEngagement = {
       assignment: { id: 4, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: null, endDate: null, updatedAt: new Date() },

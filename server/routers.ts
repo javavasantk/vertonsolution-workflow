@@ -112,6 +112,10 @@ const consultantTimeSubmissionPeriodSchema = z.object({
   endDate: z.coerce.date(),
 }).refine(input => input.endDate >= input.startDate, { message: "The period end must be on or after the period start.", path: ["endDate"] })
   .refine(input => input.endDate.getTime() - input.startDate.getTime() <= 366 * 24 * 60 * 60 * 1000, { message: "Select a period of no more than 366 days." });
+const consultantPersonalActivityTimelineSchema = z.object({
+  cursor: z.string().min(8).max(256).optional(),
+  limit: z.number().int().min(1).max(25).optional(),
+});
 const financeTimesheetEvidenceReviewerSchema = z.object({ evidenceId: z.number().int().positive(), reviewerUserId: z.number().int().positive() });
 const financeTimesheetEvidenceDiscrepancyNoteSchema = z.object({ evidenceId: z.number().int().positive(), note: z.string().trim().min(10).max(1000) });
 
@@ -254,6 +258,19 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant My Work dashboard.' });
       }
       return db.getConsultantMyWork(ctx.user.id);
+    }),
+    personalActivityTimeline: protectedProcedure.input(consultantPersonalActivityTimelineSchema).query(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant Personal Activity Timeline.' });
+      }
+      try {
+        return await db.listConsultantPersonalActivityTimeline(ctx.user.id, input);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Timeline cursor is invalid') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'The activity timeline page cursor is invalid.' });
+        }
+        throw error;
+      }
     }),
     myEngagement: protectedProcedure.query(({ ctx }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {

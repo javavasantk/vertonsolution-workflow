@@ -259,3 +259,5 @@
 - [x] Add a protected Consultant in-app Action Inbox with deterministic own-record reminders, session-scoped read/dismiss state, deduplication, rate limits, and accessible live states.
 - [x] Extend protected Consultant Time Submission into end-to-end timesheet management with private client-approved upload evidence, bounded OCR-based total-hours extraction, designated human review, and responsive lifecycle states.
 - [x] Repair Consultant timesheet upload visibility and add designated reviewer assignment, human discrepancy-resolution notes, and selected-period total-hours reporting with protected role scopes.
+- [x] Analyze the non-demo Consultant role end to end and deliver implementation prompts for verified dynamic production-workflow gaps.
+- [x] Add a protected Consultant Personal Activity Timeline with safe own-record aggregation, stable cursor pagination, permitted destinations, and accessible query states.

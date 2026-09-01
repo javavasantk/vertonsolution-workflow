@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -219,6 +219,7 @@ export async function listReadinessProfiles() {
 export async function submitEmployeeProfileUpdate(userId: number, input: { employmentType: string; statusNote: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
+  const occurredAt = new Date();
 
   const values = {
     userId,
@@ -236,6 +237,7 @@ export async function submitEmployeeProfileUpdate(userId: number, input: { emplo
       updatedByUserId: values.updatedByUserId,
     },
   });
+  await db.insert(employeeProfileUpdateActivities).values({ userId, activityType: "requested", occurredAt });
 }
 
 export const recruiterLaunchboardSelection = {
@@ -990,6 +992,128 @@ export async function setConsultantActionInboxState(userId: number, dedupKey: st
   if (!ownItems.some(item => item.dedupKey === dedupKey)) throw new Error("Action Inbox item was not found");
   await db.insert(consultantActionInboxStates).values({ userId, dedupKey, state }).onDuplicateKeyUpdate({ set: { state } });
   return { dedupKey, state } as const;
+}
+
+export type ConsultantPersonalTimelineEvent = {
+  eventId: string;
+  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
+  source: "onboarding" | "check_in" | "time_submission" | "timesheet_evidence" | "profile" | "action_inbox";
+  summary: string;
+  occurredAt: Date;
+  destination: "/workspace/onboarding" | "/workspace/check-ins" | "/workspace/time-submission" | "/workspace/profile" | "/workspace/action-inbox";
+};
+
+type ConsultantTimelineCursor = { occurredAt: number; sortKey: string };
+
+function consultantTimelineSortKey(event: Pick<ConsultantPersonalTimelineEvent, "eventId">) {
+  return createHash("sha256").update(event.eventId).digest("hex");
+}
+
+function encodeConsultantTimelineCursor(event: Pick<ConsultantPersonalTimelineEvent, "occurredAt" | "eventId">) {
+  return Buffer.from(JSON.stringify({ occurredAt: event.occurredAt.getTime(), sortKey: consultantTimelineSortKey(event) })).toString("base64url");
+}
+
+function decodeConsultantTimelineCursor(cursor: string | undefined): ConsultantTimelineCursor | undefined {
+  if (!cursor) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<ConsultantTimelineCursor>;
+    if (typeof parsed.occurredAt !== "number" || !Number.isInteger(parsed.occurredAt) || parsed.occurredAt <= 0 || typeof parsed.sortKey !== "string" || !/^[a-f0-9]{64}$/.test(parsed.sortKey)) throw new Error("invalid cursor");
+    return { occurredAt: parsed.occurredAt, sortKey: parsed.sortKey };
+  } catch {
+    throw new Error("Timeline cursor is invalid");
+  }
+}
+
+/** Pure deterministic paging for already-safe own-record events. The opaque cursor encodes only sort position, never a source identifier or field. */
+export function paginateConsultantPersonalActivityEvents(events: ConsultantPersonalTimelineEvent[], input: { cursor?: string; limit?: number } = {}) {
+  const cursor = decodeConsultantTimelineCursor(input.cursor);
+  const limit = Math.min(Math.max(input.limit ?? 12, 1), 25);
+  const deduplicated = Array.from(new Map(events.map(event => [event.eventId, event])).values())
+    .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime() || (consultantTimelineSortKey(left) < consultantTimelineSortKey(right) ? 1 : consultantTimelineSortKey(left) > consultantTimelineSortKey(right) ? -1 : 0));
+  const afterCursor = cursor ? deduplicated.filter(event => event.occurredAt.getTime() < cursor.occurredAt || (event.occurredAt.getTime() === cursor.occurredAt && consultantTimelineSortKey(event) < cursor.sortKey)) : deduplicated;
+  const page = afterCursor.slice(0, limit);
+  const lastEvent = page.at(-1);
+  return {
+    items: page.map(event => ({ eventType: event.eventType, source: event.source, summary: event.summary, occurredAt: event.occurredAt, destination: event.destination, cursor: encodeConsultantTimelineCursor(event) })),
+    nextCursor: afterCursor.length > page.length && lastEvent ? encodeConsultantTimelineCursor(lastEvent) : null,
+  };
+}
+
+/**
+ * Aggregates only factual activity rows explicitly scoped to one Consultant session account.
+ * Summaries deliberately avoid source text, reviewer identity, document content, storage identifiers,
+ * client details, readiness data, and any assessment or outcome.
+ */
+export async function listConsultantPersonalActivityTimeline(userId: number, input: { cursor?: string; limit?: number } = {}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const [onboardingActivities, checkInActivities, timeEntryActivities, evidenceActivities, profileActivities, actionStates] = await Promise.all([
+    db.select({ id: consultantOnboardingTaskActivities.id, activityType: consultantOnboardingTaskActivities.activityType, occurredAt: consultantOnboardingTaskActivities.occurredAt })
+      .from(consultantOnboardingTaskActivities).where(eq(consultantOnboardingTaskActivities.userId, userId)),
+    db.select({ id: consultantCheckInActivities.id, activityType: consultantCheckInActivities.activityType, occurredAt: consultantCheckInActivities.occurredAt })
+      .from(consultantCheckInActivities).where(eq(consultantCheckInActivities.userId, userId)),
+    db.select({ id: consultantTimeEntryActivities.id, activityType: consultantTimeEntryActivities.activityType, occurredAt: consultantTimeEntryActivities.occurredAt })
+      .from(consultantTimeEntryActivities).where(eq(consultantTimeEntryActivities.userId, userId)),
+    db.select({ id: consultantTimesheetEvidenceActivities.id, activityType: consultantTimesheetEvidenceActivities.activityType, occurredAt: consultantTimesheetEvidenceActivities.occurredAt })
+      .from(consultantTimesheetEvidenceActivities).where(eq(consultantTimesheetEvidenceActivities.userId, userId)),
+    db.select({ id: employeeProfileUpdateActivities.id, activityType: employeeProfileUpdateActivities.activityType, occurredAt: employeeProfileUpdateActivities.occurredAt })
+      .from(employeeProfileUpdateActivities).where(eq(employeeProfileUpdateActivities.userId, userId)),
+    db.select({ id: consultantActionInboxStates.id, state: consultantActionInboxStates.state, updatedAt: consultantActionInboxStates.updatedAt })
+      .from(consultantActionInboxStates).where(eq(consultantActionInboxStates.userId, userId)),
+  ]);
+
+  const events: ConsultantPersonalTimelineEvent[] = [
+    ...onboardingActivities.map(activity => ({
+      eventId: `onboarding-activity:${activity.id}`,
+      eventType: "onboarding_task_acknowledged" as const,
+      source: "onboarding" as const,
+      summary: "You acknowledged an onboarding task.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/onboarding" as const,
+    })),
+    ...checkInActivities.map(activity => ({
+      eventId: `check-in-activity:${activity.id}`,
+      eventType: "check_in_submitted" as const,
+      source: "check_in" as const,
+      summary: "You recorded a factual check-in.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/check-ins" as const,
+    })),
+    ...timeEntryActivities.map(activity => ({
+      eventId: `time-entry-activity:${activity.id}`,
+      eventType: `time_entry_${activity.activityType}` as "time_entry_created" | "time_entry_updated" | "time_entry_submitted",
+      source: "time_submission" as const,
+      summary: activity.activityType === "created" ? "You created a time entry." : activity.activityType === "updated" ? "You updated a time entry." : "You submitted a time entry for designated human review.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/time-submission" as const,
+    })),
+    ...evidenceActivities.map(activity => ({
+      eventId: `timesheet-evidence-activity:${activity.id}`,
+      eventType: activity.activityType === "uploaded" ? "timesheet_evidence_uploaded" as const : activity.activityType === "hours_extracted" ? "timesheet_hours_extracted" as const : "timesheet_evidence_needs_human_review" as const,
+      source: "timesheet_evidence" as const,
+      summary: activity.activityType === "uploaded" ? "You uploaded private timesheet evidence." : activity.activityType === "hours_extracted" ? "A bounded OCR hours result was recorded for your evidence." : "Your timesheet evidence needs designated human review.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/time-submission" as const,
+    })),
+    ...profileActivities.map(activity => ({
+      eventId: `profile-update-activity:${activity.id}`,
+      eventType: "profile_update_requested" as const,
+      source: "profile" as const,
+      summary: "You submitted a profile update request for human review.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/profile" as const,
+    })),
+    ...actionStates.filter(state => state.state === "read" || state.state === "dismissed").map(state => ({
+      eventId: `action-inbox-state:${state.id}:${state.state}:${state.updatedAt.getTime()}`,
+      eventType: state.state === "read" ? "action_inbox_read" as const : "action_inbox_dismissed" as const,
+      source: "action_inbox" as const,
+      summary: state.state === "read" ? "You marked an Action Inbox item as read." : "You dismissed an Action Inbox item.",
+      occurredAt: state.updatedAt,
+      destination: "/workspace/action-inbox" as const,
+    })),
+  ];
+
+  return paginateConsultantPersonalActivityEvents(events, input);
 }
 
 export async function getDemoPortalSummary(role: PortalSummaryRole, userId: number) {

@@ -64,6 +64,14 @@ export const employeeProfiles = mysqlTable("employee_profiles", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Append-only record that a user submitted an own-profile update request. It deliberately stores no profile values, readiness detail, documents, or decision outcome. */
+export const employeeProfileUpdateActivities = mysqlTable("employee_profile_update_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  activityType: mysqlEnum("activityType", ["requested"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 /** Recruiter-visible operational progress, separate from restricted reviewer detail. */
 export const onboardingAssignments = mysqlTable("onboarding_assignments", {
   id: int("id").autoincrement().primaryKey(),
@@ -344,6 +352,7 @@ export const operationalActivities = mysqlTable("operational_activities", {
 
 export type EmployeeProfile = typeof employeeProfiles.$inferSelect;
 export type InsertEmployeeProfile = typeof employeeProfiles.$inferInsert;
+export type EmployeeProfileUpdateActivity = typeof employeeProfileUpdateActivities.$inferSelect;
 export type OnboardingAssignment = typeof onboardingAssignments.$inferSelect;
 export type InsertOnboardingAssignment = typeof onboardingAssignments.$inferInsert;
 export type ConsultantOnboardingTask = typeof consultantOnboardingTasks.$inferSelect;

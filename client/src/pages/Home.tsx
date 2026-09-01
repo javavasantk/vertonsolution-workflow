@@ -131,6 +131,7 @@ export const workspacePagesByPath: Record<string, string> = {
   "/workspace/profile": "My profile",
   "/workspace/recruiting": "New-hire progress",
   "/workspace/my-work": "My work",
+  "/workspace/my-activity": "My activity",
   "/workspace/my-engagement": "My engagement",
   "/workspace/check-ins": "Check-ins",
   "/workspace/time-submission": "Time submission",
@@ -147,6 +148,7 @@ const allRoles = roles.map(role => role.name);
 export const navItems: NavItem[] = [
   { label: "Overview", icon: Grid2X2, roles: allRoles },
   { label: "My work", icon: Target, roles: ["Consultant"] },
+  { label: "My activity", icon: Activity, roles: ["Consultant"] },
   { label: "My engagement", icon: BriefcaseBusiness, roles: ["Consultant"] },
   { label: "Check-ins", icon: MessageCircle, roles: ["Consultant"] },
   { label: "Time submission", icon: Clock3, roles: ["Consultant"] },
@@ -528,6 +530,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const [financeDiscrepancyDrafts, setFinanceDiscrepancyDrafts] = useState<Record<number, string>>({});
   const [financeEvidenceNotice, setFinanceEvidenceNotice] = useState("");
   const [actionInboxNotice, setActionInboxNotice] = useState("");
+  const [timelineCursor, setTimelineCursor] = useState<string | undefined>();
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState<Message[]>([]);
   const [, setLocation] = useLocation();
@@ -590,6 +593,8 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   const profileMutation = trpc.profile.requestReview.useMutation({ onSuccess: () => { setProfileMutationMessage(""); setProfileSubmitted(true); myProfileQuery.refetch(); }, onError: () => { setProfileSubmitted(false); setProfileMutationMessage("Your profile update could not be submitted. Review the information and try again."); } });
   const recruiterProgressQuery = trpc.recruiting.newHireProgress.useQuery(undefined, { enabled: !previewMode && (activeRole === "Administrator" || activeRole === "Recruiter") });
   const consultantMyWorkQuery = trpc.consultant.myWork.useQuery(undefined, { enabled: !previewMode && isAuthenticated && activeRole === "Consultant" && activePage === "My work" });
+  const consultantActivityTimelineInput = useMemo(() => timelineCursor ? { cursor: timelineCursor, limit: 12 } : { limit: 12 }, [timelineCursor]);
+  const consultantActivityTimelineQuery = trpc.consultant.personalActivityTimeline.useQuery(consultantActivityTimelineInput, { enabled: !previewMode && isAuthenticated && activeRole === "Consultant" && activePage === "My activity" });
   const consultantMyEngagementQuery = trpc.consultant.myEngagement.useQuery(undefined, { enabled: !previewMode && isAuthenticated && activeRole === "Consultant" && activePage === "My engagement" });
   const consultantCheckInsQuery = trpc.consultant.checkIns.useQuery(undefined, { enabled: !previewMode && isAuthenticated && activeRole === "Consultant" && activePage === "Check-ins" });
   const consultantTimeSubmissionsQuery = trpc.consultant.timeSubmissions.useQuery(undefined, { enabled: !previewMode && isAuthenticated && activeRole === "Consultant" && activePage === "Time submission" });
@@ -670,6 +675,10 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   }, [activeRole, requestedPage]);
 
   useEffect(() => {
+    if (activePage !== "My activity") setTimelineCursor(undefined);
+  }, [activePage]);
+
+  useEffect(() => {
     if (!loading && !isAuthenticated && requestedPath !== "/login") {
       setLocation("/login");
       return;
@@ -700,7 +709,10 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
   }, [talentProfileOpen]);
 
   const changePage = (page: string) => {
-    setActivePage(resolveWorkspacePage(activeRole, page));
+    const permittedPage = resolveWorkspacePage(activeRole, page);
+    const destination = Object.entries(workspacePagesByPath).find(([, mappedPage]) => mappedPage === permittedPage)?.[0] ?? "/workspace";
+    setActivePage(permittedPage);
+    setLocation(destination);
     setMobileNavOpen(false);
   };
 
@@ -929,6 +941,18 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     return <><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Consultant workspace</p><h1 className="mt-2 text-2xl font-extrabold tracking-[-.055em] text-[#12345a] sm:text-3xl">My work</h1><p className="mt-1.5 max-w-2xl text-sm text-[#7185a0]">Your protected profile, onboarding, assignment, and time-readiness signals in one place.</p></div><Pill tone="blue">Own-record view</Pill></div><div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Card source="My Profile" title="Profile update"><p className="font-extrabold capitalize text-[#294969]">{displayState(work.profile?.profileUpdateState)}</p><p className="mt-1">Last updated: {displayDate(work.profile?.updatedAt)}</p></Card><Card source="Onboarding assignment" title="Onboarding progress">{work.onboarding ? <><p className="font-extrabold capitalize text-[#294969]">{displayState(work.onboarding.onboardingStage)} · {work.onboarding.progressPercent}%</p><p className="mt-1">Assignment signal: {displayState(work.onboarding.assignmentState)} · Updated {displayDate(work.onboarding.updatedAt)}</p></> : <p>No onboarding assignment is currently linked to your account.</p>}</Card><Card source="Consultant assignment" title="Current assignment">{work.assignment ? <><p className="font-extrabold text-[#294969]">{work.assignment.projectName}</p><p className="mt-1">{work.assignment.clientName} · {work.assignment.allocationPercent}% allocation</p><p className="mt-1">Manager: {work.assignment.managerName || "Not recorded"}</p><p className="mt-1">{displayState(work.assignment.assignmentState)} · Updated {displayDate(work.assignment.updatedAt)}</p></> : <p><b>No current assignment.</b> A designated human owner manages assignment follow-up.</p>}</Card><Card source="Timesheet entry" title="Time submission state">{work.latestTimesheet ? <><p className="font-extrabold capitalize text-[#294969]">{displayState(work.latestTimesheet.status)} · {work.latestTimesheet.hours} hours</p><p className="mt-1">Week ending {displayDate(work.latestTimesheet.weekEnding)} · Updated {displayDate(work.latestTimesheet.updatedAt)}</p></> : <p>No permitted time entry is currently linked to your account.</p>}</Card></div><section className="mt-5 rounded-2xl border border-[#d8e7f7] bg-[#f8fbff] p-4 text-xs leading-5 text-[#52718f]"><ShieldCheck className="mr-2 inline text-[#0b57d0]" size={15} /><b>Privacy boundary:</b> This dashboard uses only your session-owned workflow signals. It does not expose colleague records, client documents, restricted readiness content, candidate data, commercial values, or staffing recommendations.</section></>;
   };
 
+  const ConsultantPersonalActivityTimeline = () => {
+    const TimelineHeader = () => <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono-ui text-[10px] font-bold uppercase tracking-[.15em] text-[#0b57d0]">Consultant workspace</p><h1 className="mt-2 text-2xl font-extrabold tracking-[-.055em] text-[#12345a] sm:text-3xl">My activity</h1><p className="mt-1.5 max-w-2xl text-sm text-[#7185a0]">A factual history of your own workflow events. It does not assess performance, confirm completion, approve work, or make a staffing, employment, or financial decision.</p></div><Pill tone="blue">Own-record history</Pill></div>;
+    if (consultantActivityTimelineQuery.isLoading) return <><TimelineHeader /><section aria-busy="true" aria-label="Consultant activity timeline state" className="mt-6 rounded-2xl border border-[#cfe2fb] bg-[#f4f9ff] p-5 text-sm font-semibold text-[#365575]">Loading your protected activity history…</section></>;
+    if (consultantActivityTimelineQuery.error) return <><TimelineHeader /><section role="alert" aria-label="Consultant activity timeline state" className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><b>Your protected activity history is unavailable.</b><p className="mt-1 text-xs leading-5">No representative activity is substituted for this protected query. Try again or continue with the designated human owner.</p><button type="button" onClick={() => consultantActivityTimelineQuery.refetch()} className="mt-3 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 focus-visible:ring-2 focus-visible:ring-amber-500">Retry activity history</button></section></>;
+    const timeline = consultantActivityTimelineQuery.data;
+    const items = timeline?.items ?? [];
+    const sourceLabels: Record<string, string> = { onboarding: "Onboarding", check_in: "Check-in", time_submission: "Time submission", timesheet_evidence: "Timesheet evidence", profile: "My profile", action_inbox: "Action inbox" };
+    const destinationLabels: Record<string, string> = { "/workspace/onboarding": "Open onboarding", "/workspace/check-ins": "Open check-ins", "/workspace/time-submission": "Open time submission", "/workspace/profile": "Open my profile", "/workspace/action-inbox": "Open Action Inbox" };
+    if (!items.length) return <><TimelineHeader /><section aria-label="Consultant activity timeline state" className="mt-6 rounded-2xl border border-[#dce7f3] bg-white p-5 text-sm text-[#466381]"><b>{timelineCursor ? "No more protected activity is available." : "No protected activity yet."}</b><p className="mt-1 text-xs leading-5 text-[#7185a0]">This successful empty state does not display a representative history, colleague activity, or any decision outcome.</p>{timelineCursor && <button type="button" onClick={() => setTimelineCursor(undefined)} className="mt-4 rounded-lg border border-[#bcd3ec] bg-[#f8fbff] px-3 py-2 text-xs font-bold text-[#0b57d0] focus-visible:ring-2 focus-visible:ring-[#0b57d0]">Return to first page</button>}</section></>;
+    return <><TimelineHeader /><section aria-label="Your personal activity history" className="mt-6 overflow-hidden rounded-2xl border border-[#dce7f3] bg-white"><div className="flex flex-col gap-2 border-b border-[#e8eef5] p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-extrabold text-[#294969]">Factual workflow events</p><p className="mt-1 text-xs text-[#7185a0]">Newest first. Sources are limited to your protected onboarding, check-ins, time submission, private evidence, profile-request, and Action Inbox records.</p></div><Pill tone="slate">{timelineCursor ? "Earlier activity" : "Latest activity"}</Pill></div><div className="divide-y divide-[#edf2f7]">{items.map(item => <article key={item.cursor} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Pill tone="blue">{sourceLabels[item.source] || "Workflow"}</Pill><time className="text-[10px] font-semibold text-[#7890aa]">{new Date(item.occurredAt).toLocaleString()}</time></div><p className="mt-2 text-sm font-semibold text-[#365575]">{item.summary}</p></div><button type="button" onClick={() => changePage(workspacePagesByPath[item.destination] || "Overview")} className="shrink-0 rounded-xl border border-[#bcd3ec] bg-[#f8fbff] px-3 py-2 text-xs font-bold text-[#0b57d0] transition hover:bg-[#edf5ff] focus-visible:ring-2 focus-visible:ring-[#0b57d0]">{destinationLabels[item.destination] || "Open destination"} <ArrowRight className="ml-1 inline" size={13} /></button></article>)}</div><div className="flex flex-col gap-3 border-t border-[#e8eef5] bg-[#f8fbff] px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><p aria-live="polite" className="text-[10px] leading-4 text-[#7185a0]">{timeline?.nextCursor ? "More earlier activity is available." : "End of your protected activity history."}</p><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setTimelineCursor(undefined)} disabled={!timelineCursor} className="rounded-lg border border-[#d1dfed] bg-white px-3 py-2 text-xs font-bold text-[#466381] disabled:cursor-not-allowed disabled:opacity-55 focus-visible:ring-2 focus-visible:ring-[#0b57d0]">First page</button>{timeline?.nextCursor && <button type="button" onClick={() => setTimelineCursor(timeline.nextCursor ?? undefined)} className="rounded-lg bg-[#0b57d0] px-3 py-2 text-xs font-bold text-white focus-visible:ring-2 focus-visible:ring-[#0b57d0]">Next page <ChevronRight className="ml-1 inline" size={13} /></button>}</div></div></section><section className="mt-5 rounded-2xl border border-[#d8e7f7] bg-[#f8fbff] p-4 text-xs leading-5 text-[#52718f]"><ShieldCheck className="mr-2 inline text-[#0b57d0]" size={15} /><b>Privacy boundary:</b> This timeline excludes colleague activity, task content, reviewer identity, document content, storage keys, client-confidential fields, readiness facts, candidate data, commercial values, payroll, and decision outcomes.</section></>;
+  };
+
   const ResumeParserPanel = () => {
     const extracted = resumeProfile?.profile;
     const demoCandidates = [
@@ -1153,6 +1177,7 @@ function Workspace({ exitWorkspace, requestedPage = "Overview", requestedPath = 
     if (permittedPage !== activePage) return <Overview />;
     const content = activePage === "Candidate detail" ? <CandidateDetailPage />
       : activePage === "My work" ? <ConsultantMyWork />
+      : activePage === "My activity" ? <ConsultantPersonalActivityTimeline />
       : activePage === "My engagement" ? <ConsultantMyEngagement />
       : activePage === "Check-ins" ? ConsultantCheckIns()
       : activePage === "Time submission" ? <>{ConsultantTimePeriodSummary()}{ConsultantTimesheetEvidenceManager()}{ConsultantTimeSubmissions()}</>

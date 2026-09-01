@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "My work", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  user: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;
@@ -100,6 +100,12 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
+  it("denies Consultant Personal Activity Timeline reads to every non-consultant-compatible role", async () => {
+    for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
+      await expect(appRouter.createCaller(createContext(role)).consultant.personalActivityTimeline({ limit: 12 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
   it("keeps the workforce mutation surface limited to approved curation, own-record time, private evidence extraction, and inbox-state procedures", () => {
     const procedures = Object.keys(appRouter._def.procedures);
     expect(procedures).toContain("access.assignRole");
@@ -110,6 +116,7 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.updateTimeSubmission");
     expect(procedures).toContain("consultant.submitTimeSubmission");
     expect(procedures).toContain("consultant.timeSubmissionPeriodTotal");
+    expect(procedures).toContain("consultant.personalActivityTimeline");
     expect(procedures).toContain("consultant.prepareTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.completeTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.retryTimesheetHoursExtraction");

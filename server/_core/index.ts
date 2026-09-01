@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { registerResumeUploadRoute } from "../resumeUploadRoute";
 import { registerTimesheetUploadRoute } from "../timesheetUploadRoute";
 import { registerTimesheetEvidenceReviewRoute } from "../timesheetEvidenceReviewRoute";
+import { registerConsultantTimesheetEvidenceViewRoute } from "../consultantTimesheetEvidenceViewRoute";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -42,6 +43,7 @@ async function startServer() {
   registerResumeUploadRoute(app);
   registerTimesheetUploadRoute(app);
   registerTimesheetEvidenceReviewRoute(app);
+  registerConsultantTimesheetEvidenceViewRoute(app);
   // tRPC API
   app.use(
     "/api/trpc",

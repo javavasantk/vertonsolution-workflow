@@ -970,6 +970,26 @@ export async function createConsultantTimesheetEvidenceDiscrepancyResponse(userI
   return { reviewerNoteId, evidenceId, body: response[0].body, createdAt: response[0].createdAt };
 }
 
+/** Returns a private object reference only to the internal Consultant handoff route after proving the evidence and its time entry belong to the session user. */
+export async function getConsultantOwnedTimesheetEvidenceDocument(userId: number, evidenceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select({ fileKey: consultantTimesheetEvidence.fileKey, mimeType: consultantTimesheetEvidence.mimeType, originalFileName: consultantTimesheetEvidence.originalFileName })
+    .from(consultantTimesheetEvidence)
+    .innerJoin(timesheetEntries, eq(consultantTimesheetEvidence.timeEntryId, timesheetEntries.id))
+    .where(and(eq(consultantTimesheetEvidence.id, evidenceId), eq(consultantTimesheetEvidence.userId, userId), eq(timesheetEntries.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** Records at most one factual evidence-viewed event for the consultant's own account; no document contents, keys, or repeated access telemetry are stored. */
+export async function recordConsultantTimesheetEvidenceViewed(userId: number, evidenceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.insert(consultantTimesheetEvidenceActivities).values({ evidenceId, userId, activityType: "evidence_viewed", occurredAt: new Date() })
+    .onDuplicateKeyUpdate({ set: { evidenceId, userId, activityType: "evidence_viewed" } });
+}
+
 /** Returns a private object key only to an internal server-side document route after Finance authorization. */
 export async function getFinanceTimesheetEvidenceDocument(evidenceId: number) {
   const db = await getDb();
@@ -1055,7 +1075,7 @@ export async function setConsultantActionInboxState(userId: number, dedupKey: st
 
 export type ConsultantPersonalTimelineEvent = {
   eventId: string;
-  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "timesheet_discrepancy_acknowledged" | "timesheet_discrepancy_response_submitted" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
+  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "timesheet_evidence_viewed" | "timesheet_discrepancy_acknowledged" | "timesheet_discrepancy_response_submitted" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
   source: "onboarding" | "check_in" | "time_submission" | "timesheet_evidence" | "profile" | "action_inbox";
   summary: string;
   occurredAt: Date;
@@ -1150,9 +1170,9 @@ export async function listConsultantPersonalActivityTimeline(userId: number, inp
     })),
     ...evidenceActivities.map(activity => ({
       eventId: `timesheet-evidence-activity:${activity.id}`,
-      eventType: activity.activityType === "uploaded" ? "timesheet_evidence_uploaded" as const : activity.activityType === "hours_extracted" ? "timesheet_hours_extracted" as const : "timesheet_evidence_needs_human_review" as const,
+      eventType: activity.activityType === "uploaded" ? "timesheet_evidence_uploaded" as const : activity.activityType === "hours_extracted" ? "timesheet_hours_extracted" as const : activity.activityType === "evidence_viewed" ? "timesheet_evidence_viewed" as const : "timesheet_evidence_needs_human_review" as const,
       source: "timesheet_evidence" as const,
-      summary: activity.activityType === "uploaded" ? "You uploaded private timesheet evidence." : activity.activityType === "hours_extracted" ? "A bounded OCR hours result was recorded for your evidence." : "Your timesheet evidence needs designated human review.",
+      summary: activity.activityType === "uploaded" ? "You uploaded private timesheet evidence." : activity.activityType === "hours_extracted" ? "A bounded OCR hours result was recorded for your evidence." : activity.activityType === "evidence_viewed" ? "You opened your private timesheet source." : "Your timesheet evidence needs designated human review.",
       occurredAt: activity.occurredAt,
       destination: "/workspace/time-submission" as const,
     })),

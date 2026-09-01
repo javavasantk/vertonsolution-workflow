@@ -1,0 +1,2 @@
+ALTER TABLE `consultant_timesheet_evidence_activities` MODIFY COLUMN `activityType` enum('uploaded','hours_extracted','needs_human_review','evidence_viewed') NOT NULL;--> statement-breakpoint
+ALTER TABLE `consultant_timesheet_evidence_activities` ADD CONSTRAINT `ts_evidence_activity_uq` UNIQUE(`evidenceId`,`userId`,`activityType`);

@@ -99,6 +99,35 @@ describe("real browser demo authentication journey", () => {
     }
   }, 45_000);
 
+  runBrowserJourney("opens only a Consultant's private timesheet source through the no-store attachment handoff", async () => {
+    const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    try {
+      for (const [suffix, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]] as const) {
+        const page = await browser.newPage({ viewport });
+        await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+        await page.getByLabel("Email address").fill("consultant@demo.vertonsolutions.com");
+        await page.getByLabel("Password").fill("VertonDemo!2026");
+        await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
+        await page.waitForURL(`${baseUrl}/workspace`);
+        await page.goto(`${baseUrl}/workspace/time-submission`, { waitUntil: "networkidle" });
+        await expect.poll(() => page.getByLabel("Timesheet evidence entry").count()).toBe(1);
+        await page.getByLabel("Timesheet evidence entry").selectOption({ index: 1 });
+        await page.getByLabel("Timesheet evidence upload").setInputFiles({ name: `consultant-private-source-${suffix}.pdf`, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\nprivate consultant source\n%%EOF") });
+        await page.getByLabel("Confirm client-approved timesheet").check();
+        await page.getByRole("button", { name: "Upload & extract total hours" }).click();
+        await expect.poll(() => page.getByRole("link", { name: /Open your private source/ }).count(), { timeout: 60_000 }).toBeGreaterThan(0);
+        const privateSource = page.getByRole("link", { name: /Open your private source/ }).last();
+        expect(await privateSource.isVisible()).toBe(true);
+        const [download] = await Promise.all([page.waitForEvent("download"), privateSource.press("Enter")]);
+        expect(download.suggestedFilename()).toMatch(/consultant-private-source-(desktop|mobile)\.pdf/);
+        await expect.poll(() => page.getByText(/storage locations|presigned links|file digests/i).count()).toBeGreaterThan(0);
+        await page.screenshot({ path: `/home/ubuntu/consultant-private-timesheet-source-${suffix}.png`, fullPage: true });
+      }
+    } finally {
+      await browser.close();
+    }
+  }, 150_000);
+
   runBrowserJourney("opens the signed-upload recruiter workflow only after credential authentication", async () => {
     const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 

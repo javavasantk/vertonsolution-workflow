@@ -1141,13 +1141,33 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText("Your timesheet discrepancy note was not found")).toBeTruthy();
   });
 
+  it("renders a keyboard-accessible private-source handoff only for the Consultant's own evidence metadata", async () => {
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", note: "Submitted own-record time entry.", updatedAt: new Date("2026-08-26"), evidence: [{ id: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }] }] };
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/time-submission");
+
+    expect(screen.getByRole("region", { name: "Your private timesheet sources" })).toBeTruthy();
+    const privateSource = screen.getByRole("link", { name: "Open your private source approved-week.pdf" });
+    expect(privateSource.getAttribute("href")).toBe("/api/consultant/timesheet-evidence/91");
+    expect(privateSource.getAttribute("target")).toBe("_blank");
+    privateSource.focus();
+    expect(document.activeElement).toBe(privateSource);
+    expect(screen.getByText(/Opening a source records at most one factual own-account viewing event/i)).toBeTruthy();
+    expect(screen.queryByText(/consultant-timesheets\/|fileKey|fileSha256|signed\.private/i)).toBeNull();
+
+    cleanup();
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Draft own-record time entry.", updatedAt: new Date("2026-08-26"), evidence: [] }] };
+    renderRoute("/workspace/time-submission");
+    expect(screen.queryByRole("link", { name: /Open your private source/i })).toBeNull();
+  });
+
   it("keeps OCR retry and no-existing-entry states distinct without exposing private document content", async () => {
     const user = userEvent.setup();
     consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", note: "Submitted for designated review.", updatedAt: new Date("2026-08-26"), evidence: [{ id: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "needs_human_review", extractedHours: null, extractionConfidence: "low", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }] }] };
     setAuthenticatedRole("consultant", "Jamie Chen");
     renderRoute("/workspace/time-submission");
 
-    expect(screen.getByText("approved-week.pdf")).toBeTruthy();
+    expect(screen.getAllByText("approved-week.pdf")).toHaveLength(2);
     expect(screen.getByText(/OCR total: Not available/)).toBeTruthy();
     expect(screen.queryByText(/consultant-timesheets\/|fileSha256|fileKey/i)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Retry hours extraction" }));

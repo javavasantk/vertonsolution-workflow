@@ -304,14 +304,14 @@ export const consultantTimesheetEvidence = mysqlTable("consultant_timesheet_evid
   uniqueIndex("consultant_timesheet_evidence_file_uq").on(table.userId, table.timeEntryId, table.fileSha256),
 ]);
 
-/** Append-only operational activity for upload and extraction outcomes. It contains no document content. */
+/** Append-only operational activity for upload, extraction, and one own-account evidence-viewed event. It contains no document content. */
 export const consultantTimesheetEvidenceActivities = mysqlTable("consultant_timesheet_evidence_activities", {
   id: int("id").autoincrement().primaryKey(),
   evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
   userId: int("userId").notNull().references(() => users.id),
-  activityType: mysqlEnum("activityType", ["uploaded", "hours_extracted", "needs_human_review"]).notNull(),
+  activityType: mysqlEnum("activityType", ["uploaded", "hours_extracted", "needs_human_review", "evidence_viewed"]).notNull(),
   occurredAt: timestamp("occurredAt").defaultNow().notNull(),
-});
+}, table => [uniqueIndex("ts_evidence_activity_uq").on(table.evidenceId, table.userId, table.activityType)]);
 
 /** A single designated Finance reviewer may claim one private timesheet-evidence record for human follow-up. */
 export const consultantTimesheetEvidenceReviews = mysqlTable("consultant_timesheet_evidence_reviews", {

@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "My activity", "My engagement", "Engagement continuity", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  user: ["Overview", "My work", "My activity", "My engagement", "Engagement continuity", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;
@@ -66,11 +66,14 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("denies Consultant Time Submission, private evidence, and factual discrepancy-response procedures to every non-consultant-compatible role", async () => {
+  it("denies Consultant continuity, time-submission, private-evidence, and factual-response procedures to every non-consultant-compatible role", async () => {
     const timeInput = { assignmentId: 1, weekEnding: new Date("2026-08-30"), hours: 40, note: "Completed documented delivery hours." };
     const evidenceInput = { timeEntryId: 1, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 128, confirmClientApproved: true as const };
+    const continuityInput = { category: "handoff_context" as const, factualNote: "A factual handoff context is recorded for designated human follow-up." };
     for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
       const caller = appRouter.createCaller(createContext(role));
+      await expect(caller.consultant.engagementContinuity()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.submitEngagementContinuityNote(continuityInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.timeSubmissionPeriodTotal({ startDate: timeInput.weekEnding, endDate: timeInput.weekEnding })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.timeReconciliation({ startDate: timeInput.weekEnding, endDate: timeInput.weekEnding })).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -122,6 +125,8 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.timeSubmissionPeriodTotal");
     expect(procedures).toContain("consultant.timeReconciliation");
     expect(procedures).toContain("consultant.personalActivityTimeline");
+    expect(procedures).toContain("consultant.engagementContinuity");
+    expect(procedures).toContain("consultant.submitEngagementContinuityNote");
     expect(procedures).toContain("consultant.prepareTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.completeTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.retryTimesheetHoursExtraction");
@@ -139,6 +144,9 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).not.toContain("consultant.applyDiscrepancyCorrection");
     expect(procedures).not.toContain("consultant.sendActionInboxNotification");
     expect(procedures).not.toContain("consultant.updateTimeReconciliation");
+    expect(procedures).not.toContain("consultant.requestAssignmentExtension");
+    expect(procedures).not.toContain("consultant.decideEngagementTransition");
+    expect(procedures).not.toContain("consultant.sendEngagementContinuityNotification");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");
     expect(procedures).not.toContain("portal.issuePayment");

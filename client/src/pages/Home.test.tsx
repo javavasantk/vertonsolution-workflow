@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantTimeReconciliationTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantEngagementContinuityTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantTimeReconciliationTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -97,6 +97,14 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     data: { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } } as any,
     isLoading: false,
     error: null as Error | null,
+  },
+  consultantEngagementContinuityTestState: {
+    data: { assignment: { projectLabel: "Northstar Commerce Cloud · Demo", managerLabel: "Casey Rivera", assignmentState: "active", endDate: new Date("2026-12-31"), updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, designatedHumanOwner: "Casey Rivera", notes: [{ id: 81, category: "handoff_context", factualNote: "The latest implementation handoff context is recorded for the designated human owner.", createdAt: new Date("2026-08-26") }] } as any,
+    isLoading: false,
+    error: null as Error | null,
+    mutate: vi.fn(),
+    mutationError: null as Error | null,
+    refetch: vi.fn(),
   },
   consultantTaskTestState: {
     tasks: [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review current personal workflow fields.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date("2026-08-26") }] as any[],
@@ -201,6 +209,8 @@ vi.mock("@/lib/trpc", () => ({
       myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
       personalActivityTimeline: { useQuery: (input: any) => { consultantActivityTimelineTestState.lastInput = input; return { data: input?.cursor ? consultantActivityTimelineTestState.nextPage : consultantActivityTimelineTestState.firstPage, isLoading: consultantActivityTimelineTestState.isLoading, error: consultantActivityTimelineTestState.error, refetch: consultantActivityTimelineTestState.refetch }; } },
       myEngagement: { useQuery: () => ({ data: consultantEngagementTestState.data, isLoading: consultantEngagementTestState.isLoading, error: consultantEngagementTestState.error, refetch: vi.fn() }) },
+      engagementContinuity: { useQuery: () => ({ data: consultantEngagementContinuityTestState.data, isLoading: consultantEngagementContinuityTestState.isLoading, error: consultantEngagementContinuityTestState.error, refetch: consultantEngagementContinuityTestState.refetch }) },
+      submitEngagementContinuityNote: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantEngagementContinuityTestState.mutate(input); if (consultantEngagementContinuityTestState.mutationError) options?.onError?.(consultantEngagementContinuityTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantEngagementContinuityTestState.mutationError }) },
       checkIns: { useQuery: () => ({ data: consultantCheckInTestState.data, isLoading: consultantCheckInTestState.isLoading, error: consultantCheckInTestState.error, refetch: consultantCheckInTestState.refetch }) },
       submitCheckIn: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantCheckInTestState.mutate(input); if (consultantCheckInTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantCheckInTestState.mutationError }) },
       timeSubmissions: { useQuery: () => ({ data: consultantTimeSubmissionTestState.data, isLoading: consultantTimeSubmissionTestState.isLoading, error: consultantTimeSubmissionTestState.error, refetch: consultantTimeSubmissionTestState.refetch }) },
@@ -345,6 +355,12 @@ afterEach(() => {
   consultantEngagementTestState.data = { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } };
   consultantEngagementTestState.isLoading = false;
   consultantEngagementTestState.error = null;
+  consultantEngagementContinuityTestState.data = { assignment: { projectLabel: "Northstar Commerce Cloud · Demo", managerLabel: "Casey Rivera", assignmentState: "active", endDate: new Date("2026-12-31"), updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, designatedHumanOwner: "Casey Rivera", notes: [{ id: 81, category: "handoff_context", factualNote: "The latest implementation handoff context is recorded for the designated human owner.", createdAt: new Date("2026-08-26") }] };
+  consultantEngagementContinuityTestState.isLoading = false;
+  consultantEngagementContinuityTestState.error = null;
+  consultantEngagementContinuityTestState.mutate.mockReset();
+  consultantEngagementContinuityTestState.mutationError = null;
+  consultantEngagementContinuityTestState.refetch.mockReset();
   consultantTaskTestState.tasks = [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review current personal workflow fields.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date("2026-08-26") }];
   consultantTaskTestState.isLoading = false;
   consultantTaskTestState.error = null;
@@ -430,7 +446,7 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "Engagement continuity", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
   });
@@ -1200,6 +1216,54 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     renderRoute("/workspace/my-engagement");
     expect(screen.getByText("No active assignment")).toBeTruthy();
     expect(screen.getByText(/extension handoff requires human follow-up/i)).toBeTruthy();
+  });
+
+  it("records a factual Consultant engagement continuity note with safe assignment context and designated human follow-up", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    renderRoute("/workspace/engagement-continuity");
+
+    expect(screen.getByRole("heading", { name: "Engagement continuity" })).toBeTruthy();
+    expect(screen.getByText("Source: assignment record", { exact: false })).toBeTruthy();
+    expect(screen.getByText("Casey Rivera")).toBeTruthy();
+    expect(screen.getByText("Your continuity history")).toBeTruthy();
+    expect(screen.getByText("The latest implementation handoff context is recorded for the designated human owner.")).toBeTruthy();
+    expect(screen.queryByText(/Northstar Retail|client credential|peer name|performance rating|work authorization|compensation amount/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Record factual note" }).hasAttribute("disabled")).toBe(true);
+
+    const note = screen.getByLabelText("Engagement continuity factual note");
+    note.focus();
+    expect(document.activeElement).toBe(note);
+    await user.selectOptions(screen.getByLabelText("Engagement continuity category"), "support_needed");
+    await user.type(note, "I need a factual owner follow-up on the recorded handoff context.");
+    expect(screen.getByText(/\/ 500 characters/i)).toBeTruthy();
+    const submit = screen.getByRole("button", { name: "Record factual note" });
+    expect(submit.hasAttribute("disabled")).toBe(false);
+    await user.click(submit);
+    expect(consultantEngagementContinuityTestState.mutate).toHaveBeenCalledWith({ category: "support_needed", factualNote: "I need a factual owner follow-up on the recorded handoff context." });
+    expect(consultantEngagementContinuityTestState.refetch).toHaveBeenCalled();
+    expect(screen.getByText(/did not request or change an assignment outcome/i)).toBeTruthy();
+    expect(screen.getByText(/do not request or approve an extension, decide roll-off or redeployment, modify assignments, trigger notifications/i)).toBeTruthy();
+  });
+
+  it("keeps Consultant engagement continuity loading, unavailable, and no-assignment states distinct", () => {
+    setAuthenticatedRole("consultant", "Riley Consultant");
+    consultantEngagementContinuityTestState.isLoading = true;
+    let view = renderRoute("/workspace/engagement-continuity");
+    expect(screen.getByText("Loading your protected engagement continuity…")).toBeTruthy();
+    view.unmount();
+
+    consultantEngagementContinuityTestState.isLoading = false;
+    consultantEngagementContinuityTestState.error = new Error("Unavailable");
+    view = renderRoute("/workspace/engagement-continuity");
+    expect(screen.getByText("Your engagement continuity details are unavailable.")).toBeTruthy();
+    view.unmount();
+
+    consultantEngagementContinuityTestState.error = null;
+    consultantEngagementContinuityTestState.data = { assignment: null, hasActiveAssignment: false, designatedHumanOwner: "Designated engagement owner", notes: [] };
+    renderRoute("/workspace/engagement-continuity");
+    expect(screen.getByText("No assignment available")).toBeTruthy();
+    expect(screen.getByText(/does not create an assignment merely to save a continuity note/i)).toBeTruthy();
   });
 
   it("limits Consultant Time Submission to own active assignments, draft/correction edits, and human review", async () => {

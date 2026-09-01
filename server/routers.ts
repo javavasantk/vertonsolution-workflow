@@ -87,6 +87,10 @@ const consultantCheckInSchema = z.object({
   category: z.enum(["engagement_update", "work_update", "support_note"]),
   factualNote: z.string().trim().min(10).max(500),
 });
+const consultantEngagementContinuityNoteSchema = z.object({
+  category: z.enum(["handoff_context", "work_status", "support_needed"]),
+  factualNote: z.string().trim().min(10).max(500),
+});
 const consultantTimeSubmissionSchema = z.object({
   assignmentId: z.number().int().positive(),
   weekEnding: z.coerce.date().min(new Date("2000-01-01")),
@@ -303,6 +307,20 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access the Consultant My Engagement page.' });
       }
       return db.getConsultantMyEngagement(ctx.user.id);
+    }),
+    engagementContinuity: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant engagement continuity notes.' });
+      }
+      return db.getConsultantEngagementContinuity(ctx.user.id);
+    }),
+    submitEngagementContinuityNote: protectedProcedure.input(consultantEngagementContinuityNoteSchema).mutation(async ({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot submit a Consultant engagement continuity note.' });
+      }
+      const note = await db.createConsultantEngagementContinuityNote(ctx.user.id, input);
+      if (!note) throw new TRPCError({ code: 'NOT_FOUND', message: 'No current or recent assignment is available for a continuity note.' });
+      return note;
     }),
     checkIns: protectedProcedure.query(({ ctx }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {

@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceDiscrepancyResponses, consultantTimesheetEvidenceNoteAcknowledgements, consultantTimesheetEvidenceResponseActivities, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileRequests, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantEngagementContinuityNoteActivities, consultantEngagementContinuityNotes, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceDiscrepancyResponses, consultantTimesheetEvidenceNoteAcknowledgements, consultantTimesheetEvidenceResponseActivities, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileRequests, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -604,6 +604,69 @@ export async function getConsultantMyEngagement(userId: number) {
   return { assignment: latestAssignment, hasActiveAssignment: Boolean(activeAssignment), latestTimesheet };
 }
 
+type ContinuityNoteInput = {
+  category: "handoff_context" | "work_status" | "support_needed";
+  factualNote: string;
+};
+
+async function getOwnContinuityAssignment(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const assignments = await db
+    .select({
+      id: consultantAssignments.id,
+      projectLabel: clientProjects.name,
+      managerLabel: consultantAssignments.managerName,
+      assignmentState: consultantAssignments.assignmentState,
+      endDate: consultantAssignments.endDate,
+      updatedAt: consultantAssignments.updatedAt,
+    })
+    .from(consultantAssignments)
+    .leftJoin(clientProjects, eq(consultantAssignments.projectId, clientProjects.id))
+    .where(eq(consultantAssignments.userId, userId))
+    .orderBy(desc(consultantAssignments.updatedAt));
+  return assignments.find(assignment => assignment.assignmentState === "active") ?? assignments[0] ?? null;
+}
+
+/** Own-assignment, factual continuity context and history. It intentionally excludes client documents, peers, and decision outcomes. */
+export async function getConsultantEngagementContinuity(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const assignment = await getOwnContinuityAssignment(userId);
+  if (!assignment) return { assignment: null, hasActiveAssignment: false, designatedHumanOwner: "Designated engagement owner", notes: [] as Array<{ id: number; category: ContinuityNoteInput["category"]; factualNote: string; createdAt: Date }> };
+  const notes = await db
+    .select({ id: consultantEngagementContinuityNotes.id, category: consultantEngagementContinuityNotes.category, factualNote: consultantEngagementContinuityNotes.factualNote, createdAt: consultantEngagementContinuityNotes.createdAt })
+    .from(consultantEngagementContinuityNotes)
+    .where(and(eq(consultantEngagementContinuityNotes.userId, userId), eq(consultantEngagementContinuityNotes.assignmentId, assignment.id)))
+    .orderBy(desc(consultantEngagementContinuityNotes.createdAt), desc(consultantEngagementContinuityNotes.id));
+  return {
+    assignment: { projectLabel: assignment.projectLabel ?? "Project label not recorded", managerLabel: assignment.managerLabel ?? null, assignmentState: assignment.assignmentState, endDate: assignment.endDate, updatedAt: assignment.updatedAt },
+    hasActiveAssignment: assignment.assignmentState === "active",
+    designatedHumanOwner: assignment.managerLabel || "Designated engagement owner",
+    notes,
+  };
+}
+
+/** Writes one factual Consultant note only when an existing assignment belongs to that same session user. */
+export async function createConsultantEngagementContinuityNote(userId: number, input: ContinuityNoteInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const assignment = await getOwnContinuityAssignment(userId);
+  if (!assignment) return null;
+  const createdAt = new Date();
+  await db.insert(consultantEngagementContinuityNotes).values({ assignmentId: assignment.id, userId, category: input.category, factualNote: input.factualNote, createdAt });
+  const noteRows = await db
+    .select()
+    .from(consultantEngagementContinuityNotes)
+    .where(and(eq(consultantEngagementContinuityNotes.userId, userId), eq(consultantEngagementContinuityNotes.assignmentId, assignment.id)))
+    .orderBy(desc(consultantEngagementContinuityNotes.id))
+    .limit(1);
+  const note = noteRows[0];
+  if (!note) throw new Error("Continuity note could not be recorded");
+  await db.insert(consultantEngagementContinuityNoteActivities).values({ continuityNoteId: note.id, userId, activityType: "submitted", occurredAt: createdAt });
+  return { id: note.id, category: note.category, factualNote: note.factualNote, createdAt: note.createdAt };
+}
+
 type ConsultantTimeSubmissionInput = {
   assignmentId: number;
   weekEnding: Date;
@@ -1189,11 +1252,11 @@ export async function restoreConsultantActionInboxState(userId: number, dedupKey
 
 export type ConsultantPersonalTimelineEvent = {
   eventId: string;
-  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "timesheet_evidence_viewed" | "timesheet_discrepancy_acknowledged" | "timesheet_discrepancy_response_submitted" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
-  source: "onboarding" | "check_in" | "time_submission" | "timesheet_evidence" | "profile" | "action_inbox";
+  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "engagement_continuity_note_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "timesheet_evidence_viewed" | "timesheet_discrepancy_acknowledged" | "timesheet_discrepancy_response_submitted" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
+  source: "onboarding" | "check_in" | "engagement_continuity" | "time_submission" | "timesheet_evidence" | "profile" | "action_inbox";
   summary: string;
   occurredAt: Date;
-  destination: "/workspace/onboarding" | "/workspace/check-ins" | "/workspace/time-submission" | "/workspace/profile" | "/workspace/action-inbox";
+  destination: "/workspace/onboarding" | "/workspace/check-ins" | "/workspace/engagement-continuity" | "/workspace/time-submission" | "/workspace/profile" | "/workspace/action-inbox";
 };
 
 type ConsultantTimelineCursor = { occurredAt: number; sortKey: string };
@@ -1240,11 +1303,13 @@ export function paginateConsultantPersonalActivityEvents(events: ConsultantPerso
 export async function listConsultantPersonalActivityTimeline(userId: number, input: { cursor?: string; limit?: number } = {}) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
-  const [onboardingActivities, checkInActivities, timeEntryActivities, evidenceActivities, responseActivities, profileActivities, actionStates] = await Promise.all([
+  const [onboardingActivities, checkInActivities, continuityActivities, timeEntryActivities, evidenceActivities, responseActivities, profileActivities, actionStates] = await Promise.all([
     db.select({ id: consultantOnboardingTaskActivities.id, activityType: consultantOnboardingTaskActivities.activityType, occurredAt: consultantOnboardingTaskActivities.occurredAt })
       .from(consultantOnboardingTaskActivities).where(eq(consultantOnboardingTaskActivities.userId, userId)),
     db.select({ id: consultantCheckInActivities.id, activityType: consultantCheckInActivities.activityType, occurredAt: consultantCheckInActivities.occurredAt })
       .from(consultantCheckInActivities).where(eq(consultantCheckInActivities.userId, userId)),
+    db.select({ id: consultantEngagementContinuityNoteActivities.id, activityType: consultantEngagementContinuityNoteActivities.activityType, occurredAt: consultantEngagementContinuityNoteActivities.occurredAt })
+      .from(consultantEngagementContinuityNoteActivities).where(eq(consultantEngagementContinuityNoteActivities.userId, userId)),
     db.select({ id: consultantTimeEntryActivities.id, activityType: consultantTimeEntryActivities.activityType, occurredAt: consultantTimeEntryActivities.occurredAt })
       .from(consultantTimeEntryActivities).where(eq(consultantTimeEntryActivities.userId, userId)),
     db.select({ id: consultantTimesheetEvidenceActivities.id, activityType: consultantTimesheetEvidenceActivities.activityType, occurredAt: consultantTimesheetEvidenceActivities.occurredAt })
@@ -1273,6 +1338,14 @@ export async function listConsultantPersonalActivityTimeline(userId: number, inp
       summary: "You recorded a factual check-in.",
       occurredAt: activity.occurredAt,
       destination: "/workspace/check-ins" as const,
+    })),
+    ...continuityActivities.map(activity => ({
+      eventId: `engagement-continuity-activity:${activity.id}`,
+      eventType: "engagement_continuity_note_submitted" as const,
+      source: "engagement_continuity" as const,
+      summary: "You submitted an engagement continuity note for human follow-up.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/engagement-continuity" as const,
     })),
     ...timeEntryActivities.map(activity => ({
       eventId: `time-entry-activity:${activity.id}`,

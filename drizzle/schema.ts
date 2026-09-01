@@ -257,6 +257,25 @@ export const consultantAssignments = mysqlTable("consultant_assignments", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Consultant-owned factual continuity notes for an existing current or most-recent assignment. */
+export const consultantEngagementContinuityNotes = mysqlTable("consultant_engagement_continuity_notes", {
+  id: int("id").autoincrement().primaryKey(),
+  assignmentId: int("assignmentId").notNull().references(() => consultantAssignments.id),
+  userId: int("userId").notNull().references(() => users.id),
+  category: mysqlEnum("category", ["handoff_context", "work_status", "support_needed"]).notNull(),
+  factualNote: varchar("factualNote", { length: 500 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Append-only factual activity for a Consultant continuity-note submission. */
+export const consultantEngagementContinuityNoteActivities = mysqlTable("consultant_engagement_continuity_note_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  continuityNoteId: int("continuityNoteId").notNull().references(() => consultantEngagementContinuityNotes.id),
+  userId: int("userId").notNull().references(() => users.id),
+  activityType: mysqlEnum("activityType", ["submitted"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 export const timesheetEntries = mysqlTable("timesheet_entries", {
   id: int("id").autoincrement().primaryKey(),
   demoKey: varchar("demoKey", { length: 96 }).notNull().unique(),
@@ -408,6 +427,8 @@ export type ClientAccount = typeof clientAccounts.$inferSelect;
 export type ClientProject = typeof clientProjects.$inferSelect;
 export type StaffingDemand = typeof staffingDemands.$inferSelect;
 export type ConsultantAssignment = typeof consultantAssignments.$inferSelect;
+export type ConsultantEngagementContinuityNote = typeof consultantEngagementContinuityNotes.$inferSelect;
+export type ConsultantEngagementContinuityNoteActivity = typeof consultantEngagementContinuityNoteActivities.$inferSelect;
 export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
 export type ConsultantTimesheetEvidence = typeof consultantTimesheetEvidence.$inferSelect;
 export type ConsultantTimesheetUploadSession = typeof consultantTimesheetUploadSessions.$inferSelect;

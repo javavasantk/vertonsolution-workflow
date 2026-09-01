@@ -49,6 +49,19 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await expect.poll(() => page.getByText(/No time entry, approval, invoice, payroll, payment, or commercial action is available/i).count()).toBe(1);
   await page.screenshot({ path: `/home/ubuntu/consultant-my-engagement-${suffix}.png`, fullPage: true });
 
+  await page.goto(`${baseUrl}/workspace/engagement-continuity`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.getByRole("heading", { name: "Engagement continuity" }).count()).toBe(1);
+  await expect.poll(() => page.getByText(/Source: assignment record/).count()).toBe(1);
+  await expect.poll(() => page.getByText("Designated human owner").count()).toBeGreaterThan(0);
+  const continuityNote = page.getByLabel("Engagement continuity factual note");
+  await continuityNote.focus();
+  expect(await continuityNote.isVisible()).toBe(true);
+  await expect.poll(() => page.getByText(/cannot create an extension, alter an assignment, or make a staffing decision/i).count()).toBe(1);
+  await expect.poll(() => page.getByText(/request or approve an extension, decide roll-off or redeployment, modify assignments, trigger notifications/i).count()).toBe(1);
+  await expect.poll(() => page.getByText("Northstar Retail · Demo", { exact: true }).count()).toBe(0);
+  await expect.poll(() => page.getByText(/client credential|peer name|performance rating|work authorization|compensation amount/i).count()).toBe(0);
+  await page.screenshot({ path: `/home/ubuntu/consultant-engagement-continuity-${suffix}.png`, fullPage: true });
+
   await page.goto(`${baseUrl}/workspace/onboarding`, { waitUntil: "networkidle" });
   await expect.poll(() => page.getByRole("heading", { name: "Your assigned tasks" }).count()).toBe(1);
   await expect.poll(() => page.getByText("Protected personal tasks").count()).toBe(1);

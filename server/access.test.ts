@@ -219,6 +219,46 @@ describe("access router", () => {
     engagement.mockRestore();
   });
 
+  it("serves and records only the session Consultant's factual engagement continuity notes", async () => {
+    const safeContinuity = {
+      assignment: { projectLabel: "Northstar Commerce Cloud · Demo", managerLabel: "Casey Rivera", assignmentState: "active", endDate: new Date("2026-12-31"), updatedAt: new Date() },
+      hasActiveAssignment: true,
+      designatedHumanOwner: "Casey Rivera",
+      notes: [{ id: 84, category: "handoff_context", factualNote: "The documented handoff context is available for designated human follow-up.", createdAt: new Date() }],
+    };
+    const list = vi.spyOn(db, "getConsultantEngagementContinuity").mockResolvedValue(safeContinuity as never);
+    const create = vi.spyOn(db, "createConsultantEngagementContinuityNote").mockResolvedValue(safeContinuity.notes[0] as never);
+    const input = { category: "support_needed" as const, factualNote: "A factual designated-owner follow-up is needed for the documented work context." };
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.engagementContinuity()).resolves.toEqual(safeContinuity);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.engagementContinuity()).resolves.toEqual(safeContinuity);
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.submitEngagementContinuityNote(input)).resolves.toEqual(safeContinuity.notes[0]);
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.submitEngagementContinuityNote({ ...input, category: "invalid_category" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.submitEngagementContinuityNote({ ...input, factualNote: "Short" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 19)).consultant.engagementContinuity()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(appRouter.createCaller(createContext(role, 19)).consultant.submitEngagementContinuityNote(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(list).toHaveBeenCalledWith(17);
+    expect(create).toHaveBeenCalledWith(17, input);
+    expect(safeContinuity.assignment).not.toHaveProperty("id");
+    expect(safeContinuity.assignment).not.toHaveProperty("userId");
+    expect(safeContinuity.assignment).not.toHaveProperty("clientName");
+    expect(safeContinuity.assignment).not.toHaveProperty("clientDocument");
+    expect(safeContinuity.notes[0]).not.toHaveProperty("assignmentId");
+    expect(safeContinuity.notes[0]).not.toHaveProperty("performanceRating");
+    expect(safeContinuity.notes[0]).not.toHaveProperty("readinessDetails");
+    expect(safeContinuity.notes[0]).not.toHaveProperty("compensation");
+    list.mockRestore();
+    create.mockRestore();
+  });
+
+  it("rejects a Consultant continuity note when no current or recent own assignment remains", async () => {
+    const create = vi.spyOn(db, "createConsultantEngagementContinuityNote").mockResolvedValue(null as never);
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.submitEngagementContinuityNote({ category: "work_status", factualNote: "A factual work status has been recorded for designated human follow-up." })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    create.mockRestore();
+  });
+
   it("serves and acknowledges only the session consultant's safe personal onboarding tasks", async () => {
     const safeTasks = [{ id: 41, title: "Review your workforce profile", taskType: "profile", description: "Review your current profile before requesting human review.", ownerGroup: "consultant", dueDate: new Date("2026-09-01"), consultantCompletionState: "pending", acknowledgedAt: null, updatedAt: new Date() }];
     const tasks = vi.spyOn(db, "listConsultantOnboardingTasks").mockResolvedValue(safeTasks as never);

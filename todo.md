@@ -263,3 +263,4 @@
 - [x] Add a protected Consultant Personal Activity Timeline with safe own-record aggregation, stable cursor pagination, permitted destinations, and accessible query states.
 - [x] Add protected Consultant acknowledgement and one bounded factual response per designated human timesheet discrepancy note, with safe Finance review visibility and no state-changing automation.
 - [x] Add a protected Consultant own-timesheet-evidence viewer with server-side ownership checks, no-store private download handoff, and safe own-account viewing activity.
+- [x] Add a protected read-only Consultant Time Reconciliation workspace with bounded period/status filtering, safe entered-versus-OCR comparison, and responsive own-record states.

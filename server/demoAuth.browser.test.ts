@@ -69,6 +69,16 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
     await expect.poll(() => page.getByText(/documents are private and are not stored in the database/i).count()).toBe(1);
     await page.screenshot({ path: `/home/ubuntu/consultant-time-submission-${suffix}.png`, fullPage: true });
 
+    await page.goto(`${baseUrl}/workspace/time-reconciliation`, { waitUntil: "networkidle" });
+    await expect.poll(() => page.getByRole("heading", { name: "Time reconciliation" }).count()).toBe(1);
+    await expect.poll(() => page.getByLabel("Reconciliation period start").count()).toBe(1);
+    await expect.poll(() => page.getByLabel("Reconciliation period end").count()).toBe(1);
+    await expect.poll(() => page.getByLabel("Reconciliation status filter").count()).toBe(1);
+    await expect.poll(() => page.getByText(/factual sum only/i).count()).toBe(1);
+    await expect.poll(() => page.getByText(/never changes a time-entry, review, approval, or financial state/i).count()).toBe(1);
+    await expect.poll(() => page.getByText(/billable amount|invoice|margin|utilization/i).count()).toBe(0);
+    await page.screenshot({ path: `/home/ubuntu/consultant-time-reconciliation-${suffix}.png`, fullPage: true });
+
     await page.goto(`${baseUrl}/workspace/action-inbox`, { waitUntil: "networkidle" });
     await expect.poll(() => page.getByRole("heading", { name: "Action Inbox" }).count()).toBe(1);
     await expect.poll(() => page.getByText("Your active reminders").count()).toBe(1);

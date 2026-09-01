@@ -20,6 +20,7 @@ function Router() {
       <Route path="/workspace/my-engagement" component={() => <Home />} />
       <Route path="/workspace/check-ins" component={() => <Home />} />
       <Route path="/workspace/time-submission" component={() => <Home />} />
+      <Route path="/workspace/time-reconciliation" component={() => <Home />} />
       <Route path="/workspace/action-inbox" component={() => <Home />} />
       <Route path={"/workspace/talent/:id"} component={Home} />
       <Route path={"/workspace/:rest*"} component={Home} />

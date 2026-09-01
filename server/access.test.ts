@@ -300,6 +300,31 @@ describe("access router", () => {
     totals.mockRestore();
   });
 
+  it("returns a dedicated own-record Consultant reconciliation projection with only permitted status filtering and arithmetic", async () => {
+    const reconciliation = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: "submitted", entryCount: 1, enteredHoursTotal: 40, evidenceCount: 1, ocrResultCount: 1, rows: [{ timeEntryId: 72, weekEnding: new Date("2026-08-23"), status: "submitted", enteredHours: 40, evidence: [{ evidenceId: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", extractionStatus: "extracted", extractedHours: 38, extractionConfidence: "medium", reviewerAssigned: true, differenceHours: 2, comparisonLabel: "Human comparison needed", discrepancyNotes: [{ note: "Confirm the visible totals through human follow-up.", createdAt: new Date("2026-08-26") }] }] }] };
+    const getReconciliation = vi.spyOn(db, "getConsultantTimeReconciliation").mockResolvedValue(reconciliation as never);
+    const input = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: "submitted" as const };
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.timeReconciliation(input)).resolves.toEqual(reconciliation);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.timeReconciliation(input)).resolves.toEqual(reconciliation);
+    expect(getReconciliation).toHaveBeenCalledWith(17, input);
+    expect(getReconciliation).toHaveBeenCalledWith(18, input);
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 22)).consultant.timeReconciliation(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.timeReconciliation({ startDate: new Date("2026-08-31"), endDate: new Date("2026-08-01") })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.timeReconciliation({ startDate: new Date("2025-01-01"), endDate: new Date("2026-01-03") })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.timeReconciliation({ startDate: input.startDate, endDate: input.endDate, status: "reviewed" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(reconciliation.rows[0]).not.toHaveProperty("clientName");
+    expect(reconciliation.rows[0]).not.toHaveProperty("reviewerName");
+    expect(reconciliation.rows[0].evidence[0]).not.toHaveProperty("fileKey");
+    expect(reconciliation.rows[0].evidence[0]).not.toHaveProperty("sourceContent");
+    expect(reconciliation).not.toHaveProperty("payroll");
+    expect(reconciliation).not.toHaveProperty("billRate");
+    expect(reconciliation).not.toHaveProperty("invoiceAmount");
+    getReconciliation.mockRestore();
+  });
+
   it("keeps private timesheet evidence completion and OCR retry session-owned, without leaking document or commercial fields", async () => {
     const completedEvidence = vi.spyOn(db, "getCompletedConsultantTimesheetEvidenceBySession").mockResolvedValue(undefined);
     const unavailableSession = vi.spyOn(db, "getActiveConsultantTimesheetUploadSession").mockResolvedValue(undefined);

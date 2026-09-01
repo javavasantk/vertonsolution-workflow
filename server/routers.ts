@@ -114,6 +114,12 @@ const consultantTimeSubmissionPeriodSchema = z.object({
   endDate: z.coerce.date(),
 }).refine(input => input.endDate >= input.startDate, { message: "The period end must be on or after the period start.", path: ["endDate"] })
   .refine(input => input.endDate.getTime() - input.startDate.getTime() <= 366 * 24 * 60 * 60 * 1000, { message: "Select a period of no more than 366 days." });
+const consultantTimeReconciliationSchema = z.object({
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  status: z.enum(["draft", "submitted", "approved", "exception"]).optional(),
+}).refine(input => input.endDate >= input.startDate, { message: "The period end must be on or after the period start.", path: ["endDate"] })
+  .refine(input => input.endDate.getTime() - input.startDate.getTime() <= 366 * 24 * 60 * 60 * 1000, { message: "Select a period of no more than 366 days." });
 const consultantPersonalActivityTimelineSchema = z.object({
   cursor: z.string().min(8).max(256).optional(),
   limit: z.number().int().min(1).max(25).optional(),
@@ -319,6 +325,12 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant time totals.' });
       }
       return db.getConsultantTimeSubmissionPeriodTotal(ctx.user.id, input.startDate, input.endDate);
+    }),
+    timeReconciliation: protectedProcedure.input(consultantTimeReconciliationSchema).query(({ ctx, input }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant time reconciliation.' });
+      }
+      return db.getConsultantTimeReconciliation(ctx.user.id, input);
     }),
     createTimeSubmission: protectedProcedure.input(consultantTimeSubmissionSchema).mutation(async ({ ctx, input }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {

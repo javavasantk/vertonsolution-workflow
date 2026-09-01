@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantTimeReconciliationTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -131,6 +131,13 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     periodTotalError: null as Error | null,
     periodTotalRefetch: vi.fn(),
   },
+  consultantTimeReconciliationTestState: {
+    data: { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: null, entryCount: 1, enteredHoursTotal: 40, evidenceCount: 1, ocrResultCount: 1, rows: [{ timeEntryId: 71, weekEnding: new Date("2026-08-23"), status: "draft", enteredHours: 40, evidence: [{ evidenceId: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", extractionStatus: "extracted", extractedHours: 38, extractionConfidence: "medium", reviewerAssigned: true, differenceHours: 2, comparisonLabel: "Human comparison needed", discrepancyNotes: [{ note: "Please provide factual clarification for the visible source total.", createdAt: new Date("2026-08-26") }], createdAt: new Date("2026-08-26") }] }] } as any,
+    isLoading: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+    lastInput: undefined as any,
+  },
   consultantActionInboxTestState: {
     items: [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), state: "unread" }] as any[],
     isLoading: false,
@@ -191,6 +198,7 @@ vi.mock("@/lib/trpc", () => ({
       submitCheckIn: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantCheckInTestState.mutate(input); if (consultantCheckInTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantCheckInTestState.mutationError }) },
       timeSubmissions: { useQuery: () => ({ data: consultantTimeSubmissionTestState.data, isLoading: consultantTimeSubmissionTestState.isLoading, error: consultantTimeSubmissionTestState.error, refetch: consultantTimeSubmissionTestState.refetch }) },
       timeSubmissionPeriodTotal: { useQuery: () => ({ data: consultantTimeSubmissionTestState.periodTotal, isLoading: consultantTimeSubmissionTestState.periodTotalLoading, error: consultantTimeSubmissionTestState.periodTotalError, refetch: consultantTimeSubmissionTestState.periodTotalRefetch }) },
+      timeReconciliation: { useQuery: (input: any) => { consultantTimeReconciliationTestState.lastInput = input; return { data: consultantTimeReconciliationTestState.data, isLoading: consultantTimeReconciliationTestState.isLoading, error: consultantTimeReconciliationTestState.error, refetch: consultantTimeReconciliationTestState.refetch }; } },
       createTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.create(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
       updateTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.update(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
       submitTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.submit(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
@@ -353,6 +361,11 @@ afterEach(() => {
   consultantTimeSubmissionTestState.discrepancyError = null;
   consultantTimeSubmissionTestState.refetch.mockReset();
   consultantTimeSubmissionTestState.periodTotal = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), entryCount: 1, enteredHoursTotal: 40, statusCounts: { draft: 1, submitted: 0, approved: 0, exception: 0 } };
+  consultantTimeReconciliationTestState.data = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: null, entryCount: 1, enteredHoursTotal: 40, evidenceCount: 1, ocrResultCount: 1, rows: [{ timeEntryId: 71, weekEnding: new Date("2026-08-23"), status: "draft", enteredHours: 40, evidence: [{ evidenceId: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", extractionStatus: "extracted", extractedHours: 38, extractionConfidence: "medium", reviewerAssigned: true, differenceHours: 2, comparisonLabel: "Human comparison needed", discrepancyNotes: [{ note: "Please provide factual clarification for the visible source total.", createdAt: new Date("2026-08-26") }], createdAt: new Date("2026-08-26") }] }] };
+  consultantTimeReconciliationTestState.isLoading = false;
+  consultantTimeReconciliationTestState.error = null;
+  consultantTimeReconciliationTestState.refetch.mockReset();
+  consultantTimeReconciliationTestState.lastInput = undefined;
   consultantTimeSubmissionTestState.periodTotalLoading = false;
   consultantTimeSubmissionTestState.periodTotalError = null;
   consultantTimeSubmissionTestState.periodTotalRefetch.mockReset();
@@ -403,9 +416,62 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
+  });
+
+  it("renders the Consultant-only read-only time reconciliation with bounded filters, human comparison language, and safe own-record fields", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/time-reconciliation");
+
+    expect(screen.getByRole("heading", { name: "Time reconciliation" })).toBeTruthy();
+    expect(screen.getByText("Own records only")).toBeTruthy();
+    expect(screen.getByText("Entered hours")).toBeTruthy();
+    expect(screen.getAllByText("Human comparison needed")[0]).toBeTruthy();
+    expect(screen.getAllByText("Difference: 2 h")[0]).toBeTruthy();
+    expect(screen.getAllByText("Please provide factual clarification for the visible source total.")[0]).toBeTruthy();
+    expect(screen.queryByText(/payroll|billable amount|invoice|margin|utilization/i)).toBeNull();
+    expect(screen.queryByText(/Casey Rivera|private storage|fileKey|client name/i)).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Reconciliation status filter"), "submitted");
+    await waitFor(() => expect(consultantTimeReconciliationTestState.lastInput).toMatchObject({ status: "submitted" }));
+    const revise = screen.getAllByRole("button", { name: "Revise in Time submission" })[0];
+    revise.focus();
+    expect(document.activeElement).toBe(revise);
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace/time-submission"));
+  });
+
+  it("keeps Consultant reconciliation loading, unavailable, no-time, no-evidence, and no-OCR states distinct", () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantTimeReconciliationTestState.isLoading = true;
+    let view = renderRoute("/workspace/time-reconciliation");
+    expect(screen.getByText("Loading your protected time reconciliation…")).toBeTruthy();
+    view.unmount();
+
+    consultantTimeReconciliationTestState.isLoading = false;
+    consultantTimeReconciliationTestState.error = new Error("Unavailable");
+    view = renderRoute("/workspace/time-reconciliation");
+    expect(screen.getByText("Your protected reconciliation is unavailable.")).toBeTruthy();
+    view.unmount();
+
+    consultantTimeReconciliationTestState.error = null;
+    consultantTimeReconciliationTestState.data = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: null, entryCount: 0, enteredHoursTotal: 0, evidenceCount: 0, ocrResultCount: 0, rows: [] };
+    view = renderRoute("/workspace/time-reconciliation");
+    expect(screen.getByText("No time entries in this period")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Time submission" })).toBeTruthy();
+    view.unmount();
+
+    consultantTimeReconciliationTestState.data = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: null, entryCount: 1, enteredHoursTotal: 40, evidenceCount: 0, ocrResultCount: 0, rows: [{ timeEntryId: 71, weekEnding: new Date("2026-08-23"), status: "draft", enteredHours: 40, evidence: [] }] };
+    view = renderRoute("/workspace/time-reconciliation");
+    expect(screen.getByText(/No evidence in this period/i)).toBeTruthy();
+    view.unmount();
+
+    consultantTimeReconciliationTestState.data = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: null, entryCount: 1, enteredHoursTotal: 40, evidenceCount: 1, ocrResultCount: 0, rows: [{ timeEntryId: 71, weekEnding: new Date("2026-08-23"), status: "draft", enteredHours: 40, evidence: [{ evidenceId: 91, originalFileName: "pending-week.pdf", mimeType: "application/pdf", extractionStatus: "needs_human_review", extractedHours: null, extractionConfidence: "low", reviewerAssigned: false, differenceHours: null, comparisonLabel: "No OCR result", discrepancyNotes: [], createdAt: new Date("2026-08-26") }] }] };
+    view = renderRoute("/workspace/time-reconciliation");
+    expect(screen.getByText(/No OCR result in this period/i)).toBeTruthy();
+    expect(within(view.container).getAllByText("pending-week.pdf")[0]).toBeTruthy();
   });
 
   it("renders the consultant-only My Work dashboard from safe own-record signals", () => {

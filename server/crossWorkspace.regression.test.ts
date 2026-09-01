@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  user: ["Overview", "My work", "My activity", "My engagement", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;
@@ -73,6 +73,7 @@ describe("cross-workspace regression gate", () => {
       const caller = appRouter.createCaller(createContext(role));
       await expect(caller.consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.timeSubmissionPeriodTotal({ startDate: timeInput.weekEnding, endDate: timeInput.weekEnding })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.timeReconciliation({ startDate: timeInput.weekEnding, endDate: timeInput.weekEnding })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.createTimeSubmission(timeInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.updateTimeSubmission({ timeEntryId: 1, weekEnding: timeInput.weekEnding, hours: 40, note: timeInput.note })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.submitTimeSubmission({ timeEntryId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -118,6 +119,7 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.updateTimeSubmission");
     expect(procedures).toContain("consultant.submitTimeSubmission");
     expect(procedures).toContain("consultant.timeSubmissionPeriodTotal");
+    expect(procedures).toContain("consultant.timeReconciliation");
     expect(procedures).toContain("consultant.personalActivityTimeline");
     expect(procedures).toContain("consultant.prepareTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.completeTimesheetEvidenceUpload");
@@ -133,6 +135,7 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).not.toContain("finance.approveTimesheetEvidence");
     expect(procedures).not.toContain("consultant.resolveTimesheetDiscrepancy");
     expect(procedures).not.toContain("consultant.applyDiscrepancyCorrection");
+    expect(procedures).not.toContain("consultant.updateTimeReconciliation");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");
     expect(procedures).not.toContain("portal.issuePayment");

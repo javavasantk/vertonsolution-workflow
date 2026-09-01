@@ -675,6 +675,62 @@ export async function getConsultantTimeSubmissionPeriodTotal(userId: number, sta
   return { startDate, endDate, entryCount: rows.length, enteredHoursTotal: rows.reduce((sum, row) => sum + row.hours, 0), statusCounts };
 }
 
+type ConsultantReconciliationStatus = "draft" | "submitted" | "approved" | "exception";
+
+/** Builds a read-only own-record reconciliation model. A difference is factual arithmetic only and never changes a time, review, or financial state. */
+export function buildConsultantTimeReconciliation(
+  entries: Array<{ id: number; weekEnding: Date; hours: number; status: ConsultantReconciliationStatus }>,
+  evidence: Array<{ id: number; timeEntryId: number; originalFileName: string; mimeType: string; extractionStatus: "extracted" | "needs_human_review"; extractedHours: number | null; extractionConfidence: "high" | "medium" | "low"; createdAt: Date }>,
+  reviewedEvidenceIds: Set<number>,
+  notesByEvidence: Map<number, Array<{ note: string; createdAt: Date }>>,
+) {
+  const evidenceByTimeEntry = new Map<number, typeof evidence>();
+  evidence.forEach(row => evidenceByTimeEntry.set(row.timeEntryId, [...(evidenceByTimeEntry.get(row.timeEntryId) ?? []), row]));
+  const rows = entries.map(entry => ({
+    timeEntryId: entry.id,
+    weekEnding: entry.weekEnding,
+    status: entry.status,
+    enteredHours: entry.hours,
+    evidence: (evidenceByTimeEntry.get(entry.id) ?? []).map(item => ({
+      evidenceId: item.id,
+      originalFileName: item.originalFileName,
+      mimeType: item.mimeType,
+      extractionStatus: item.extractionStatus,
+      extractedHours: item.extractedHours,
+      extractionConfidence: item.extractionConfidence,
+      reviewerAssigned: reviewedEvidenceIds.has(item.id),
+      differenceHours: item.extractedHours === null ? null : entry.hours - item.extractedHours,
+      comparisonLabel: item.extractedHours === null ? "No OCR result" : item.extractedHours === entry.hours ? "Entered and OCR totals match" : "Human comparison needed",
+      discrepancyNotes: notesByEvidence.get(item.id) ?? [],
+      createdAt: item.createdAt,
+    })),
+  }));
+  const evidenceCount = rows.reduce((sum, row) => sum + row.evidence.length, 0);
+  const ocrResultCount = rows.reduce((sum, row) => sum + row.evidence.filter(item => item.extractedHours !== null).length, 0);
+  return { entryCount: rows.length, enteredHoursTotal: rows.reduce((sum, row) => sum + row.enteredHours, 0), evidenceCount, ocrResultCount, rows };
+}
+
+/** Projects only a session consultant's selected-period time entries, uploaded evidence metadata, OCR arithmetic, reviewer-assigned indicators, and factual notes. */
+export async function getConsultantTimeReconciliation(userId: number, input: { startDate: Date; endDate: Date; status?: ConsultantReconciliationStatus }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const entryConditions = [eq(timesheetEntries.userId, userId), gte(timesheetEntries.weekEnding, input.startDate), lte(timesheetEntries.weekEnding, input.endDate)];
+  if (input.status) entryConditions.push(eq(timesheetEntries.status, input.status));
+  const entries = await db.select({ id: timesheetEntries.id, weekEnding: timesheetEntries.weekEnding, hours: timesheetEntries.hours, status: timesheetEntries.status })
+    .from(timesheetEntries).where(and(...entryConditions)).orderBy(desc(timesheetEntries.weekEnding), desc(timesheetEntries.id));
+  const entryIds = entries.map(entry => entry.id);
+  const evidence = entryIds.length ? await db.select({ id: consultantTimesheetEvidence.id, timeEntryId: consultantTimesheetEvidence.timeEntryId, originalFileName: consultantTimesheetEvidence.originalFileName, mimeType: consultantTimesheetEvidence.mimeType, extractionStatus: consultantTimesheetEvidence.extractionStatus, extractedHours: consultantTimesheetEvidence.extractedHours, extractionConfidence: consultantTimesheetEvidence.extractionConfidence, createdAt: consultantTimesheetEvidence.createdAt })
+    .from(consultantTimesheetEvidence).where(and(eq(consultantTimesheetEvidence.userId, userId), inArray(consultantTimesheetEvidence.timeEntryId, entryIds))).orderBy(desc(consultantTimesheetEvidence.createdAt), desc(consultantTimesheetEvidence.id)) : [];
+  const evidenceIds = evidence.map(item => item.id);
+  const [reviewRows, noteRows] = evidenceIds.length ? await Promise.all([
+    db.select({ evidenceId: consultantTimesheetEvidenceReviews.evidenceId }).from(consultantTimesheetEvidenceReviews).where(inArray(consultantTimesheetEvidenceReviews.evidenceId, evidenceIds)),
+    db.select({ evidenceId: consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, note: consultantTimesheetEvidenceDiscrepancyNotes.note, createdAt: consultantTimesheetEvidenceDiscrepancyNotes.createdAt }).from(consultantTimesheetEvidenceDiscrepancyNotes).where(inArray(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, evidenceIds)).orderBy(desc(consultantTimesheetEvidenceDiscrepancyNotes.createdAt)),
+  ]) : [[], []];
+  const notesByEvidence = new Map<number, Array<{ note: string; createdAt: Date }>>();
+  noteRows.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), { note: note.note, createdAt: note.createdAt }]));
+  return { startDate: input.startDate, endDate: input.endDate, status: input.status ?? null, ...buildConsultantTimeReconciliation(entries, evidence, new Set(reviewRows.map(row => row.evidenceId)), notesByEvidence) };
+}
+
 async function getOwnedActiveAssignment(userId: number, assignmentId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");

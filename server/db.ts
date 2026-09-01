@@ -682,6 +682,52 @@ export async function getConsultantMyEngagement(userId: number) {
   return { assignment: latestAssignment, hasActiveAssignment: Boolean(activeAssignment), latestTimesheet };
 }
 
+/** Dedicated Consultant delivery projection. It reads only the session user's assignment relations and never uses the shared portal summary. */
+export async function getConsultantMyDeliveryContext(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const assignmentRows = await db
+    .select({
+      id: consultantAssignments.id,
+      projectLabel: clientProjects.name,
+      clientLabel: clientAccounts.name,
+      managerLabel: consultantAssignments.managerName,
+      allocationPercent: consultantAssignments.allocationPercent,
+      assignmentState: consultantAssignments.assignmentState,
+      startDate: consultantAssignments.startDate,
+      endDate: consultantAssignments.endDate,
+      updatedAt: consultantAssignments.updatedAt,
+    })
+    .from(consultantAssignments)
+    .leftJoin(clientProjects, eq(consultantAssignments.projectId, clientProjects.id))
+    .leftJoin(clientAccounts, eq(consultantAssignments.clientId, clientAccounts.id))
+    .where(eq(consultantAssignments.userId, userId))
+    .orderBy(desc(consultantAssignments.updatedAt), desc(consultantAssignments.id));
+  const activeAssignment = assignmentRows.find(row => row.assignmentState === "active") ?? null;
+  const assignment = activeAssignment ?? assignmentRows[0] ?? null;
+  if (!assignment) return { assignment: null, hasActiveAssignment: false, source: "Assignment record" as const, humanFollowUp: "No assignment record is available." };
+  const humanFollowUp = assignment.assignmentState === "roll_off"
+    ? "Human follow-up is available for the recorded assignment transition."
+    : assignment.endDate && assignment.endDate.getTime() - Date.now() <= 30 * 24 * 60 * 60 * 1000
+      ? "Human follow-up is available for the recorded assignment end date."
+      : "No assignment transition decision is made here.";
+  return {
+    assignment: {
+      projectLabel: assignment.projectLabel ?? "Project label not recorded",
+      clientLabel: assignment.clientLabel ?? "Client label not recorded",
+      managerLabel: assignment.managerLabel ?? "Designated engagement owner",
+      allocationPercent: assignment.allocationPercent,
+      assignmentState: assignment.assignmentState,
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      updatedAt: assignment.updatedAt,
+    },
+    hasActiveAssignment: Boolean(activeAssignment),
+    source: "Assignment record" as const,
+    humanFollowUp,
+  };
+}
+
 type ContinuityNoteInput = {
   category: "handoff_context" | "work_status" | "support_needed";
   factualNote: string;
@@ -825,6 +871,34 @@ export async function listConsultantTimeSubmissions(userId: number) {
     assignments,
     entries: entries.map(entry => ({ ...presentConsultantTimeSubmission(entry), evidence: evidenceByTimeEntry.get(entry.id) ?? [] })),
     designatedHumanOwner: assignments.find(row => row.assignmentState === "active")?.managerName || assignments[0]?.managerName || "Designated time reviewer",
+  };
+}
+
+/** Dedicated read-only Consultant time-history projection. It maps only the session user's time entries and their own private evidence metadata. */
+export async function listConsultantMyTimeHistory(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const entries = await db
+    .select({ id: timesheetEntries.id, weekEnding: timesheetEntries.weekEnding, hours: timesheetEntries.hours, status: timesheetEntries.status, note: timesheetEntries.note, updatedAt: timesheetEntries.updatedAt })
+    .from(timesheetEntries)
+    .where(eq(timesheetEntries.userId, userId))
+    .orderBy(desc(timesheetEntries.weekEnding), desc(timesheetEntries.id))
+    .limit(50);
+  const entryIds = entries.map(entry => entry.id);
+  const evidenceRows = entryIds.length
+    ? await db
+      .select({ id: consultantTimesheetEvidence.id, timeEntryId: consultantTimesheetEvidence.timeEntryId, originalFileName: consultantTimesheetEvidence.originalFileName, mimeType: consultantTimesheetEvidence.mimeType, fileSize: consultantTimesheetEvidence.fileSize, extractionStatus: consultantTimesheetEvidence.extractionStatus, extractedHours: consultantTimesheetEvidence.extractedHours, extractionConfidence: consultantTimesheetEvidence.extractionConfidence, createdAt: consultantTimesheetEvidence.createdAt, updatedAt: consultantTimesheetEvidence.updatedAt })
+      .from(consultantTimesheetEvidence)
+      .where(and(eq(consultantTimesheetEvidence.userId, userId), inArray(consultantTimesheetEvidence.timeEntryId, entryIds)))
+      .orderBy(desc(consultantTimesheetEvidence.createdAt), desc(consultantTimesheetEvidence.id))
+    : [];
+  const evidenceByEntryId = new Map<number, Array<(typeof evidenceRows)[number]>>();
+  evidenceRows.forEach(row => evidenceByEntryId.set(row.timeEntryId, [...(evidenceByEntryId.get(row.timeEntryId) ?? []), row]));
+  return {
+    source: "Time entry record" as const,
+    entryCount: entries.length,
+    evidenceCount: evidenceRows.length,
+    entries: entries.map(entry => ({ ...entry, evidence: evidenceByEntryId.get(entry.id) ?? [] })),
   };
 }
 

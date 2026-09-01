@@ -18,9 +18,11 @@ function Router() {
       <Route path="/workspace/my-work" component={() => <Home />} />
       <Route path="/workspace/my-activity" component={() => <Home />} />
       <Route path="/workspace/my-engagement" component={() => <Home />} />
+      <Route path="/workspace/my-delivery" component={() => <Home />} />
       <Route path="/workspace/engagement-continuity" component={() => <Home />} />
       <Route path="/workspace/check-ins" component={() => <Home />} />
       <Route path="/workspace/time-submission" component={() => <Home />} />
+      <Route path="/workspace/my-time-history" component={() => <Home />} />
       <Route path="/workspace/time-reconciliation" component={() => <Home />} />
       <Route path="/workspace/action-inbox" component={() => <Home />} />
       <Route path={"/workspace/talent/:id"} component={Home} />

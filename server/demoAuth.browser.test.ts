@@ -49,6 +49,21 @@ async function completeRecoveryJourney(page: import("playwright-core").Page, suf
   await expect.poll(() => page.getByText(/No time entry, approval, invoice, payroll, payment, or commercial action is available/i).count()).toBe(1);
   await page.screenshot({ path: `/home/ubuntu/consultant-my-engagement-${suffix}.png`, fullPage: true });
 
+  await page.goto(`${baseUrl}/workspace/my-delivery`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.getByRole("heading", { name: "My delivery context" }).count()).toBe(1);
+  await expect.poll(() => page.getByText(/Source:/).count()).toBeGreaterThan(0);
+  await expect.poll(() => page.getByText(/does not expose delivery demand, portfolio, colleague, document, commercial, or staffing information/i).count()).toBe(1);
+  await expect.poll(() => page.getByText(/Protected database-backed staffing demand|Time & billing readiness/i).count()).toBe(0);
+  await page.screenshot({ path: `/home/ubuntu/consultant-my-delivery-context-${suffix}.png`, fullPage: true });
+
+  await page.goto(`${baseUrl}/workspace/my-time-history`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.getByRole("heading", { name: "My time history" }).count()).toBe(1);
+  await expect.poll(() => page.getByText(/Source:/).count()).toBeGreaterThan(0);
+  await expect.poll(() => page.getByRole("button", { name: "Open time reconciliation" }).count()).toBe(1);
+  await expect.poll(() => page.getByText(/No billing metrics, invoices, payroll, payments, commercial values, client documents, or peer records are included/i).count()).toBe(1);
+  await expect.poll(() => page.getByText(/Time & billing readiness|billing-readiness view/i).count()).toBe(0);
+  await page.screenshot({ path: `/home/ubuntu/consultant-my-time-history-${suffix}.png`, fullPage: true });
+
   await page.goto(`${baseUrl}/workspace/engagement-continuity`, { waitUntil: "networkidle" });
   await expect.poll(() => page.getByRole("heading", { name: "Engagement continuity" }).count()).toBe(1);
   await expect.poll(() => page.getByText(/Source: assignment record/).count()).toBe(1);
@@ -265,7 +280,7 @@ describe("real browser demo authentication journey", () => {
       for (const [suffix, viewport] of [["desktop", { width: 1280, height: 900 }], ["mobile", { width: 390, height: 844 }]] as const) {
         const page = await browser.newPage({ viewport });
         await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
-        await page.getByLabel("Email address").fill("consultant@demo.vertonsolutions.com");
+        await page.getByLabel("Email address").fill("administrator@demo.vertonsolutions.com");
         await page.getByLabel("Password").fill("VertonDemo!2026");
         await page.getByRole("button", { name: /Enter Workforce Hub/ }).click();
         await page.waitForURL(`${baseUrl}/workspace`);

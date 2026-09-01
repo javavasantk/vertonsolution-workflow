@@ -312,6 +312,12 @@ export const appRouter = router({
       }
       return db.getConsultantMyEngagement(ctx.user.id);
     }),
+    myDeliveryContext: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant delivery context.' });
+      }
+      return db.getConsultantMyDeliveryContext(ctx.user.id);
+    }),
     engagementContinuity: protectedProcedure.query(({ ctx }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant engagement continuity notes.' });
@@ -343,6 +349,12 @@ export const appRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant time submissions.' });
       }
       return db.listConsultantTimeSubmissions(ctx.user.id);
+    }),
+    myTimeHistory: protectedProcedure.query(({ ctx }) => {
+      if (!['consultant', 'user'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your assigned role cannot access Consultant time history.' });
+      }
+      return db.listConsultantMyTimeHistory(ctx.user.id);
     }),
     timeSubmissionPeriodTotal: protectedProcedure.input(consultantTimeSubmissionPeriodSchema).query(({ ctx, input }) => {
       if (!['consultant', 'user'].includes(ctx.user.role)) {

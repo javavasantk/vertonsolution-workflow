@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantEngagementContinuityTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantTimeReconciliationTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
+const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuthState, resumeTestState, adminTestState, portalTestState, readinessTestState, newHireTestState, profileTestState, consultantMyWorkTestState, consultantActivityTimelineTestState, consultantEngagementTestState, consultantDeliveryContextTestState, consultantEngagementContinuityTestState, consultantTaskTestState, consultantCheckInTestState, consultantTimeSubmissionTestState, consultantTimeHistoryTestState, consultantTimeReconciliationTestState, consultantActionInboxTestState, financeTimesheetEvidenceTestState } = vi.hoisted(() => ({
   authState: {
     user: null as any,
     loading: false,
@@ -98,6 +98,12 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     isLoading: false,
     error: null as Error | null,
   },
+  consultantDeliveryContextTestState: {
+    data: { source: "assignment record", assignment: { projectLabel: "Northstar Commerce Cloud", clientLabel: "Northstar Retail", managerLabel: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: new Date("2026-12-31"), updatedAt: new Date("2026-08-26") }, humanFollowUp: "Current assignment relationship is recorded." } as any,
+    isLoading: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+  },
   consultantEngagementContinuityTestState: {
     data: { assignment: { projectLabel: "Northstar Commerce Cloud · Demo", managerLabel: "Casey Rivera", assignmentState: "active", endDate: new Date("2026-12-31"), updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, designatedHumanOwner: "Casey Rivera", notes: [{ id: 81, category: "handoff_context", factualNote: "The latest implementation handoff context is recorded for the designated human owner.", createdAt: new Date("2026-08-26") }] } as any,
     isLoading: false,
@@ -142,6 +148,12 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     periodTotalLoading: false,
     periodTotalError: null as Error | null,
     periodTotalRefetch: vi.fn(),
+  },
+  consultantTimeHistoryTestState: {
+    data: { source: "time entry records", entryCount: 1, evidenceCount: 1, entries: [{ id: 71, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned delivery hours.", updatedAt: new Date("2026-08-26"), evidence: [{ id: 91, originalFileName: "approved-week.pdf", extractionStatus: "extracted", extractedHours: 40 }] }] } as any,
+    isLoading: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
   },
   consultantTimeReconciliationTestState: {
     data: { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), status: null, entryCount: 1, enteredHoursTotal: 40, evidenceCount: 1, ocrResultCount: 1, rows: [{ timeEntryId: 71, weekEnding: new Date("2026-08-23"), status: "draft", enteredHours: 40, evidence: [{ evidenceId: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", extractionStatus: "extracted", extractedHours: 38, extractionConfidence: "medium", reviewerAssigned: true, differenceHours: 2, comparisonLabel: "Human comparison needed", discrepancyNotes: [{ note: "Please provide factual clarification for the visible source total.", createdAt: new Date("2026-08-26") }], createdAt: new Date("2026-08-26") }] }] } as any,
@@ -209,11 +221,13 @@ vi.mock("@/lib/trpc", () => ({
       myWork: { useQuery: () => ({ data: consultantMyWorkTestState.data, isLoading: consultantMyWorkTestState.isLoading, error: consultantMyWorkTestState.error, refetch: consultantMyWorkTestState.refetch }) },
       personalActivityTimeline: { useQuery: (input: any) => { consultantActivityTimelineTestState.lastInput = input; return { data: input?.cursor ? consultantActivityTimelineTestState.nextPage : consultantActivityTimelineTestState.firstPage, isLoading: consultantActivityTimelineTestState.isLoading, error: consultantActivityTimelineTestState.error, refetch: consultantActivityTimelineTestState.refetch }; } },
       myEngagement: { useQuery: () => ({ data: consultantEngagementTestState.data, isLoading: consultantEngagementTestState.isLoading, error: consultantEngagementTestState.error, refetch: vi.fn() }) },
+      myDeliveryContext: { useQuery: () => ({ data: consultantDeliveryContextTestState.data, isLoading: consultantDeliveryContextTestState.isLoading, error: consultantDeliveryContextTestState.error, refetch: consultantDeliveryContextTestState.refetch }) },
       engagementContinuity: { useQuery: () => ({ data: consultantEngagementContinuityTestState.data, isLoading: consultantEngagementContinuityTestState.isLoading, error: consultantEngagementContinuityTestState.error, refetch: consultantEngagementContinuityTestState.refetch }) },
       submitEngagementContinuityNote: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantEngagementContinuityTestState.mutate(input); if (consultantEngagementContinuityTestState.mutationError) options?.onError?.(consultantEngagementContinuityTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantEngagementContinuityTestState.mutationError }) },
       checkIns: { useQuery: () => ({ data: consultantCheckInTestState.data, isLoading: consultantCheckInTestState.isLoading, error: consultantCheckInTestState.error, refetch: consultantCheckInTestState.refetch }) },
       submitCheckIn: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantCheckInTestState.mutate(input); if (consultantCheckInTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantCheckInTestState.mutationError }) },
       timeSubmissions: { useQuery: () => ({ data: consultantTimeSubmissionTestState.data, isLoading: consultantTimeSubmissionTestState.isLoading, error: consultantTimeSubmissionTestState.error, refetch: consultantTimeSubmissionTestState.refetch }) },
+      myTimeHistory: { useQuery: () => ({ data: consultantTimeHistoryTestState.data, isLoading: consultantTimeHistoryTestState.isLoading, error: consultantTimeHistoryTestState.error, refetch: consultantTimeHistoryTestState.refetch }) },
       timeSubmissionPeriodTotal: { useQuery: () => ({ data: consultantTimeSubmissionTestState.periodTotal, isLoading: consultantTimeSubmissionTestState.periodTotalLoading, error: consultantTimeSubmissionTestState.periodTotalError, refetch: consultantTimeSubmissionTestState.periodTotalRefetch }) },
       timeReconciliation: { useQuery: (input: any) => { consultantTimeReconciliationTestState.lastInput = input; return { data: consultantTimeReconciliationTestState.data, isLoading: consultantTimeReconciliationTestState.isLoading, error: consultantTimeReconciliationTestState.error, refetch: consultantTimeReconciliationTestState.refetch }; } },
       createTimeSubmission: { useMutation: (options?: { onSuccess?: () => void; onError?: () => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.create(input); if (consultantTimeSubmissionTestState.mutationError) options?.onError?.(); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.mutationError }) },
@@ -355,6 +369,10 @@ afterEach(() => {
   consultantEngagementTestState.data = { assignment: { id: 1, projectName: "Northstar Commerce Cloud · Demo", clientName: "Northstar Retail · Demo", managerName: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: null, updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, latestTimesheet: { assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", updatedAt: new Date("2026-08-26") } };
   consultantEngagementTestState.isLoading = false;
   consultantEngagementTestState.error = null;
+  consultantDeliveryContextTestState.data = { source: "assignment record", assignment: { projectLabel: "Northstar Commerce Cloud", clientLabel: "Northstar Retail", managerLabel: "Casey Rivera", allocationPercent: 100, assignmentState: "active", startDate: new Date("2026-08-01"), endDate: new Date("2026-12-31"), updatedAt: new Date("2026-08-26") }, humanFollowUp: "Current assignment relationship is recorded." };
+  consultantDeliveryContextTestState.isLoading = false;
+  consultantDeliveryContextTestState.error = null;
+  consultantDeliveryContextTestState.refetch.mockReset();
   consultantEngagementContinuityTestState.data = { assignment: { projectLabel: "Northstar Commerce Cloud · Demo", managerLabel: "Casey Rivera", assignmentState: "active", endDate: new Date("2026-12-31"), updatedAt: new Date("2026-08-26") }, hasActiveAssignment: true, designatedHumanOwner: "Casey Rivera", notes: [{ id: 81, category: "handoff_context", factualNote: "The latest implementation handoff context is recorded for the designated human owner.", createdAt: new Date("2026-08-26") }] };
   consultantEngagementContinuityTestState.isLoading = false;
   consultantEngagementContinuityTestState.error = null;
@@ -397,6 +415,10 @@ afterEach(() => {
   consultantTimeSubmissionTestState.periodTotalLoading = false;
   consultantTimeSubmissionTestState.periodTotalError = null;
   consultantTimeSubmissionTestState.periodTotalRefetch.mockReset();
+  consultantTimeHistoryTestState.data = { source: "time entry records", entryCount: 1, evidenceCount: 1, entries: [{ id: 71, weekEnding: new Date("2026-08-23"), hours: 40, status: "draft", note: "Completed the planned delivery hours.", updatedAt: new Date("2026-08-26"), evidence: [{ id: 91, originalFileName: "approved-week.pdf", extractionStatus: "extracted", extractedHours: 40 }] }] };
+  consultantTimeHistoryTestState.isLoading = false;
+  consultantTimeHistoryTestState.error = null;
+  consultantTimeHistoryTestState.refetch.mockReset();
   consultantActionInboxTestState.items = [{ dedupKey: "onboarding-task:41:pending", source: "onboarding_task", title: "Review your workforce profile", status: "action_needed", designatedHumanOwner: "Workforce Operations", destination: "/workspace/onboarding", updatedAt: new Date("2026-08-26"), agingLabel: "Updated this week", state: "unread", dismissedAt: null, restoredAt: null, stateUpdatedAt: null }];
   consultantActionInboxTestState.isLoading = false;
   consultantActionInboxTestState.error = null;
@@ -446,9 +468,58 @@ describe("Workforce Hub role access", () => {
 
   it("limits consultant navigation to employee-relevant workspaces", () => {
     const items = getAllowedNavigation("Consultant").map(item => item.label);
-    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "Engagement continuity", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"]);
+    expect(items).toEqual(["Overview", "My work", "My activity", "My engagement", "My delivery context", "Engagement continuity", "Check-ins", "Time submission", "My time history", "Time reconciliation", "Action inbox", "Onboarding", "My profile"]);
     expect(items).not.toContain("Readiness");
     expect(items).not.toContain("Controls");
+    expect(items).not.toContain("Delivery");
+    expect(items).not.toContain("Time & billing");
+  });
+
+  it("renders dedicated Consultant delivery context and never falls back to shared Delivery", async () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/my-delivery");
+
+    expect(screen.getByRole("heading", { name: "My delivery context" })).toBeTruthy();
+    expect(screen.getByText("Northstar Commerce Cloud")).toBeTruthy();
+    expect(screen.getByText("Client label")).toBeTruthy();
+    expect(screen.getByText("Source: assignment record")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Delivery" })).toBeNull();
+    expect(screen.queryByText("Protected database-backed staffing demand, assignment, and capacity records.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Edit project/i })).toBeNull();
+
+    cleanup();
+    consultantDeliveryContextTestState.data = { source: "assignment record", assignment: null, humanFollowUp: "Contact the designated human owner." };
+    renderRoute("/workspace/my-delivery");
+    expect(screen.getByText("No assignment record is available.")).toBeTruthy();
+  });
+
+  it("renders dedicated Consultant time history with own evidence metadata and no financial controls", async () => {
+    const user = userEvent.setup();
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/my-time-history");
+
+    expect(screen.getByRole("heading", { name: "My time history" })).toBeTruthy();
+    expect(screen.getAllByText("40 h")[0]).toBeTruthy();
+    expect(screen.getAllByText("approved-week.pdf")[0]).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open time reconciliation" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Time & billing" })).toBeNull();
+    expect(screen.queryByText("Time & billing readiness")).toBeNull();
+    expect(screen.queryByRole("button", { name: /approve|invoice|payroll|payment/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open time reconciliation" }));
+    expect(window.location.pathname).toBe("/workspace/time-reconciliation");
+  });
+
+  it("renders dedicated Consultant delivery and time history loading and protected-error states", () => {
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    consultantDeliveryContextTestState.isLoading = true;
+    renderRoute("/workspace/my-delivery");
+    expect(screen.getByText("Loading your protected delivery context…")).toBeTruthy();
+
+    cleanup();
+    consultantDeliveryContextTestState.isLoading = false;
+    consultantTimeHistoryTestState.error = new Error("unavailable");
+    renderRoute("/workspace/my-time-history");
+    expect(screen.getByRole("alert").textContent).toContain("Your time history is unavailable.");
   });
 
   it("renders the Consultant-only read-only time reconciliation with bounded filters, human comparison language, and safe own-record fields", async () => {
@@ -1036,7 +1107,7 @@ describe("Workforce Hub login and protected workflow behavior", () => {
 
   it("renders seeded staffing demand, assignments, and timesheets in their protected operational views", async () => {
     const user = userEvent.setup();
-    setAuthenticatedRole("consultant", "Jamie Consultant");
+    setAuthenticatedRole("admin", "Avery Administrator");
     renderRoute("/workspace");
 
     await user.click(screen.getAllByRole("button", { name: "Delivery" })[0]!);
@@ -1651,14 +1722,13 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(portalTestState.summaryRefetch).not.toHaveBeenCalled();
   });
 
-  it("keeps a consultant project delivery view read-only", async () => {
-    const user = userEvent.setup();
+  it("removes Consultant shared project delivery access in favor of the dedicated own-record route", () => {
     setAuthenticatedRole("consultant", "Scoped consultant");
-    renderRoute("/workspace");
-    await user.click(screen.getAllByRole("button", { name: "Delivery" })[0]!);
+    renderRoute("/workspace/my-delivery");
 
+    expect(screen.queryByRole("button", { name: "Delivery" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit Northstar Commerce Cloud · Demo" })).toBeNull();
-    expect(screen.getByText("View only")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "My delivery context" })).toBeTruthy();
   });
 
   it("keeps finance project updates out of the scoped navigation and view", () => {

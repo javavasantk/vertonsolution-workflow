@@ -336,6 +336,57 @@ describe("access router", () => {
     submit.mockRestore();
   });
 
+  it("serves dedicated Consultant delivery context and time history only from own-record projections", async () => {
+    const delivery = {
+      source: "assignment record",
+      assignment: {
+        projectLabel: "Northstar Commerce Cloud",
+        clientLabel: "Northstar Retail",
+        managerLabel: "Casey Rivera",
+        allocationPercent: 100,
+        assignmentState: "active",
+        startDate: new Date("2026-08-01"),
+        endDate: new Date("2026-12-31"),
+        updatedAt: new Date("2026-08-26"),
+      },
+      humanFollowUp: "Current assignment relationship is recorded.",
+    };
+    const history = {
+      source: "time entry records",
+      entryCount: 1,
+      evidenceCount: 1,
+      entries: [{
+        id: 72,
+        weekEnding: new Date("2026-08-23"),
+        hours: 40,
+        status: "submitted",
+        note: "Completed documented delivery hours.",
+        updatedAt: new Date("2026-08-26"),
+        evidence: [{ id: 91, originalFileName: "approved-week.pdf", extractionStatus: "extracted", extractedHours: 40 }],
+      }],
+    };
+    const getDelivery = vi.spyOn(db, "getConsultantMyDeliveryContext").mockResolvedValue(delivery as never);
+    const getHistory = vi.spyOn(db, "listConsultantMyTimeHistory").mockResolvedValue(history as never);
+
+    await expect(appRouter.createCaller(createContext("consultant", 17)).consultant.myDeliveryContext()).resolves.toEqual(delivery);
+    await expect(appRouter.createCaller(createContext("user", 18)).consultant.myTimeHistory()).resolves.toEqual(history);
+    expect(getDelivery).toHaveBeenCalledWith(17);
+    expect(getHistory).toHaveBeenCalledWith(18);
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      await expect(appRouter.createCaller(createContext(role, 22)).consultant.myDeliveryContext()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(appRouter.createCaller(createContext(role, 22)).consultant.myTimeHistory()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(delivery.assignment).not.toHaveProperty("clientDocument");
+    expect(delivery.assignment).not.toHaveProperty("commercialRate");
+    expect(delivery.assignment).not.toHaveProperty("otherAssignment");
+    expect(history.entries[0]).not.toHaveProperty("payrollAmount");
+    expect(history.entries[0]).not.toHaveProperty("invoiceId");
+    expect(history.entries[0].evidence[0]).not.toHaveProperty("fileKey");
+    expect(history.entries[0].evidence[0]).not.toHaveProperty("sourceContent");
+    getDelivery.mockRestore();
+    getHistory.mockRestore();
+  });
+
   it("prepares private client-approved timesheet upload evidence only for the current consultant's own time entry", async () => {
     const createUpload = vi.spyOn(db, "createConsultantTimesheetUploadSession").mockResolvedValue({ id: "f4c4c2a6-17fb-4d62-b119-784831553898", fileKey: "consultant-timesheets/17/private.pdf", expiresAt: new Date("2026-08-27") } as never);
     const input = { timeEntryId: 72, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 256, confirmClientApproved: true as const };

@@ -11,8 +11,8 @@ const roleMatrix = {
   delivery_manager: ["Overview", "Talent pipeline", "Onboarding", "Delivery", "My profile"],
   project_manager: ["Overview", "Delivery", "Time & billing", "My profile"],
   finance: ["Overview", "Time & billing", "Controls", "My profile"],
-  consultant: ["Overview", "My work", "My activity", "My engagement", "Engagement continuity", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
-  user: ["Overview", "My work", "My activity", "My engagement", "Engagement continuity", "Check-ins", "Time submission", "Time reconciliation", "Action inbox", "Onboarding", "Delivery", "Time & billing", "My profile"],
+  consultant: ["Overview", "My work", "My activity", "My engagement", "My delivery context", "Engagement continuity", "Check-ins", "Time submission", "My time history", "Time reconciliation", "Action inbox", "Onboarding", "My profile"],
+  user: ["Overview", "My work", "My activity", "My engagement", "My delivery context", "Engagement continuity", "Check-ins", "Time submission", "My time history", "Time reconciliation", "Action inbox", "Onboarding", "My profile"],
 } as const;
 
 type StoredRole = keyof typeof roleMatrix;
@@ -32,6 +32,12 @@ describe("cross-workspace regression gate", () => {
       expect(getAllowedNavigation(roleKey).map(item => item.label)).toEqual(expectedPages);
       expect(resolveWorkspacePage(roleKey, "Admin center")).toBe(expectedPages.includes("Admin center") ? "Admin center" : "Overview");
       expect(resolveWorkspacePage(roleKey, "My profile")).toBe("My profile");
+      if (["consultant", "user"].includes(storedRole)) {
+        expect(resolveWorkspacePage(roleKey, "My delivery context")).toBe("My delivery context");
+        expect(resolveWorkspacePage(roleKey, "My time history")).toBe("My time history");
+        expect(resolveWorkspacePage(roleKey, "Delivery")).toBe("Overview");
+        expect(resolveWorkspacePage(roleKey, "Time & billing")).toBe("Overview");
+      }
     }
   });
 
@@ -66,12 +72,14 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("denies Consultant continuity, time-submission, private-evidence, and factual-response procedures to every non-consultant-compatible role", async () => {
+  it("denies Consultant delivery-context, time-history, continuity, time-submission, private-evidence, and factual-response procedures to every non-consultant-compatible role", async () => {
     const timeInput = { assignmentId: 1, weekEnding: new Date("2026-08-30"), hours: 40, note: "Completed documented delivery hours." };
     const evidenceInput = { timeEntryId: 1, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 128, confirmClientApproved: true as const };
     const continuityInput = { category: "handoff_context" as const, factualNote: "A factual handoff context is recorded for designated human follow-up." };
     for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
       const caller = appRouter.createCaller(createContext(role));
+      await expect(caller.consultant.myDeliveryContext()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.myTimeHistory()).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.engagementContinuity()).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.submitEngagementContinuityNote(continuityInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.timeSubmissions()).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -124,6 +132,8 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.submitTimeSubmission");
     expect(procedures).toContain("consultant.timeSubmissionPeriodTotal");
     expect(procedures).toContain("consultant.timeReconciliation");
+    expect(procedures).toContain("consultant.myDeliveryContext");
+    expect(procedures).toContain("consultant.myTimeHistory");
     expect(procedures).toContain("consultant.personalActivityTimeline");
     expect(procedures).toContain("consultant.engagementContinuity");
     expect(procedures).toContain("consultant.submitEngagementContinuityNote");

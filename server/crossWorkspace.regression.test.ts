@@ -66,7 +66,7 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("denies Consultant Time Submission and private evidence procedures to every non-consultant-compatible role", async () => {
+  it("denies Consultant Time Submission, private evidence, and factual discrepancy-response procedures to every non-consultant-compatible role", async () => {
     const timeInput = { assignmentId: 1, weekEnding: new Date("2026-08-30"), hours: 40, note: "Completed documented delivery hours." };
     const evidenceInput = { timeEntryId: 1, fileName: "approved-week.pdf", mimeType: "application/pdf" as const, fileSize: 128, confirmClientApproved: true as const };
     for (const role of (Object.keys(roleMatrix) as StoredRole[]).filter(role => !["consultant", "user"].includes(role))) {
@@ -79,6 +79,8 @@ describe("cross-workspace regression gate", () => {
       await expect(caller.consultant.prepareTimesheetEvidenceUpload(evidenceInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.completeTimesheetEvidenceUpload({ sessionId: "f4c4c2a6-17fb-4d62-b119-784831553898" })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(caller.consultant.retryTimesheetHoursExtraction({ evidenceId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.acknowledgeTimesheetEvidenceDiscrepancy({ reviewerNoteId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.respondToTimesheetEvidenceDiscrepancy({ reviewerNoteId: 1, body: "The documented source total remains forty hours." })).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
   });
 
@@ -106,7 +108,7 @@ describe("cross-workspace regression gate", () => {
     }
   });
 
-  it("keeps the workforce mutation surface limited to approved curation, own-record time, private evidence extraction, and inbox-state procedures", () => {
+  it("keeps the workforce mutation surface limited to approved curation, own-record time, factual human follow-up, private evidence extraction, and inbox-state procedures", () => {
     const procedures = Object.keys(appRouter._def.procedures);
     expect(procedures).toContain("access.assignRole");
     expect(procedures).toContain("profile.requestReview");
@@ -120,6 +122,8 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).toContain("consultant.prepareTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.completeTimesheetEvidenceUpload");
     expect(procedures).toContain("consultant.retryTimesheetHoursExtraction");
+    expect(procedures).toContain("consultant.acknowledgeTimesheetEvidenceDiscrepancy");
+    expect(procedures).toContain("consultant.respondToTimesheetEvidenceDiscrepancy");
     expect(procedures).toContain("finance.assignTimesheetEvidenceReviewer");
     expect(procedures).toContain("finance.addTimesheetEvidenceDiscrepancyNote");
     expect(procedures).toContain("consultant.markActionRead");
@@ -127,6 +131,8 @@ describe("cross-workspace regression gate", () => {
     expect(procedures).not.toContain("portal.approveTimesheet");
     expect(procedures).not.toContain("consultant.applyExtractedHours");
     expect(procedures).not.toContain("finance.approveTimesheetEvidence");
+    expect(procedures).not.toContain("consultant.resolveTimesheetDiscrepancy");
+    expect(procedures).not.toContain("consultant.applyDiscrepancyCorrection");
     expect(procedures).not.toContain("portal.createInvoice");
     expect(procedures).not.toContain("portal.calculatePayroll");
     expect(procedures).not.toContain("portal.issuePayment");

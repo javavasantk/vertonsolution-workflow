@@ -331,6 +331,36 @@ export const consultantTimesheetEvidenceDiscrepancyNotes = mysqlTable("consultan
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** A Consultant may acknowledge a reviewer note only on evidence owned by that Consultant. Acknowledgement is not resolution, correction, or approval. */
+export const consultantTimesheetEvidenceNoteAcknowledgements = mysqlTable("consultant_timesheet_evidence_note_acknowledgements", {
+  id: int("id").autoincrement().primaryKey(),
+  reviewerNoteId: int("reviewerNoteId").notNull().references(() => consultantTimesheetEvidenceDiscrepancyNotes.id),
+  evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
+  userId: int("userId").notNull().references(() => users.id),
+  acknowledgedAt: timestamp("acknowledgedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("ts_note_ack_uq").on(table.reviewerNoteId, table.userId)]);
+
+/** One bounded factual Consultant response per reviewer note. It is a request for designated human follow-up, not a timesheet or financial outcome. */
+export const consultantTimesheetEvidenceDiscrepancyResponses = mysqlTable("consultant_timesheet_evidence_discrepancy_responses", {
+  id: int("id").autoincrement().primaryKey(),
+  reviewerNoteId: int("reviewerNoteId").notNull().references(() => consultantTimesheetEvidenceDiscrepancyNotes.id),
+  evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
+  authorUserId: int("authorUserId").notNull().references(() => users.id),
+  body: varchar("body", { length: 500 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("ts_note_response_uq").on(table.reviewerNoteId, table.authorUserId)]);
+
+/** Immutable factual activity for a Consultant acknowledgement or response. It contains no private document content or reviewer identity. */
+export const consultantTimesheetEvidenceResponseActivities = mysqlTable("consultant_timesheet_evidence_response_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  evidenceId: int("evidenceId").notNull().references(() => consultantTimesheetEvidence.id),
+  userId: int("userId").notNull().references(() => users.id),
+  reviewerNoteId: int("reviewerNoteId").notNull().references(() => consultantTimesheetEvidenceDiscrepancyNotes.id),
+  activityType: mysqlEnum("activityType", ["discrepancy_acknowledged", "discrepancy_response_submitted"]).notNull(),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+}, table => [uniqueIndex("ts_resp_activity_uq").on(table.reviewerNoteId, table.userId, table.activityType)]);
+
 /** Session-scoped presentation state for deterministic Action Inbox items. Reminder content remains derived from protected source records. */
 export const consultantActionInboxStates = mysqlTable("consultant_action_inbox_states", {
   id: int("id").autoincrement().primaryKey(),
@@ -370,5 +400,8 @@ export type ConsultantTimesheetEvidence = typeof consultantTimesheetEvidence.$in
 export type ConsultantTimesheetUploadSession = typeof consultantTimesheetUploadSessions.$inferSelect;
 export type ConsultantTimesheetEvidenceReview = typeof consultantTimesheetEvidenceReviews.$inferSelect;
 export type ConsultantTimesheetEvidenceDiscrepancyNote = typeof consultantTimesheetEvidenceDiscrepancyNotes.$inferSelect;
+export type ConsultantTimesheetEvidenceNoteAcknowledgement = typeof consultantTimesheetEvidenceNoteAcknowledgements.$inferSelect;
+export type ConsultantTimesheetEvidenceDiscrepancyResponse = typeof consultantTimesheetEvidenceDiscrepancyResponses.$inferSelect;
+export type ConsultantTimesheetEvidenceResponseActivity = typeof consultantTimesheetEvidenceResponseActivities.$inferSelect;
 export type ConsultantActionInboxState = typeof consultantActionInboxStates.$inferSelect;
 export type OperationalActivity = typeof operationalActivities.$inferSelect;

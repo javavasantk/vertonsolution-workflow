@@ -107,6 +107,8 @@ const consultantTimesheetEvidenceMetadataSchema = z.object({
 });
 const consultantTimesheetEvidenceCompletionSchema = z.object({ sessionId: z.string().uuid() });
 const consultantTimesheetEvidenceRetrySchema = z.object({ evidenceId: z.number().int().positive() });
+const consultantTimesheetEvidenceDiscrepancyAcknowledgementSchema = z.object({ reviewerNoteId: z.number().int().positive() });
+const consultantTimesheetEvidenceDiscrepancyResponseSchema = z.object({ reviewerNoteId: z.number().int().positive(), body: z.string().trim().min(10).max(500) });
 const consultantTimeSubmissionPeriodSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
@@ -183,6 +185,22 @@ function enforceConsultantTimesheetOcrRateLimit(userId: number) {
 
 export function resetConsultantTimesheetOcrRateLimitsForTests() {
   consultantTimesheetOcrWindows.clear();
+}
+
+const consultantTimesheetDiscrepancyResponseWindows = new Map<number, { startedAt: number; count: number }>();
+function enforceConsultantTimesheetDiscrepancyResponseRateLimit(userId: number) {
+  const now = Date.now();
+  const current = consultantTimesheetDiscrepancyResponseWindows.get(userId);
+  if (!current || now - current.startedAt >= 60_000) {
+    consultantTimesheetDiscrepancyResponseWindows.set(userId, { startedAt: now, count: 1 });
+    return;
+  }
+  if (current.count >= 12) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait before acknowledging or responding to more timesheet discrepancy notes." });
+  current.count += 1;
+}
+
+export function resetConsultantTimesheetDiscrepancyResponseRateLimitsForTests() {
+  consultantTimesheetDiscrepancyResponseWindows.clear();
 }
 
 export const appRouter = router({
@@ -366,6 +384,26 @@ export const appRouter = router({
       } catch (error) {
         if (error instanceof Error && error.message === 'Timesheet evidence was not found') throw new TRPCError({ code: 'NOT_FOUND', message: 'Timesheet evidence was not found for this account.' });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'The private timesheet hours extraction could not be retried.' });
+      }
+    }),
+    acknowledgeTimesheetEvidenceDiscrepancy: protectedProcedure.input(consultantTimesheetEvidenceDiscrepancyAcknowledgementSchema).mutation(async ({ ctx, input }) => {
+      if (!["consultant", "user"].includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Your assigned role cannot acknowledge timesheet discrepancy notes." });
+      enforceConsultantTimesheetDiscrepancyResponseRateLimit(ctx.user.id);
+      try {
+        return await db.acknowledgeConsultantTimesheetEvidenceDiscrepancy(ctx.user.id, input.reviewerNoteId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Your timesheet discrepancy acknowledgement could not be saved.";
+        throw new TRPCError({ code: message.includes("not found") ? "NOT_FOUND" : "INTERNAL_SERVER_ERROR", message });
+      }
+    }),
+    respondToTimesheetEvidenceDiscrepancy: protectedProcedure.input(consultantTimesheetEvidenceDiscrepancyResponseSchema).mutation(async ({ ctx, input }) => {
+      if (!["consultant", "user"].includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Your assigned role cannot respond to timesheet discrepancy notes." });
+      enforceConsultantTimesheetDiscrepancyResponseRateLimit(ctx.user.id);
+      try {
+        return await db.createConsultantTimesheetEvidenceDiscrepancyResponse(ctx.user.id, input.reviewerNoteId, input.body);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Your factual discrepancy response could not be saved.";
+        throw new TRPCError({ code: message.includes("not found") ? "NOT_FOUND" : "INTERNAL_SERVER_ERROR", message });
       }
     }),
     actionInbox: protectedProcedure.query(({ ctx }) => {

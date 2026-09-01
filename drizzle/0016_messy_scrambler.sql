@@ -1,0 +1,1 @@
+ALTER TABLE `consultant_timesheet_evidence_response_activities` ADD CONSTRAINT `ts_resp_activity_uq` UNIQUE(`reviewerNoteId`,`userId`,`activityType`);

@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
-import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
+import { accessRoleChanges, candidateProfiles, clientAccounts, clientProjects, consultantActionInboxStates, consultantAssignments, consultantCheckInActivities, consultantCheckIns, consultantOnboardingTaskActivities, consultantOnboardingTasks, consultantTimeEntryActivities, consultantTimesheetEvidence, consultantTimesheetEvidenceActivities, consultantTimesheetEvidenceDiscrepancyNotes, consultantTimesheetEvidenceDiscrepancyResponses, consultantTimesheetEvidenceNoteAcknowledgements, consultantTimesheetEvidenceResponseActivities, consultantTimesheetEvidenceReviews, consultantTimesheetUploadSessions, employeeProfileUpdateActivities, employeeProfiles, InsertUser, onboardingAssignments, operationalActivities, resumeUploads, resumeUploadSessions, staffingDemands, timesheetEntries, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 
@@ -638,14 +638,19 @@ export async function listConsultantTimeSubmissions(userId: number) {
       .orderBy(desc(consultantTimesheetEvidence.createdAt)),
   ]);
   const evidenceIds = evidenceRows.map(row => row.id);
-  const [reviewRows, discrepancyNotes] = evidenceIds.length ? await Promise.all([
+  const [reviewRows, discrepancyNotes, acknowledgements, responses] = evidenceIds.length ? await Promise.all([
     db.select({ evidenceId: consultantTimesheetEvidenceReviews.evidenceId }).from(consultantTimesheetEvidenceReviews).where(inArray(consultantTimesheetEvidenceReviews.evidenceId, evidenceIds)),
     db.select({ id: consultantTimesheetEvidenceDiscrepancyNotes.id, evidenceId: consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, note: consultantTimesheetEvidenceDiscrepancyNotes.note, createdAt: consultantTimesheetEvidenceDiscrepancyNotes.createdAt }).from(consultantTimesheetEvidenceDiscrepancyNotes).where(inArray(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, evidenceIds)).orderBy(desc(consultantTimesheetEvidenceDiscrepancyNotes.createdAt)),
-  ]) : [[], []];
+    db.select({ reviewerNoteId: consultantTimesheetEvidenceNoteAcknowledgements.reviewerNoteId, acknowledgedAt: consultantTimesheetEvidenceNoteAcknowledgements.acknowledgedAt }).from(consultantTimesheetEvidenceNoteAcknowledgements).where(and(eq(consultantTimesheetEvidenceNoteAcknowledgements.userId, userId), inArray(consultantTimesheetEvidenceNoteAcknowledgements.evidenceId, evidenceIds))),
+    db.select({ reviewerNoteId: consultantTimesheetEvidenceDiscrepancyResponses.reviewerNoteId, body: consultantTimesheetEvidenceDiscrepancyResponses.body, createdAt: consultantTimesheetEvidenceDiscrepancyResponses.createdAt }).from(consultantTimesheetEvidenceDiscrepancyResponses).where(and(eq(consultantTimesheetEvidenceDiscrepancyResponses.authorUserId, userId), inArray(consultantTimesheetEvidenceDiscrepancyResponses.evidenceId, evidenceIds))),
+  ]) : [[], [], [], []];
   const reviewedEvidenceIds = new Set(reviewRows.map(row => row.evidenceId));
-  const notesByEvidence = new Map<number, typeof discrepancyNotes>();
-  discrepancyNotes.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), note]));
-  const evidenceByTimeEntry = new Map<number, Array<ReturnType<typeof presentConsultantTimesheetEvidence> & { designatedReviewerAssigned: boolean; discrepancyNotes: typeof discrepancyNotes }>>();
+  const acknowledgementByNoteId = new Map(acknowledgements.map(row => [row.reviewerNoteId, row.acknowledgedAt]));
+  const responseByNoteId = new Map(responses.map(row => [row.reviewerNoteId, row]));
+  const consultantNotes = discrepancyNotes.map(note => ({ ...note, acknowledgedAt: acknowledgementByNoteId.get(note.id) ?? null, response: responseByNoteId.get(note.id) ?? null }));
+  const notesByEvidence = new Map<number, typeof consultantNotes>();
+  consultantNotes.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), note]));
+  const evidenceByTimeEntry = new Map<number, Array<ReturnType<typeof presentConsultantTimesheetEvidence> & { designatedReviewerAssigned: boolean; discrepancyNotes: typeof consultantNotes }>>();
   evidenceRows.forEach(row => {
     const evidence = evidenceByTimeEntry.get(row.timeEntryId) ?? [];
     evidence.push({ ...presentConsultantTimesheetEvidence(row), designatedReviewerAssigned: reviewedEvidenceIds.has(row.id), discrepancyNotes: notesByEvidence.get(row.id) ?? [] });
@@ -867,13 +872,24 @@ export async function listFinanceTimesheetEvidenceReview() {
     .orderBy(desc(consultantTimesheetEvidence.createdAt));
   const evidenceIds = rows.map(row => row.evidenceId);
   const noteAuthor = alias(users, "timesheetEvidenceNoteAuthor");
-  const notes = evidenceIds.length ? await db.select({ evidenceId: consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, id: consultantTimesheetEvidenceDiscrepancyNotes.id, note: consultantTimesheetEvidenceDiscrepancyNotes.note, createdAt: consultantTimesheetEvidenceDiscrepancyNotes.createdAt, authorUserId: consultantTimesheetEvidenceDiscrepancyNotes.authorUserId, authorName: noteAuthor.name })
-    .from(consultantTimesheetEvidenceDiscrepancyNotes)
-    .leftJoin(noteAuthor, eq(noteAuthor.id, consultantTimesheetEvidenceDiscrepancyNotes.authorUserId))
-    .where(inArray(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, evidenceIds))
-    .orderBy(desc(consultantTimesheetEvidenceDiscrepancyNotes.createdAt)) : [];
-  const notesByEvidence = new Map<number, typeof notes>();
-  notes.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), note]));
+  const [notes, acknowledgements, responses] = evidenceIds.length ? await Promise.all([
+    db.select({ evidenceId: consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, id: consultantTimesheetEvidenceDiscrepancyNotes.id, note: consultantTimesheetEvidenceDiscrepancyNotes.note, createdAt: consultantTimesheetEvidenceDiscrepancyNotes.createdAt, authorUserId: consultantTimesheetEvidenceDiscrepancyNotes.authorUserId, authorName: noteAuthor.name })
+      .from(consultantTimesheetEvidenceDiscrepancyNotes)
+      .leftJoin(noteAuthor, eq(noteAuthor.id, consultantTimesheetEvidenceDiscrepancyNotes.authorUserId))
+      .where(inArray(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, evidenceIds))
+      .orderBy(desc(consultantTimesheetEvidenceDiscrepancyNotes.createdAt)),
+    db.select({ reviewerNoteId: consultantTimesheetEvidenceNoteAcknowledgements.reviewerNoteId, acknowledgedAt: consultantTimesheetEvidenceNoteAcknowledgements.acknowledgedAt })
+      .from(consultantTimesheetEvidenceNoteAcknowledgements)
+      .where(inArray(consultantTimesheetEvidenceNoteAcknowledgements.evidenceId, evidenceIds)),
+    db.select({ reviewerNoteId: consultantTimesheetEvidenceDiscrepancyResponses.reviewerNoteId, body: consultantTimesheetEvidenceDiscrepancyResponses.body, createdAt: consultantTimesheetEvidenceDiscrepancyResponses.createdAt })
+      .from(consultantTimesheetEvidenceDiscrepancyResponses)
+      .where(inArray(consultantTimesheetEvidenceDiscrepancyResponses.evidenceId, evidenceIds)),
+  ]) : [[], [], []];
+  const acknowledgementByNoteId = new Map(acknowledgements.map(row => [row.reviewerNoteId, row.acknowledgedAt]));
+  const responseByNoteId = new Map(responses.map(row => [row.reviewerNoteId, row]));
+  const financeNotes = notes.map(note => ({ ...note, consultantAcknowledgedAt: acknowledgementByNoteId.get(note.id) ?? null, consultantResponse: responseByNoteId.get(note.id) ?? null }));
+  const notesByEvidence = new Map<number, typeof financeNotes>();
+  financeNotes.forEach(note => notesByEvidence.set(note.evidenceId, [...(notesByEvidence.get(note.evidenceId) ?? []), note]));
   return rows.map(row => ({ ...row, discrepancyNotes: notesByEvidence.get(row.evidenceId) ?? [] }));
 }
 
@@ -909,6 +925,49 @@ export async function addFinanceTimesheetEvidenceDiscrepancyNote(authorUserId: n
   const occurredAt = new Date();
   await db.insert(consultantTimesheetEvidenceDiscrepancyNotes).values({ evidenceId, authorUserId, note, createdAt: occurredAt });
   return { evidenceId, authorUserId, note, createdAt: occurredAt };
+}
+
+async function getOwnedTimesheetEvidenceReviewerNote(userId: number, reviewerNoteId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  const rows = await db.select({ reviewerNoteId: consultantTimesheetEvidenceDiscrepancyNotes.id, evidenceId: consultantTimesheetEvidence.id })
+    .from(consultantTimesheetEvidenceDiscrepancyNotes)
+    .innerJoin(consultantTimesheetEvidence, eq(consultantTimesheetEvidenceDiscrepancyNotes.evidenceId, consultantTimesheetEvidence.id))
+    .where(and(eq(consultantTimesheetEvidenceDiscrepancyNotes.id, reviewerNoteId), eq(consultantTimesheetEvidence.userId, userId)))
+    .limit(1);
+  if (!rows[0]) throw new Error("Your timesheet discrepancy note was not found");
+  return { db, ...rows[0] };
+}
+
+/** Acknowledges only a reviewer note attached to the current Consultant's own evidence. It never resolves, corrects, approves, or changes any source state. */
+export async function acknowledgeConsultantTimesheetEvidenceDiscrepancy(userId: number, reviewerNoteId: number) {
+  const { db, evidenceId } = await getOwnedTimesheetEvidenceReviewerNote(userId, reviewerNoteId);
+  const occurredAt = new Date();
+  await db.insert(consultantTimesheetEvidenceNoteAcknowledgements).values({ reviewerNoteId, evidenceId, userId, acknowledgedAt: occurredAt, createdAt: occurredAt })
+    .onDuplicateKeyUpdate({ set: { reviewerNoteId, userId } });
+  await db.insert(consultantTimesheetEvidenceResponseActivities).values({ evidenceId, userId, reviewerNoteId, activityType: "discrepancy_acknowledged", occurredAt })
+    .onDuplicateKeyUpdate({ set: { reviewerNoteId, userId, activityType: "discrepancy_acknowledged" } });
+  const acknowledgement = await db.select({ acknowledgedAt: consultantTimesheetEvidenceNoteAcknowledgements.acknowledgedAt, createdAt: consultantTimesheetEvidenceNoteAcknowledgements.createdAt })
+    .from(consultantTimesheetEvidenceNoteAcknowledgements)
+    .where(and(eq(consultantTimesheetEvidenceNoteAcknowledgements.reviewerNoteId, reviewerNoteId), eq(consultantTimesheetEvidenceNoteAcknowledgements.userId, userId)))
+    .limit(1);
+  return { reviewerNoteId, evidenceId, acknowledgedAt: acknowledgement[0]?.acknowledgedAt ?? occurredAt, createdAt: acknowledgement[0]?.createdAt ?? occurredAt };
+}
+
+/** Stores at most one bounded factual Consultant response for each reviewer note. Duplicate/concurrent retries return the immutable first response and do not update source states. */
+export async function createConsultantTimesheetEvidenceDiscrepancyResponse(userId: number, reviewerNoteId: number, body: string) {
+  const { db, evidenceId } = await getOwnedTimesheetEvidenceReviewerNote(userId, reviewerNoteId);
+  const occurredAt = new Date();
+  await db.insert(consultantTimesheetEvidenceDiscrepancyResponses).values({ reviewerNoteId, evidenceId, authorUserId: userId, body, createdAt: occurredAt })
+    .onDuplicateKeyUpdate({ set: { reviewerNoteId, authorUserId: userId } });
+  await db.insert(consultantTimesheetEvidenceResponseActivities).values({ evidenceId, userId, reviewerNoteId, activityType: "discrepancy_response_submitted", occurredAt })
+    .onDuplicateKeyUpdate({ set: { reviewerNoteId, userId, activityType: "discrepancy_response_submitted" } });
+  const response = await db.select({ body: consultantTimesheetEvidenceDiscrepancyResponses.body, createdAt: consultantTimesheetEvidenceDiscrepancyResponses.createdAt })
+    .from(consultantTimesheetEvidenceDiscrepancyResponses)
+    .where(and(eq(consultantTimesheetEvidenceDiscrepancyResponses.reviewerNoteId, reviewerNoteId), eq(consultantTimesheetEvidenceDiscrepancyResponses.authorUserId, userId)))
+    .limit(1);
+  if (!response[0]) throw new Error("Your factual discrepancy response could not be saved");
+  return { reviewerNoteId, evidenceId, body: response[0].body, createdAt: response[0].createdAt };
 }
 
 /** Returns a private object key only to an internal server-side document route after Finance authorization. */
@@ -996,7 +1055,7 @@ export async function setConsultantActionInboxState(userId: number, dedupKey: st
 
 export type ConsultantPersonalTimelineEvent = {
   eventId: string;
-  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
+  eventType: "onboarding_task_acknowledged" | "check_in_submitted" | "time_entry_created" | "time_entry_updated" | "time_entry_submitted" | "timesheet_evidence_uploaded" | "timesheet_hours_extracted" | "timesheet_evidence_needs_human_review" | "timesheet_discrepancy_acknowledged" | "timesheet_discrepancy_response_submitted" | "profile_update_requested" | "action_inbox_read" | "action_inbox_dismissed";
   source: "onboarding" | "check_in" | "time_submission" | "timesheet_evidence" | "profile" | "action_inbox";
   summary: string;
   occurredAt: Date;
@@ -1047,7 +1106,7 @@ export function paginateConsultantPersonalActivityEvents(events: ConsultantPerso
 export async function listConsultantPersonalActivityTimeline(userId: number, input: { cursor?: string; limit?: number } = {}) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
-  const [onboardingActivities, checkInActivities, timeEntryActivities, evidenceActivities, profileActivities, actionStates] = await Promise.all([
+  const [onboardingActivities, checkInActivities, timeEntryActivities, evidenceActivities, responseActivities, profileActivities, actionStates] = await Promise.all([
     db.select({ id: consultantOnboardingTaskActivities.id, activityType: consultantOnboardingTaskActivities.activityType, occurredAt: consultantOnboardingTaskActivities.occurredAt })
       .from(consultantOnboardingTaskActivities).where(eq(consultantOnboardingTaskActivities.userId, userId)),
     db.select({ id: consultantCheckInActivities.id, activityType: consultantCheckInActivities.activityType, occurredAt: consultantCheckInActivities.occurredAt })
@@ -1056,6 +1115,8 @@ export async function listConsultantPersonalActivityTimeline(userId: number, inp
       .from(consultantTimeEntryActivities).where(eq(consultantTimeEntryActivities.userId, userId)),
     db.select({ id: consultantTimesheetEvidenceActivities.id, activityType: consultantTimesheetEvidenceActivities.activityType, occurredAt: consultantTimesheetEvidenceActivities.occurredAt })
       .from(consultantTimesheetEvidenceActivities).where(eq(consultantTimesheetEvidenceActivities.userId, userId)),
+    db.select({ id: consultantTimesheetEvidenceResponseActivities.id, activityType: consultantTimesheetEvidenceResponseActivities.activityType, occurredAt: consultantTimesheetEvidenceResponseActivities.occurredAt })
+      .from(consultantTimesheetEvidenceResponseActivities).where(eq(consultantTimesheetEvidenceResponseActivities.userId, userId)),
     db.select({ id: employeeProfileUpdateActivities.id, activityType: employeeProfileUpdateActivities.activityType, occurredAt: employeeProfileUpdateActivities.occurredAt })
       .from(employeeProfileUpdateActivities).where(eq(employeeProfileUpdateActivities.userId, userId)),
     db.select({ id: consultantActionInboxStates.id, state: consultantActionInboxStates.state, updatedAt: consultantActionInboxStates.updatedAt })
@@ -1092,6 +1153,14 @@ export async function listConsultantPersonalActivityTimeline(userId: number, inp
       eventType: activity.activityType === "uploaded" ? "timesheet_evidence_uploaded" as const : activity.activityType === "hours_extracted" ? "timesheet_hours_extracted" as const : "timesheet_evidence_needs_human_review" as const,
       source: "timesheet_evidence" as const,
       summary: activity.activityType === "uploaded" ? "You uploaded private timesheet evidence." : activity.activityType === "hours_extracted" ? "A bounded OCR hours result was recorded for your evidence." : "Your timesheet evidence needs designated human review.",
+      occurredAt: activity.occurredAt,
+      destination: "/workspace/time-submission" as const,
+    })),
+    ...responseActivities.map(activity => ({
+      eventId: `timesheet-response-activity:${activity.id}`,
+      eventType: activity.activityType === "discrepancy_acknowledged" ? "timesheet_discrepancy_acknowledged" as const : "timesheet_discrepancy_response_submitted" as const,
+      source: "timesheet_evidence" as const,
+      summary: activity.activityType === "discrepancy_acknowledged" ? "You acknowledged a timesheet discrepancy note." : "You submitted a factual response for designated human follow-up.",
       occurredAt: activity.occurredAt,
       destination: "/workspace/time-submission" as const,
     })),

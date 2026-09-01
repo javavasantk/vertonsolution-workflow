@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { appRouter, resetConsultantActionInboxRateLimitsForTests, resetConsultantTimesheetOcrRateLimitsForTests } from "./routers";
+import { appRouter, resetConsultantActionInboxRateLimitsForTests, resetConsultantTimesheetOcrRateLimitsForTests, resetConsultantTimesheetDiscrepancyResponseRateLimitsForTests } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import * as db from "./db";
 
@@ -25,6 +25,7 @@ describe("access router", () => {
   beforeEach(() => {
     resetConsultantActionInboxRateLimitsForTests();
     resetConsultantTimesheetOcrRateLimitsForTests();
+    resetConsultantTimesheetDiscrepancyResponseRateLimitsForTests();
   });
   it("rejects role-management access for non-administrator accounts", async () => {
     const caller = appRouter.createCaller(createContext("user"));
@@ -372,6 +373,55 @@ describe("access router", () => {
     reviewers.mockRestore();
     assign.mockRestore();
     addNote.mockRestore();
+  });
+
+  it("allows only Consultant-compatible accounts to acknowledge and submit one factual response for their own reviewer note", async () => {
+    const acknowledgement = vi.spyOn(db, "acknowledgeConsultantTimesheetEvidenceDiscrepancy").mockResolvedValue({ reviewerNoteId: 118, acknowledgedAt: new Date("2026-08-27") } as never);
+    const response = vi.spyOn(db, "createConsultantTimesheetEvidenceDiscrepancyResponse").mockResolvedValue({ id: 41, reviewerNoteId: 118, body: "The documented source total remains forty hours.", createdAt: new Date("2026-08-27") } as never);
+    const consultantCaller = appRouter.createCaller(createContext("consultant", 17));
+    const userCaller = appRouter.createCaller(createContext("user", 18));
+
+    await expect(consultantCaller.consultant.acknowledgeTimesheetEvidenceDiscrepancy({ reviewerNoteId: 118 })).resolves.toMatchObject({ reviewerNoteId: 118 });
+    await expect(userCaller.consultant.respondToTimesheetEvidenceDiscrepancy({ reviewerNoteId: 118, body: "The documented source total remains forty hours." })).resolves.toMatchObject({ reviewerNoteId: 118, body: "The documented source total remains forty hours." });
+    expect(acknowledgement).toHaveBeenCalledWith(17, 118);
+    expect(response).toHaveBeenCalledWith(18, 118, "The documented source total remains forty hours.");
+    for (const role of ["admin", "recruiter", "hr_compliance", "account_manager", "delivery_manager", "project_manager", "finance"] as const) {
+      const caller = appRouter.createCaller(createContext(role, 9));
+      await expect(caller.consultant.acknowledgeTimesheetEvidenceDiscrepancy({ reviewerNoteId: 118 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(caller.consultant.respondToTimesheetEvidenceDiscrepancy({ reviewerNoteId: 118, body: "The documented source total remains forty hours." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    const safeResult = await userCaller.consultant.respondToTimesheetEvidenceDiscrepancy({ reviewerNoteId: 118, body: "The documented source total remains forty hours." });
+    expect(safeResult).not.toHaveProperty("reviewerUserId");
+    expect(safeResult).not.toHaveProperty("fileKey");
+    expect(safeResult).not.toHaveProperty("clientContent");
+    expect(safeResult).not.toHaveProperty("payrollState");
+    acknowledgement.mockRestore();
+    response.mockRestore();
+  });
+
+  it("rejects cross-consultant reviewer notes and keeps duplicate concurrent factual responses retry-safe", async () => {
+    const acknowledgement = vi.spyOn(db, "acknowledgeConsultantTimesheetEvidenceDiscrepancy").mockRejectedValueOnce(new Error("Timesheet discrepancy note was not found"));
+    const response = vi.spyOn(db, "createConsultantTimesheetEvidenceDiscrepancyResponse").mockResolvedValue({ id: 41, reviewerNoteId: 118, body: "The documented source total remains forty hours.", createdAt: new Date("2026-08-27") } as never);
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+    const input = { reviewerNoteId: 118, body: "The documented source total remains forty hours." };
+
+    await expect(caller.consultant.acknowledgeTimesheetEvidenceDiscrepancy({ reviewerNoteId: 118 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const [first, repeated] = await Promise.all([caller.consultant.respondToTimesheetEvidenceDiscrepancy(input), caller.consultant.respondToTimesheetEvidenceDiscrepancy(input)]);
+    expect(first).toEqual(repeated);
+    expect(response).toHaveBeenCalledTimes(2);
+    acknowledgement.mockRestore();
+    response.mockRestore();
+  });
+
+  it("limits each Consultant to twelve discrepancy acknowledgement or response writes per minute", async () => {
+    const acknowledgement = vi.spyOn(db, "acknowledgeConsultantTimesheetEvidenceDiscrepancy").mockImplementation(async (_userId, reviewerNoteId) => ({ reviewerNoteId, acknowledgedAt: new Date() }) as never);
+    const caller = appRouter.createCaller(createContext("consultant", 17));
+    for (let index = 0; index < 12; index += 1) {
+      await expect(caller.consultant.acknowledgeTimesheetEvidenceDiscrepancy({ reviewerNoteId: index + 1 })).resolves.toMatchObject({ reviewerNoteId: index + 1 });
+    }
+    await expect(caller.consultant.respondToTimesheetEvidenceDiscrepancy({ reviewerNoteId: 99, body: "The documented source total remains forty hours." })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(acknowledgement).toHaveBeenCalledTimes(12);
+    acknowledgement.mockRestore();
   });
 
   it("serves deterministic Consultant Action Inbox items only to consultant-compatible session roles with safe fields", async () => {

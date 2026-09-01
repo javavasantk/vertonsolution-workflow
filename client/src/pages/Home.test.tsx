@@ -120,8 +120,11 @@ const { authState, startLoginSpy, aiTestState, workspaceAssistantState, demoAuth
     prepareEvidence: vi.fn(),
     completeEvidence: vi.fn(),
     retryEvidence: vi.fn(),
+    acknowledgeDiscrepancy: vi.fn(),
+    respondToDiscrepancy: vi.fn(),
     mutationError: null as Error | null,
     evidenceError: null as Error | null,
+    discrepancyError: null as Error | null,
     refetch: vi.fn(),
     periodTotal: { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), entryCount: 1, enteredHoursTotal: 40, statusCounts: { draft: 1, submitted: 0, approved: 0, exception: 0 } } as any,
     periodTotalLoading: false,
@@ -194,6 +197,8 @@ vi.mock("@/lib/trpc", () => ({
       prepareTimesheetEvidenceUpload: { useMutation: () => ({ mutateAsync: async (input: unknown) => { consultantTimeSubmissionTestState.prepareEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) throw consultantTimeSubmissionTestState.evidenceError; return { sessionId: "b6d2ba3c-6f44-4d4c-b7f9-9a457bca80f2", uploadPath: "/api/consultant/timesheet-upload/b6d2ba3c-6f44-4d4c-b7f9-9a457bca80f2", expiresAt: new Date() }; }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
       completeTimesheetEvidenceUpload: { useMutation: (options?: { onSuccess?: (data: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.completeEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) options?.onError?.(consultantTimeSubmissionTestState.evidenceError); else options?.onSuccess?.({ id: 91, timeEntryId: 71, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }); }, mutateAsync: async (input: unknown) => { consultantTimeSubmissionTestState.completeEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) { options?.onError?.(consultantTimeSubmissionTestState.evidenceError); throw consultantTimeSubmissionTestState.evidenceError; } const result = { id: 91, timeEntryId: 71, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26") }; options?.onSuccess?.(result); return result; }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
       retryTimesheetHoursExtraction: { useMutation: (options?: { onSuccess?: (data: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.retryEvidence(input); if (consultantTimeSubmissionTestState.evidenceError) options?.onError?.(consultantTimeSubmissionTestState.evidenceError); else options?.onSuccess?.({ id: 91, timeEntryId: 71, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high" }); }, isPending: false, error: consultantTimeSubmissionTestState.evidenceError }) },
+      acknowledgeTimesheetEvidenceDiscrepancy: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantTimeSubmissionTestState.acknowledgeDiscrepancy(input); if (consultantTimeSubmissionTestState.discrepancyError) options?.onError?.(consultantTimeSubmissionTestState.discrepancyError); else options?.onSuccess?.(); }, isPending: false, error: consultantTimeSubmissionTestState.discrepancyError }) },
+      respondToTimesheetEvidenceDiscrepancy: { useMutation: (options?: { onSuccess?: (data: any, input: any) => void; onError?: (error: Error) => void }) => ({ mutate: (input: any) => { consultantTimeSubmissionTestState.respondToDiscrepancy(input); if (consultantTimeSubmissionTestState.discrepancyError) options?.onError?.(consultantTimeSubmissionTestState.discrepancyError); else options?.onSuccess?.({ ...input, createdAt: new Date() }, input); }, isPending: false, error: consultantTimeSubmissionTestState.discrepancyError }) },
       actionInbox: { useQuery: () => ({ data: consultantActionInboxTestState.items, isLoading: consultantActionInboxTestState.isLoading, error: consultantActionInboxTestState.error, refetch: consultantActionInboxTestState.refetch }) },
       markActionRead: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.markRead(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
       dismissAction: { useMutation: (options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => ({ mutate: (input: unknown) => { consultantActionInboxTestState.dismiss(input); if (consultantActionInboxTestState.mutationError) options?.onError?.(consultantActionInboxTestState.mutationError); else options?.onSuccess?.(); }, isPending: false, error: consultantActionInboxTestState.mutationError }) },
@@ -341,8 +346,11 @@ afterEach(() => {
   consultantTimeSubmissionTestState.prepareEvidence.mockReset();
   consultantTimeSubmissionTestState.completeEvidence.mockReset();
   consultantTimeSubmissionTestState.retryEvidence.mockReset();
+  consultantTimeSubmissionTestState.acknowledgeDiscrepancy.mockReset();
+  consultantTimeSubmissionTestState.respondToDiscrepancy.mockReset();
   consultantTimeSubmissionTestState.mutationError = null;
   consultantTimeSubmissionTestState.evidenceError = null;
+  consultantTimeSubmissionTestState.discrepancyError = null;
   consultantTimeSubmissionTestState.refetch.mockReset();
   consultantTimeSubmissionTestState.periodTotal = { startDate: new Date("2026-08-01"), endDate: new Date("2026-08-31"), entryCount: 1, enteredHoursTotal: 40, statusCounts: { draft: 1, submitted: 0, approved: 0, exception: 0 } };
   consultantTimeSubmissionTestState.periodTotalLoading = false;
@@ -939,6 +947,20 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText(/It did not change the time entry or make a decision/i)).toBeTruthy();
   });
 
+  it("shows Finance only safe Consultant factual acknowledgement and response fields for protected evidence review", async () => {
+    const user = userEvent.setup();
+    financeTimesheetEvidenceTestState.data = [{ evidenceId: 91, timeEntryId: 72, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 256, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", uploadedAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26"), weekEnding: new Date("2026-08-23"), enteredHours: 40, timeEntryStatus: "submitted", reviewerUserId: 1, reviewerName: "Finley Finance", reviewerAssignedAt: new Date("2026-08-26"), discrepancyNotes: [{ id: 118, note: "Entered and visible source totals require factual human follow-up.", createdAt: new Date("2026-08-26"), consultantAcknowledgedAt: new Date("2026-08-27"), consultantResponse: { body: "The documented source total remains forty hours.", createdAt: new Date("2026-08-27") } }] }];
+    setAuthenticatedRole("finance", "Finley Finance");
+    renderRoute("/workspace/time-billing");
+    await user.click(screen.getAllByRole("button", { name: "Time & billing" })[0]);
+
+    expect(screen.getByRole("region", { name: "Consultant factual discrepancy responses" })).toBeTruthy();
+    expect(screen.getByText("The documented source total remains forty hours.")).toBeTruthy();
+    expect(screen.getByText(/Consultant acknowledged this note/)).toBeTruthy();
+    expect(screen.getByText(/Only the original designated reviewer may continue to add factual reviewer notes/i)).toBeTruthy();
+    expect(screen.queryByText(/authorUserId|fileKey|consultant-timesheets\/|private storage/i)).toBeNull();
+  });
+
   it("labels Controls material as representative and exposes no audit-export or approval action", async () => {
     const user = userEvent.setup();
     setAuthenticatedRole("admin", "Avery Admin");
@@ -1085,6 +1107,38 @@ describe("Workforce Hub login and protected workflow behavior", () => {
     expect(screen.getByText(/has not changed your time entry/i)).toBeTruthy();
     expect(screen.getByText(/cannot approve time, determine eligibility, calculate payroll, create invoices, issue payments/i)).toBeTruthy();
     vi.unstubAllGlobals();
+  });
+
+  it("lets a Consultant acknowledge an own reviewer note and submit one bounded factual response without changing any timesheet outcome", async () => {
+    const user = userEvent.setup();
+    consultantTimeSubmissionTestState.data = { designatedHumanOwner: "Casey Rivera", assignments: [{ id: 1, projectName: "Northstar Commerce Cloud · Demo", assignmentState: "active" }], entries: [{ id: 71, assignmentId: 1, weekEnding: new Date("2026-08-23"), hours: 40, status: "submitted", note: "Submitted own-record time entry.", updatedAt: new Date("2026-08-26"), evidence: [{ id: 91, originalFileName: "approved-week.pdf", mimeType: "application/pdf", fileSize: 24, extractionStatus: "extracted", extractedHours: 40, extractionConfidence: "high", createdAt: new Date("2026-08-26"), updatedAt: new Date("2026-08-26"), designatedReviewerAssigned: true, discrepancyNotes: [{ id: 118, evidenceId: 91, note: "Entered and visible source totals require factual human follow-up.", createdAt: new Date("2026-08-26"), acknowledgedAt: null, response: null }] }] }] };
+    setAuthenticatedRole("consultant", "Jamie Chen");
+    renderRoute("/workspace/time-submission");
+
+    expect(screen.getByRole("region", { name: "Timesheet discrepancy follow-up" })).toBeTruthy();
+    expect(screen.getAllByText("Entered and visible source totals require factual human follow-up.")).toHaveLength(2);
+    const acknowledge = screen.getByRole("button", { name: "Acknowledge note" });
+    acknowledge.focus();
+    expect(document.activeElement).toBe(acknowledge);
+    await user.keyboard("{Enter}");
+    expect(consultantTimeSubmissionTestState.acknowledgeDiscrepancy).toHaveBeenCalledWith({ reviewerNoteId: 118 });
+    expect(screen.getByText(/acknowledgement was recorded for designated human follow-up/i)).toBeTruthy();
+
+    const response = screen.getByLabelText("Factual response for discrepancy note 118");
+    await user.type(response, "Too short");
+    expect((screen.getByRole("button", { name: "Send factual response for human follow-up" }) as HTMLButtonElement).disabled).toBe(true);
+    await user.type(response, " but the documented total remains forty hours.");
+    expect(screen.getByText(`${(response as HTMLTextAreaElement).value.length}/500`)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Send factual response for human follow-up" }));
+    expect(consultantTimeSubmissionTestState.respondToDiscrepancy).toHaveBeenCalledWith({ reviewerNoteId: 118, body: "Too short but the documented total remains forty hours." });
+    expect(screen.getByText(/human reviewer remains responsible for resolving the discrepancy/i)).toBeTruthy();
+    expect(screen.queryByText(/reviewerUserId|fileKey|private\//i)).toBeNull();
+
+    cleanup();
+    consultantTimeSubmissionTestState.discrepancyError = new Error("Your timesheet discrepancy note was not found");
+    renderRoute("/workspace/time-submission");
+    await user.click(screen.getByRole("button", { name: "Acknowledge note" }));
+    expect(screen.getByText("Your timesheet discrepancy note was not found")).toBeTruthy();
   });
 
   it("keeps OCR retry and no-existing-entry states distinct without exposing private document content", async () => {

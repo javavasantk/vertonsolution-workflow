@@ -269,3 +269,4 @@
 - [x] Add a protected Consultant Engagement Continuity Note route with factual own-assignment notes, designated-human-owner context, and append-only personal history.
 - [x] Extend the authenticated assistant with deterministic Consultant own-record lookup intents, minimal safe projections, bounded results, and no mutation or external-message capability.
 - [x] Replace Consultant shared Delivery and Time & Billing routes with dedicated server-projected My Delivery Context and My Time History routes.
+- [x] Push the latest validated Workforce Hub source changes to the connected GitHub repository.
